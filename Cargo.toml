@@ -1,6 +1,15 @@
 [package]
 name = "coap-shell"
+description = """
+A tool to interact with a shell via CoAP.
+"""
 version = "0.1.0"
 edition = "2021"
+authors = ["Bennet Blischke <bennet.blischke@haw-hamburg.de>"]
 
 [dependencies]
+crossterm = "*"
+serialport = "*"
+serial-line-ip = "*"
+ratatui = "*"
+coap-lite = "*"
