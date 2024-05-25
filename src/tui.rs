@@ -65,8 +65,8 @@ impl App {
     ) -> Self {
         Self {
             focus: ElementInFocus::UserInput,
-            user_command: Default::default(),
-            diagnostic_messages: Default::default(),
+            user_command: String::new(),
+            diagnostic_messages: String::new(),
             configuration_packets: vec![],
             write_port,
             diagnostic_channel,
@@ -84,11 +84,10 @@ impl App {
             ElementInFocus::UserInput => match key.code {
                 KeyCode::Esc => return Refresh::Quit,
                 KeyCode::Enter => {
-                    if !self.user_command.starts_with("/") {
+                    if !self.user_command.starts_with('/') {
                         self.user_command.push('\n');
                         let (data, size) = send_diagnostic(&self.user_command);
                         let _ = self.write_port.write(&data[..size]);
-                        let _ = self.write_port.flush();
                     } else {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
@@ -97,8 +96,8 @@ impl App {
                         let (data, size) = send_configuration(&request.message);
                         self.configuration_packets.push(request.message);
                         let _ = self.write_port.write(&data[..size]);
-                        let _ = self.write_port.flush();
                     }
+                    let _ = self.write_port.flush();
                     self.user_command.clear();
                     true
                 }
@@ -113,13 +112,12 @@ impl App {
                 }
                 _ => false,
             },
-            _ => false,
         };
 
         if update {
-            return Refresh::Update;
+            Refresh::Update
         } else {
-            return Refresh::Skip;
+            Refresh::Skip
         }
     }
 
@@ -246,8 +244,7 @@ where
             let refresh = match crossterm::event::read().unwrap() {
                 Event::Key(key) => app.on_key(key),
                 Event::Resize(_, _) => Refresh::Update,
-                Event::FocusGained | Event::FocusLost | Event::Paste(_) => Refresh::Skip,
-                Event::Mouse(_) => Refresh::Skip,
+                _ => Refresh::Skip,
             };
             match refresh {
                 Refresh::Quit => return,
@@ -263,9 +260,7 @@ where
                 debounce.get_or_insert_with(Instant::now);
             }
             Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => {
-                panic!();
-            }
+            Err(mpsc::TryRecvError::Disconnected) => panic!(),
         }
         match app.configuration_channel.try_recv() {
             Ok(data) => {
@@ -274,18 +269,14 @@ where
                 debounce.get_or_insert_with(Instant::now);
             }
             Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => {
-                panic!();
-            }
+            Err(mpsc::TryRecvError::Disconnected) => panic!(),
         }
         match app.packet_channel.try_recv() {
             Ok(_data) => {
                 debounce.get_or_insert_with(Instant::now);
             }
             Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => {
-                panic!();
-            }
+            Err(mpsc::TryRecvError::Disconnected) => panic!(),
         }
         if debounce.map_or_else(
             || last_render.elapsed() > INTERVAL,

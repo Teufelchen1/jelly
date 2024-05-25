@@ -13,7 +13,7 @@ pub fn send_diagnostic(text: &str) -> ([u8; 256], usize) {
         .encode(text.as_bytes(), &mut output[totals.written..])
         .unwrap();
     totals += slip.finish(&mut output[totals.written..]).unwrap();
-    return (output, totals.written);
+    (output, totals.written)
 }
 
 pub fn send_configuration(packet: &Packet) -> ([u8; 256], usize) {
@@ -24,7 +24,7 @@ pub fn send_configuration(packet: &Packet) -> ([u8; 256], usize) {
         .encode(&packet.to_bytes().unwrap(), &mut output[totals.written..])
         .unwrap();
     totals += slip.finish(&mut output[totals.written..]).unwrap();
-    return (output, totals.written);
+    (output, totals.written)
 }
 
 pub fn read_thread(
