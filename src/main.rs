@@ -1,13 +1,14 @@
-mod slipmux;
-mod tui;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::thread;
+use std::time::Duration;
 
 use slipmux::read_thread;
 use tui::show;
 
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
-use std::time::Duration;
+mod slipmux;
+mod tui;
 
 fn main() {
     let (diagnostic_tx, diagnostic_rx): (Sender<String>, Receiver<String>) = mpsc::channel();

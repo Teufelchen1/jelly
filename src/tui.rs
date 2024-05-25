@@ -1,20 +1,26 @@
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
+use std::time::Instant;
+
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
-use coap_lite::{Packet, RequestType as Method};
+use coap_lite::Packet;
+use coap_lite::RequestType as Method;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use ratatui::prelude::Alignment;
-use ratatui::prelude::Backend;
-use ratatui::prelude::Constraint;
-use ratatui::prelude::CrosstermBackend;
-use ratatui::prelude::Direction;
-use ratatui::prelude::Layout;
-use ratatui::prelude::Span;
-use ratatui::prelude::Text;
+use ratatui::backend::Backend;
+use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Alignment;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::text::Span;
+use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::BorderType;
 use ratatui::widgets::List;
@@ -23,11 +29,6 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use ratatui::Terminal;
 use serialport::SerialPort;
-
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::time::Duration;
-use std::time::Instant;
 
 use crate::slipmux::send_configuration;
 use crate::slipmux::send_diagnostic;
