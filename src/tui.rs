@@ -299,50 +299,38 @@ where
 }
 
 fn fmt_packet(packet: &Packet) -> String {
-    let mut out: String = Default::default();
-
-    let class = {
-        match packet.header.code {
-            MessageClass::Empty => "Empty ",
-            MessageClass::Request(rtype) => {
-                let payload: String = "Empty Payload".to_string();
-                let contentformat = {
-                    match packet.get_first_option(CoapOption::UriPath) {
-                        Some(ref cf) => &format!("{:}", &String::from_utf8_lossy(&cf)),
-                        None => "",
-                    }
-                };
-                &format!("<- Req({:?}; {:})\n  {:}", rtype, contentformat, payload)
+    use std::fmt::Write;
+    // When writing to a String `write!` will never fail.
+    // Therefore the Result is ignored with `_ = write!()`.
+    let mut out = String::new();
+    match packet.header.code {
+        MessageClass::Empty => _ = write!(out, "Empty"),
+        MessageClass::Request(rtype) => {
+            _ = write!(out, "<- Req({rtype:?}");
+            if let Some(contentformat) = packet
+                .get_first_option(CoapOption::UriPath)
+                .map(|cf| String::from_utf8_lossy(cf))
+            {
+                _ = write!(out, "; {contentformat}");
             }
-            MessageClass::Response(rtype) => {
-                let mut payload: String = "Empty Payload".to_string();
-                let contentformat = {
-                    match packet.get_content_format() {
-                        Some(cf) => {
-                            match cf {
-                                ContentFormat::ApplicationLinkFormat => {
-                                    payload = String::from_utf8_lossy(&packet.payload)
-                                        .to_string()
-                                        .replace(",", "\n  ");
-                                }
-                                ContentFormat::TextPlain => {
-                                    payload = String::from_utf8_lossy(&packet.payload)
-                                        .to_string()
-                                        .replace(",", "\n  ");
-                                }
-                                _ => todo!(),
-                            }
-                            &format!("{:?}", cf)
-                        }
-                        None => "",
-                    }
-                };
-                &format!("-> Res({:?}/{:})\n  {:}", rtype, contentformat, payload)
-            }
-            MessageClass::Reserved(_) => "Reserved ",
+            _ = write!(out, ")\n  Empty Payload");
         }
-    };
-    out.push_str(class);
-    //out.push_str(&format!("{:04x} ", packet.header.message_id));
+        MessageClass::Response(rtype) => {
+            _ = write!(out, "-> Res({rtype:?}");
+            if let Some(cf) = packet.get_content_format() {
+                let payload = match cf {
+                    ContentFormat::ApplicationLinkFormat | ContentFormat::TextPlain => {
+                        String::from_utf8_lossy(&packet.payload).replace(',', "\n  ")
+                    }
+                    _ => todo!(),
+                };
+                _ = write!(out, "/{cf:?})\n  {payload}");
+            } else {
+                _ = write!(out, ")\n  Empty Payload");
+            }
+        }
+        MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
+    }
+    // _ = write!(out, " {:04x} ", packet.header.message_id);
     out
 }
