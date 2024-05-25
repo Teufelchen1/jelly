@@ -1,7 +1,10 @@
-use coap_lite::Packet;
-use serial_line_ip::{Decoder, Encoder};
-use serialport::SerialPort;
 use std::sync::mpsc::Sender;
+
+use coap_lite::Packet;
+use serial_line_ip::Decoder;
+use serial_line_ip::Encoder;
+use serialport::SerialPort;
+
 const DIAGNOSTIC: u8 = 0x0a;
 const CONFIGURATION: u8 = 0xA9;
 
