@@ -218,15 +218,24 @@ impl App {
             .title(vec![Span::from("User Input")])
             .title_alignment(Alignment::Left);
 
-        let text: &str = &self.diagnostic_messages;
-        let text = Text::from(text);
-        let paragraph = Paragraph::new(text).block(right_block_up);
-        frame.render_widget(paragraph, right_chunk_upper);
-
         let text: &str = &self.user_command;
         let text = Text::from(text);
         let paragraph = Paragraph::new(text).block(right_block_down);
         frame.render_widget(paragraph, right_chunk_lower);
+
+        let text: &str = &self.diagnostic_messages;
+        let text = Text::from(text);
+        let height = right_block_up.inner(right_chunk_upper).height;
+        let scroll = {
+            if text.height() > height as usize {
+                text.height() - height as usize
+            } else {
+                0
+            }
+        };
+        let paragraph = Paragraph::new(text).scroll((scroll as u16, 0));
+        let paragraph_block = paragraph.block(right_block_up);
+        frame.render_widget(paragraph_block, right_chunk_upper);
 
         let left_block = Block::bordered()
             .title(vec![Span::from("Configuration Packets")])
