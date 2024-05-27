@@ -48,7 +48,10 @@ pub enum ElementInFocus {
 
 pub struct App {
     focus: ElementInFocus,
+    user_commands: Vec<String>,
     user_command: String,
+    user_command_cursor: usize,
+    autocomplete: Vec<String>,
     diagnostic_messages: String,
     configuration_packets: Vec<Packet>,
     write_port: Box<dyn SerialPort>,
@@ -66,7 +69,25 @@ impl App {
     ) -> Self {
         Self {
             focus: ElementInFocus::UserInput,
+            user_commands: vec![],
             user_command: String::new(),
+            user_command_cursor: 0,
+            autocomplete: vec![
+                "help".to_string(),
+                "/.well-known/core".to_string(),
+                "/sha256".to_string(),
+                "/riot/".to_string(),
+                "/echo/".to_string(),
+                "/shell/".to_string(),
+                "ifconfig".to_string(),
+                "nib".to_string(),
+                "pm".to_string(),
+                "ps".to_string(),
+                "reboot".to_string(),
+                "saul".to_string(),
+                "txtsnd".to_string(),
+                "version".to_string(),
+            ],
             diagnostic_messages: String::new(),
             configuration_packets: vec![],
             write_port,
@@ -74,6 +95,15 @@ impl App {
             configuration_channel,
             packet_channel,
         }
+    }
+
+    fn suggest_cmd(&self, cmd: &String) -> Option<String> {
+        for known_cmd in &self.autocomplete {
+            if known_cmd.starts_with(cmd) {
+                return Some(known_cmd.clone());
+            };
+        }
+        None
     }
 
     fn on_key(&mut self, key: KeyEvent) -> Refresh {
@@ -86,7 +116,9 @@ impl App {
                 KeyCode::Esc => return Refresh::Quit,
                 KeyCode::Enter => {
                     if !self.user_command.starts_with('/') {
-                        self.user_command.push('\n');
+                        if !self.user_command.ends_with('\n') {
+                            self.user_command.push('\n');
+                        }
                         let (data, size) = send_diagnostic(&self.user_command);
                         let _ = self.write_port.write(&data[..size]);
                     } else {
@@ -99,11 +131,43 @@ impl App {
                         let _ = self.write_port.write(&data[..size]);
                     }
                     let _ = self.write_port.flush();
+                    if self.user_command != "\n" {
+                        self.user_commands.push(self.user_command.clone());
+                        self.user_command_cursor = self.user_commands.len();
+                    }
                     self.user_command.clear();
                     true
                 }
                 KeyCode::Backspace => {
                     self.user_command.pop();
+                    true
+                }
+                KeyCode::Up => {
+                    if self.user_command_cursor > 0 {
+                        self.user_command.clear();
+                        self.user_command_cursor -= 1;
+                        self.user_command = self.user_commands[self.user_command_cursor].clone();
+                    }
+                    true
+                }
+                KeyCode::Down => {
+                    if self.user_command_cursor < self.user_commands.len() {
+                        self.user_command.clear();
+                        self.user_command_cursor += 1;
+                        if self.user_command_cursor == self.user_commands.len() {
+                            self.user_command.clear();
+                        } else {
+                            self.user_command =
+                                self.user_commands[self.user_command_cursor].clone();
+                        }
+                    }
+                    true
+                }
+                KeyCode::Tab => {
+                    match self.suggest_cmd(&self.user_command) {
+                        Some(cmd) => self.user_command = cmd,
+                        None => {}
+                    }
                     true
                 }
                 KeyCode::Char(to_insert) => {

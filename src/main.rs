@@ -18,7 +18,7 @@ fn main() {
 
     //let conf_tx = configuration_tx.clone();
 
-    let mut port = serialport::new("/dev/ttyACM1", 115200)
+    let mut port = serialport::new("/dev/ttyACM0", 115200)
         .open()
         .expect("Error");
     let _ = port.set_timeout(Duration::from_secs(60));
