@@ -1,3 +1,4 @@
+use ratatui::widgets::Borders;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
@@ -22,7 +23,6 @@ use ratatui::layout::Layout;
 use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
-use ratatui::widgets::BorderType;
 use ratatui::widgets::List;
 use ratatui::widgets::ListItem;
 use ratatui::widgets::Paragraph;
@@ -48,6 +48,7 @@ pub enum ElementInFocus {
 
 pub struct App {
     focus: ElementInFocus,
+    ip: String,
     user_commands: Vec<String>,
     user_command: String,
     user_command_cursor: usize,
@@ -69,16 +70,22 @@ impl App {
     ) -> Self {
         Self {
             focus: ElementInFocus::UserInput,
+            ip: String::new(),
             user_commands: vec![],
             user_command: String::new(),
             user_command_cursor: 0,
             autocomplete: vec![
                 "help".to_string(),
+                "/.well-known/".to_string(),
                 "/.well-known/core".to_string(),
+                "/.well-known/ifconfig".to_string(),
                 "/sha256".to_string(),
                 "/riot/".to_string(),
                 "/echo/".to_string(),
                 "/shell/".to_string(),
+                "/shell/version".to_string(),
+                "/shell/nib".to_string(),
+                "/shell/reboot".to_string(),
                 "ifconfig".to_string(),
                 "nib".to_string(),
                 "pm".to_string(),
@@ -94,6 +101,24 @@ impl App {
             diagnostic_channel,
             configuration_channel,
             packet_channel,
+        }
+    }
+
+    fn poll_ifconfig(&mut self) {
+        use std::fmt::Write;
+        let mut request: CoapRequest<String> = CoapRequest::new();
+        request.set_method(Method::Get);
+        request.set_path("/.well-known/ifconfig");
+        request.message.add_option(CoapOption::Block2, vec![0x05]);
+        let (data, size) = send_configuration(&request.message);
+        let _ = self.write_port.write(&data[..size]);
+
+        match self.configuration_channel.recv() {
+            Ok(data) => {
+                let response = Packet::from_bytes(&data).unwrap();
+                _ = write!(self.ip, "{:}", String::from_utf8_lossy(&response.payload));
+            }
+            Err(_) => panic!(),
         }
     }
 
@@ -187,17 +212,35 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let size = frame.size();
+        let main_layout = Layout::new(
+            Direction::Vertical,
+            [
+                Constraint::Length(1),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ],
+        )
+        .split(frame.size());
+        frame.render_widget(
+            Block::new()
+                .borders(Borders::TOP)
+                .title("Jelly 🪼: Friendly SLIPMUX for RIOT OS")
+                .title_alignment(Alignment::Center),
+            main_layout[0],
+        );
+        frame.render_widget(
+            Block::new()
+                .borders(Borders::TOP)
+                .title("✅ connected via /dev/ttyACM0 with RIOT version FooBar")
+                .title_alignment(Alignment::Right),
+            main_layout[2],
+        );
 
-        let block = Block::bordered()
-            .title("Main")
-            .title_alignment(Alignment::Center)
-            .border_type(BorderType::Rounded);
         let horizontal_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .margin(1)
+            .margin(0)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-            .split(frame.size());
+            .split(main_layout[1]);
 
         let horizontal_chunk_left = horizontal_chunks[0];
         let horizontal_chunk_right = horizontal_chunks[1];
@@ -237,18 +280,35 @@ impl App {
         let paragraph_block = paragraph.block(right_block_up);
         frame.render_widget(paragraph_block, right_chunk_upper);
 
-        let left_block = Block::bordered()
+        let left_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+            .split(horizontal_chunk_left);
+
+        let left_chunk_upper = left_chunks[0];
+        let left_chunk_lower = left_chunks[1];
+
+        let left_block_up = Block::bordered()
             .title(vec![Span::from("Configuration Packets")])
             .title_alignment(Alignment::Left);
+
+        let left_block_down = Block::bordered()
+            .title(vec![Span::from("Configuration")])
+            .title_alignment(Alignment::Left);
+
         let items: Vec<ListItem> = self
             .configuration_packets
             .iter()
             .map(|i| ListItem::new(fmt_packet(i)))
             .collect();
-        let list = List::new(items).block(left_block);
-        frame.render_widget(list, horizontal_chunk_left);
+        let list = List::new(items).block(left_block_up);
+        frame.render_widget(list, left_chunk_upper);
 
-        frame.render_widget(block, size);
+        let text: &str = &self.ip;
+        let text = Text::from(text);
+        let paragraph = Paragraph::new(text).scroll((scroll as u16, 0));
+        let paragraph_block = paragraph.block(left_block_down);
+        frame.render_widget(paragraph_block, left_chunk_lower);
     }
 }
 
@@ -269,12 +329,13 @@ pub fn show(
     configuration_channel: Receiver<Vec<u8>>,
     packet_channel: Receiver<Vec<u8>>,
 ) {
-    let app = App::new(
+    let mut app = App::new(
         write_port,
         diagnostic_channel,
         configuration_channel,
         packet_channel,
     );
+    app.poll_ifconfig();
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
@@ -371,12 +432,10 @@ fn fmt_packet(packet: &Packet) -> String {
     match packet.header.code {
         MessageClass::Empty => _ = write!(out, "Empty"),
         MessageClass::Request(rtype) => {
-            _ = write!(out, "<- Req({rtype:?}");
-            if let Some(contentformat) = packet
-                .get_first_option(CoapOption::UriPath)
-                .map(|cf| String::from_utf8_lossy(cf))
-            {
-                _ = write!(out, "; {contentformat}");
+            _ = write!(out, "<- Req({rtype:?} ");
+            let option_list = packet.get_option(CoapOption::UriPath).unwrap();
+            for option in option_list {
+                _ = write!(out, "/{}", String::from_utf8_lossy(option));
             }
             _ = write!(out, ")\n  Empty Payload");
         }
@@ -396,6 +455,5 @@ fn fmt_packet(packet: &Packet) -> String {
         }
         MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
     }
-    // _ = write!(out, " {:04x} ", packet.header.message_id);
     out
 }
