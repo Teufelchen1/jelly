@@ -1,8 +1,20 @@
+use crate::tui::Constraint::Fill;
+use crate::tui::Constraint::Length;
+use crate::tui::Constraint::Max;
+use crate::tui::Constraint::Min;
+use coap_lite::CoapResponse;
+use core::iter::zip;
+use ratatui::prelude::Rect;
+use ratatui::prelude::StatefulWidget;
+use ratatui::prelude::Widget;
 use ratatui::widgets::Borders;
+use std::borrow::Cow;
+use std::fmt::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use std::time::Instant;
+use tui_scrollview::{ScrollView, ScrollViewState};
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
@@ -20,11 +32,11 @@ use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
+use ratatui::layout::Size;
+use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
-use ratatui::widgets::List;
-use ratatui::widgets::ListItem;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use ratatui::Terminal;
@@ -49,11 +61,15 @@ pub enum ElementInFocus {
 pub struct App {
     focus: ElementInFocus,
     ip: String,
+    version: String,
+    board: String,
+    token_count: u16,
     user_commands: Vec<String>,
     user_command: String,
     user_command_cursor: usize,
     autocomplete: Vec<String>,
     diagnostic_messages: String,
+    configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
     write_port: Box<dyn SerialPort>,
     diagnostic_channel: Receiver<String>,
@@ -71,6 +87,9 @@ impl App {
         Self {
             focus: ElementInFocus::UserInput,
             ip: String::new(),
+            version: String::new(),
+            board: String::new(),
+            token_count: 0,
             user_commands: vec![],
             user_command: String::new(),
             user_command_cursor: 0,
@@ -86,16 +105,23 @@ impl App {
                 "/shell/version".to_string(),
                 "/shell/nib".to_string(),
                 "/shell/reboot".to_string(),
+                "/shell/saul".to_string(),
+                "/shell/ps_regular".to_string(),
+                "/shell/pm".to_string(),
+                "/shell/txtsnd".to_string(),
+                "/shell/ifconfig".to_string(),
+                "/config/ps".to_string(),
                 "ifconfig".to_string(),
                 "nib".to_string(),
                 "pm".to_string(),
-                "ps".to_string(),
+                "ps_regular".to_string(),
                 "reboot".to_string(),
                 "saul".to_string(),
                 "txtsnd".to_string(),
                 "version".to_string(),
             ],
             diagnostic_messages: String::new(),
+            configuration_requests: vec![],
             configuration_packets: vec![],
             write_port,
             diagnostic_channel,
@@ -104,21 +130,96 @@ impl App {
         }
     }
 
-    fn poll_ifconfig(&mut self) {
-        use std::fmt::Write;
-        let mut request: CoapRequest<String> = CoapRequest::new();
-        request.set_method(Method::Get);
-        request.set_path("/.well-known/ifconfig");
-        request.message.add_option(CoapOption::Block2, vec![0x05]);
-        let (data, size) = send_configuration(&request.message);
-        let _ = self.write_port.write(&data[..size]);
+    fn get_new_token(&mut self) -> Vec<u8> {
+        self.token_count += 1;
+        self.token_count.to_le_bytes().to_vec()
+    }
 
-        match self.configuration_channel.recv() {
-            Ok(data) => {
-                let response = Packet::from_bytes(&data).unwrap();
-                _ = write!(self.ip, "{:}", String::from_utf8_lossy(&response.payload));
+    fn poll_ifconfig(&mut self) {
+        {
+            let mut request: CoapRequest<String> = CoapRequest::new();
+            request.set_method(Method::Get);
+            request.set_path("/riot/ver");
+            request.message.add_option(CoapOption::Block2, vec![0x05]);
+            let (data, size) = send_configuration(&request.message);
+            let _ = self.write_port.write(&data[..size]);
+
+            let mut version = String::new();
+            match self.configuration_channel.recv() {
+                Ok(data) => {
+                    let response = Packet::from_bytes(&data);
+                    if response.is_ok() {
+                        _ = write!(
+                            version,
+                            "{}",
+                            String::from_utf8_lossy(&response.unwrap().payload)
+                        );
+                    } else {
+                        _ = write!(
+                            version,
+                            "{}",
+                            String::from_utf8_lossy(b"Failed to parse /riot/ver packet")
+                        );
+                    }
+                }
+                Err(_) => panic!(),
             }
-            Err(_) => panic!(),
+            let version = version
+                .split_once('(')
+                .unwrap()
+                .1
+                .split_once(')')
+                .unwrap()
+                .0;
+            _ = write!(self.version, "{}", version);
+        }
+        {
+            let mut request: CoapRequest<String> = CoapRequest::new();
+            request.set_method(Method::Get);
+            request.set_path("/riot/board");
+            request.message.add_option(CoapOption::Block2, vec![0x05]);
+            let (data, size) = send_configuration(&request.message);
+            let _ = self.write_port.write(&data[..size]);
+
+            match self.configuration_channel.recv() {
+                Ok(data) => {
+                    let response = Packet::from_bytes(&data);
+                    if response.is_ok() {
+                        _ = write!(
+                            self.board,
+                            "{:}",
+                            String::from_utf8_lossy(&response.unwrap().payload)
+                        );
+                    } else {
+                        _ = write!(self.board, "Failed to parse /riot/board packet");
+                    }
+                }
+                Err(_) => panic!(),
+            }
+        }
+        {
+            let mut request: CoapRequest<String> = CoapRequest::new();
+            request.set_method(Method::Get);
+            request.set_path("/.well-known/ifconfig");
+            request.message.add_option(CoapOption::Block2, vec![0x05]);
+            let (data, size) = send_configuration(&request.message);
+            let _ = self.write_port.write(&data[..size]);
+
+            match self.configuration_channel.recv() {
+                Ok(data) => {
+                    let response = Packet::from_bytes(&data);
+                    if response.is_ok() {
+                        _ = write!(
+                            self.ip,
+                            "{:}",
+                            String::from_utf8_lossy(&response.unwrap().payload)
+                        );
+                    } else {
+                        _ = write!(self.ip, "Failed to parse ifconfig packet");
+                    }
+                }
+                Err(_) => panic!(),
+            }
         }
     }
 
@@ -150,10 +251,12 @@ impl App {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
                         request.set_path(&self.user_command);
+                        request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
                         let (data, size) = send_configuration(&request.message);
-                        self.configuration_packets.push(request.message);
+                        self.configuration_packets.push(request.message.clone());
                         let _ = self.write_port.write(&data[..size]);
+                        self.configuration_requests.push(request);
                     }
                     let _ = self.write_port.flush();
                     if self.user_command != "\n" {
@@ -197,7 +300,6 @@ impl App {
                 }
                 KeyCode::Char(to_insert) => {
                     self.user_command.push(to_insert);
-                    // diagnostic_messages.push(to_insert);
                     true
                 }
                 _ => false,
@@ -231,7 +333,10 @@ impl App {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
-                .title("✅ connected via /dev/ttyACM0 with RIOT version FooBar")
+                .title(format!(
+                    "✅ connected via /dev/ttyACM0 with RIOT {}",
+                    self.version
+                ))
                 .title_alignment(Alignment::Right),
             main_layout[2],
         );
@@ -239,7 +344,7 @@ impl App {
         let horizontal_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .margin(0)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .constraints([Constraint::Percentage(45), Constraint::Percentage(55)].as_ref())
             .split(main_layout[1]);
 
         let horizontal_chunk_left = horizontal_chunks[0];
@@ -254,7 +359,7 @@ impl App {
         let right_chunk_lower = right_chunks[1];
 
         let right_block_up = Block::bordered()
-            .title(vec![Span::from("Diagnostic Messages")])
+            .title(vec![Span::from("Configuration Messages")])
             .title_alignment(Alignment::Left);
 
         let right_block_down = Block::bordered()
@@ -266,19 +371,87 @@ impl App {
         let paragraph = Paragraph::new(text).block(right_block_down);
         frame.render_widget(paragraph, right_chunk_lower);
 
-        let text: &str = &self.diagnostic_messages;
-        let text = Text::from(text);
-        let height = right_block_up.inner(right_chunk_upper).height;
-        let scroll = {
-            if text.height() > height as usize {
-                text.height() - height as usize
-            } else {
-                0
+        let mut state = ScrollViewState::default();
+        let mut req_blocks = vec![];
+        let mut constrains = vec![];
+        let total_length: u16 = {
+            let mut sum = 0;
+            for req in &self.configuration_requests {
+                let option_list_ = req.message.get_option(CoapOption::UriPath).unwrap();
+                let mut uri_path = String::new();
+                for option in option_list_ {
+                    _ = write!(uri_path, "{}", String::from_utf8_lossy(option))
+                }
+                if uri_path.eq("configps") {
+                    let block = Block::new()
+                        .borders(Borders::TOP | Borders::BOTTOM)
+                        .title(vec![Span::from("Command: ps")])
+                        .title_alignment(Alignment::Left);
+                    match &req.response {
+                        Some(resp) => {
+                            let text = fmt_ps(&resp.message);
+                            let linecount = text.lines().count();
+                            sum += linecount + 2;
+                            constrains.push(Min((linecount + 2).try_into().unwrap()));
+                            req_blocks.push(Paragraph::new(text).block(block));
+                        }
+                        None => {
+                            req_blocks.push(Paragraph::new("Awaiting response").block(block));
+                            sum += 3;
+                            constrains.push(Min(3));
+                        }
+                    };
+                } else {
+                    let block = Block::new()
+                        .borders(Borders::TOP | Borders::BOTTOM)
+                        .title(vec![Span::from(fmt_packet(&req.message))])
+                        .title_alignment(Alignment::Left);
+                    match &req.response {
+                        Some(resp) => {
+                            let text = fmt_packet(&resp.message);
+                            let linecount = text.lines().count();
+                            sum += linecount + 2;
+                            constrains.push(Min((linecount + 2).try_into().unwrap()));
+                            req_blocks.push(Paragraph::new(text).block(block));
+                        }
+                        None => {
+                            req_blocks.push(Paragraph::new("Awaiting response").block(block));
+                            sum += 3;
+                            constrains.push(Min(3));
+                        }
+                    };
+                }
             }
+            sum.try_into().unwrap()
         };
-        let paragraph = Paragraph::new(text).scroll((scroll as u16, 0));
-        let paragraph_block = paragraph.block(right_block_up);
-        frame.render_widget(paragraph_block, right_chunk_upper);
+
+        let width = if right_block_up.inner(right_chunk_upper).height < total_length {
+            right_block_up.inner(right_chunk_upper).width - 1
+        } else {
+            right_block_up.inner(right_chunk_upper).width
+        };
+
+        if right_block_up.inner(right_chunk_upper).height < total_length {
+            let diff = total_length - right_block_up.inner(right_chunk_upper).height;
+            for _ in 0..diff {
+                state.scroll_down();
+            }
+        }
+
+        let mut scroll_view = ScrollView::new(Size::new(width, total_length));
+        let buf = scroll_view.buf_mut();
+        let area = buf.area;
+        let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
+        for (a, req_b) in zip(areas, req_blocks) {
+            req_b.render(a, buf);
+        }
+        for _request in &self.configuration_requests {}
+        frame.render_stateful_widget(
+            scroll_view,
+            right_block_up.inner(right_chunk_upper),
+            &mut state,
+        );
+        frame.render_widget(right_block_up, right_chunk_upper);
 
         let left_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -289,24 +462,34 @@ impl App {
         let left_chunk_lower = left_chunks[1];
 
         let left_block_up = Block::bordered()
-            .title(vec![Span::from("Configuration Packets")])
+            .title(vec![Span::from("Diagnostic Messages")])
             .title_alignment(Alignment::Left);
 
         let left_block_down = Block::bordered()
             .title(vec![Span::from("Configuration")])
             .title_alignment(Alignment::Left);
 
-        let items: Vec<ListItem> = self
-            .configuration_packets
-            .iter()
-            .map(|i| ListItem::new(fmt_packet(i)))
-            .collect();
-        let list = List::new(items).block(left_block_up);
-        frame.render_widget(list, left_chunk_upper);
-
-        let text: &str = &self.ip;
+        let text: &str = &self.diagnostic_messages;
         let text = Text::from(text);
+        let height = left_block_up.inner(left_chunk_upper).height;
+        let scroll = {
+            if text.height() > height as usize {
+                text.height() - height as usize
+            } else {
+                0
+            }
+        };
         let paragraph = Paragraph::new(text).scroll((scroll as u16, 0));
+        let paragraph_block = paragraph.block(left_block_up);
+        frame.render_widget(paragraph_block, left_chunk_upper);
+
+        //let text: &str = &self.ip;
+        let text = format!(
+            "Version: {}\nBoard: {}\n{}",
+            self.version, self.board, self.ip
+        );
+        let text = Text::from(text);
+        let paragraph = Paragraph::new(text);
         let paragraph_block = paragraph.block(left_block_down);
         frame.render_widget(paragraph_block, left_chunk_lower);
     }
@@ -400,6 +583,14 @@ where
         match app.configuration_channel.try_recv() {
             Ok(data) => {
                 let response = Packet::from_bytes(&data).unwrap();
+                let token = response.get_token();
+                for request in &mut app.configuration_requests {
+                    if request.message.get_token() == token {
+                        request.response = Some(CoapResponse {
+                            message: response.clone(),
+                        });
+                    }
+                }
                 app.configuration_packets.push(response);
                 debounce.get_or_insert_with(Instant::now);
             }
@@ -425,32 +616,118 @@ where
 }
 
 fn fmt_packet(packet: &Packet) -> String {
-    use std::fmt::Write;
     // When writing to a String `write!` will never fail.
     // Therefore the Result is ignored with `_ = write!()`.
     let mut out = String::new();
     match packet.header.code {
         MessageClass::Empty => _ = write!(out, "Empty"),
         MessageClass::Request(rtype) => {
-            _ = write!(out, "<- Req({rtype:?} ");
+            _ = write!(out, " ← Req({rtype:?} ");
             let option_list = packet.get_option(CoapOption::UriPath).unwrap();
             for option in option_list {
                 _ = write!(out, "/{}", String::from_utf8_lossy(option));
             }
-            _ = write!(out, ")\n  Empty Payload");
+            _ = write!(
+                out,
+                ")[0x{:04x}]",
+                u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff]))
+            );
         }
         MessageClass::Response(rtype) => {
-            _ = write!(out, "-> Res({rtype:?}");
+            _ = write!(out, " → Res({rtype:?}");
             if let Some(cf) = packet.get_content_format() {
                 let payload = match cf {
-                    ContentFormat::ApplicationLinkFormat | ContentFormat::TextPlain => {
+                    ContentFormat::ApplicationLinkFormat => {
+                        // change me back | ContentFormat::TextPlain
                         String::from_utf8_lossy(&packet.payload).replace(',', "\n  ")
+                    }
+                    ContentFormat::TextPlain => {
+                        String::from_utf8_lossy(&packet.payload).to_string()
                     }
                     _ => todo!(),
                 };
-                _ = write!(out, "/{cf:?})\n  {payload}");
+                _ = write!(
+                    out,
+                    "/{cf:?})[0x{:04x}]\n  {payload}",
+                    u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff]))
+                );
             } else {
-                _ = write!(out, ")\n  Empty Payload");
+                _ = write!(
+                    out,
+                    ")[0x{:04x}]\n  Empty Payload",
+                    u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff]))
+                );
+            }
+        }
+        MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
+    }
+    out
+}
+
+fn fmt_ps(packet: &Packet) -> String {
+    // When writing to a String `write!` will never fail.
+    // Therefore the Result is ignored with `_ = write!()`.
+    let mut out = String::new();
+    match packet.header.code {
+        MessageClass::Empty => _ = write!(out, "Empty"),
+        MessageClass::Request(_rtype) => {
+            _ = write!(out, "Request");
+        }
+        MessageClass::Response(_rtype) => {
+            if let Some(cf) = packet.get_content_format() {
+                let _payload = match cf {
+                    ContentFormat::TextPlain => {
+                        //_ = write!(out, "Total payload size: {}\n", packet.payload.len());
+                        _ = write!(
+                            out,
+                            "{:<20}|{:<5}|{:<5}|{:<5}|{:<10}|{:<10}|\n",
+                            "name", "stack", "used", "free", "start", "SP"
+                        );
+                        let mut last_zero = 0;
+                        while let Some(mut next_zero) =
+                            packet.payload[last_zero..].iter().position(|&x| x == 0)
+                        {
+                            next_zero = last_zero + next_zero;
+                            let name =
+                                String::from_utf8_lossy(&packet.payload[last_zero..next_zero]);
+                            next_zero += 1;
+
+                            let stack_size = u32::from_le_bytes(
+                                packet.payload[next_zero..(next_zero + 4)]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            next_zero += 4;
+                            let stack_size_used = u32::from_le_bytes(
+                                packet.payload[next_zero..(next_zero + 4)]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            next_zero += 4;
+                            let stack_start = u32::from_le_bytes(
+                                packet.payload[next_zero..(next_zero + 4)]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            next_zero += 4;
+                            let stack_pointer = stack_start + stack_size + 52 - stack_size_used;
+                            let stack_free = stack_size - stack_size_used;
+                            _ = write!(
+                                out,
+                                "{name:<20}|{stack_size:<5}|{stack_size_used:<5}|{stack_free:<5}|{stack_start:#010x}|{stack_pointer:#010x}|\n"
+                            );
+                            //next_zero += 4;
+                            last_zero = next_zero;
+                        }
+                    }
+                    _ => todo!(),
+                };
+            } else {
+                _ = write!(
+                    out,
+                    ")[0x{:04x}]\n  Empty Payload",
+                    u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff]))
+                );
             }
         }
         MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
