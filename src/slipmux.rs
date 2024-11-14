@@ -48,18 +48,15 @@ pub fn read_thread(
             match res {
                 Ok(num) => num,
                 Err(_) => {
-                    //println!("{:}", e);
                     continue;
                 }
             }
         };
-
         while offset < num {
             let (used, out, end) = {
                 match slip_decoder.decode(&buffer[offset..num], &mut output[index..]) {
                     Ok((used, out, end)) => (used, out, end),
                     Err(_) => {
-                        //println!("{:}", e);
                         break;
                     }
                 }

@@ -344,7 +344,7 @@ impl App {
         let horizontal_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .margin(0)
-            .constraints([Constraint::Percentage(45), Constraint::Percentage(55)].as_ref())
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
             .split(main_layout[1]);
 
         let horizontal_chunk_left = horizontal_chunks[0];
@@ -518,7 +518,7 @@ pub fn show(
         configuration_channel,
         packet_channel,
     );
-    app.poll_ifconfig();
+    //app.poll_ifconfig();
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
@@ -648,8 +648,9 @@ fn fmt_packet(packet: &Packet) -> String {
                 };
                 _ = write!(
                     out,
-                    "/{cf:?})[0x{:04x}]\n  {payload}",
-                    u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff]))
+                    "/{cf:?})[0x{:04x}] {:} bytes\n  {payload}",
+                    u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff])),
+                    payload.len()
                 );
             } else {
                 _ = write!(
