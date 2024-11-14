@@ -1,12 +1,21 @@
 use std::sync::mpsc::Sender;
+use std::thread::JoinHandle;
+use std::time::Duration;
+use std::{thread, time};
 
 use coap_lite::Packet;
 use serial_line_ip::Decoder;
 use serial_line_ip::Encoder;
 use serialport::SerialPort;
 
+use crate::events::Event;
+
 const DIAGNOSTIC: u8 = 0x0a;
 const CONFIGURATION: u8 = 0xA9;
+
+pub fn create_slipmux_thread(sender: Sender<Event>) -> JoinHandle<()> {
+    thread::spawn(move || read_thread(sender))
+}
 
 pub fn send_diagnostic(text: &str) -> ([u8; 256], usize) {
     let mut output: [u8; 256] = [0; 256];
@@ -30,12 +39,7 @@ pub fn send_configuration(packet: &Packet) -> ([u8; 256], usize) {
     (output, totals.written)
 }
 
-pub fn read_thread(
-    mut read_port: Box<dyn SerialPort>,
-    diagnostic_channel: Sender<String>,
-    configuration_channel: Sender<Vec<u8>>,
-    packet_channel: Sender<Vec<u8>>,
-) {
+fn read_loop(mut read_port: Box<dyn SerialPort>, sender: &Sender<Event>) {
     let mut slip_decoder = Decoder::new();
     let mut output = [0; 2024];
     let mut index = 0;
@@ -48,16 +52,18 @@ pub fn read_thread(
             match res {
                 Ok(num) => num,
                 Err(_) => {
-                    continue;
+                    // TODO: Catch timeout
+                    let _ = sender.send(Event::SerialDisconnect);
+                    break;
                 }
             }
         };
-        while offset < num {
+        'inner: while offset < num {
             let (used, out, end) = {
                 match slip_decoder.decode(&buffer[offset..num], &mut output[index..]) {
                     Ok((used, out, end)) => (used, out, end),
                     Err(_) => {
-                        break;
+                        break 'inner;
                     }
                 }
             };
@@ -67,14 +73,15 @@ pub fn read_thread(
             if end {
                 match output[0] {
                     DIAGNOSTIC => {
-                        let _ = diagnostic_channel
-                            .send(String::from_utf8_lossy(&output[1..index]).to_string());
+                        let _ = sender.send(Event::Diagnostic(
+                            String::from_utf8_lossy(&output[1..index]).to_string(),
+                        ));
                     }
                     CONFIGURATION => {
-                        let _ = configuration_channel.send(output[1..index].to_vec());
+                        let _ = sender.send(Event::Configuration(output[1..index].to_vec()));
                     }
                     _ => {
-                        let _ = packet_channel.send(output[0..index].to_vec());
+                        let _ = sender.send(Event::Packet(output[0..index].to_vec()));
                     }
                 }
                 slip_decoder = Decoder::new();
@@ -83,5 +90,21 @@ pub fn read_thread(
                 index = 0;
             }
         }
+    }
+}
+
+pub fn read_thread(sender: Sender<Event>) {
+    loop {
+        let mut port = match serialport::new("/dev/ttyACM0", 115200).open() {
+            Ok(p) => p,
+            Err(_) => {
+                thread::sleep(time::Duration::from_millis(100));
+                continue;
+            }
+        };
+        let _ = port.set_timeout(Duration::from_secs(600));
+        let read_port = port.try_clone().unwrap();
+        let _ = sender.send(Event::SerialConnect(port));
+        read_loop(read_port, &sender);
     }
 }
