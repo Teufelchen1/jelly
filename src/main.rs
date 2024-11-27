@@ -2,14 +2,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::thread;
-
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
-
-use std::time::Duration;
 
 use events::{create_terminal_thread, event_loop, Event};
 //use slipmux::read_thread;
@@ -22,20 +16,6 @@ use slipmux::create_slipmux_thread;
 mod events;
 mod slipmux;
 mod tui2;
-// mod tui;
-
-// fn slipmux_thread(sender: Sender<Event>) {
-//     let f = File::open("/tmp/fifo").unwrap();
-//     let mut reader = BufReader::new(f);
-
-//     loop {
-//         let mut b = String::new();
-//         let data = reader.read_line(&mut b).unwrap();
-//         if data != 0 {
-//             sender.send(Event::Fifo(b));
-//         }
-//     }
-// }
 
 fn reset_terminal() {
     crossterm::terminal::disable_raw_mode().unwrap();
@@ -49,16 +29,10 @@ fn reset_terminal() {
 }
 
 fn main() {
-    let mut port = serialport::new("/dev/ttyACM0", 115200)
-        .open()
-        .expect("Error");
-    let _ = port.set_timeout(Duration::from_secs(60));
-    let read_port = port.try_clone().unwrap();
-    let mut write_port = port.try_clone().unwrap();
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
     let slipmux_event_sender = event_sender.clone();
     let terminal_event_sender = event_sender.clone();
-    let _ = create_slipmux_thread(read_port, slipmux_event_sender);
+    let _ = create_slipmux_thread(slipmux_event_sender);
     let _ = create_terminal_thread(terminal_event_sender);
 
     let original_hook = std::panic::take_hook();
@@ -80,7 +54,7 @@ fn main() {
 
     terminal.clear().unwrap();
 
-    event_loop(event_receiver, terminal, write_port);
+    event_loop(event_receiver, terminal);
 
     reset_terminal();
     // let (diagnostic_tx, diagnostic_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
