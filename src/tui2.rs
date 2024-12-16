@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::io::Error;
 use std::iter::zip;
 use std::time::Duration;
 use std::{thread, time};
@@ -78,34 +79,47 @@ impl App {
         request
     }
 
-    fn send_request(&mut self, msg: &Packet) {
+    fn send_request(&mut self, msg: &Packet) -> Result<(), Error> {
         let (data, size) = send_configuration(msg);
         if let Some(ref mut port) = &mut self.write_port {
-            let _ = port.write_all(&data[..size]);
+            port.write_all(&data[..size])?;
             let _ = port.flush();
         }
+        Ok(())
     }
 
     pub fn connect(&mut self, write_port: Box<dyn SerialPort>) {
         self.write_port = Some(write_port);
 
         let request: CoapRequest<String> = self.build_request("/riot/board");
-        self.send_request(&request.message);
-        self.configuration_requests.push(request);
+        if let Err(_) = self.send_request(&request.message) {
+            self.diagnostic_messages
+                .push_str("Failed to request /riot/board\n");
+        } else {
+            self.configuration_requests.push(request);
+        }
 
         // TODO: Fix me
         thread::sleep(time::Duration::from_millis(10));
 
         let request: CoapRequest<String> = self.build_request("/riot/ver");
-        self.send_request(&request.message);
-        self.configuration_requests.push(request);
+        if let Err(_) = self.send_request(&request.message) {
+            self.diagnostic_messages
+                .push_str("Failed to request /riot/ver\n");
+        } else {
+            self.configuration_requests.push(request);
+        }
 
         // TODO: Fix me
         // thread::sleep(time::Duration::from_millis(20));
 
-        // let request: CoapRequest<String> = self.build_request("/.well-known/core");
-        // self.send_request(&request.message);
-        // self.configuration_requests.push(request);
+        let request: CoapRequest<String> = self.build_request("/.well-known/core");
+        if let Err(_) = self.send_request(&request.message) {
+            self.diagnostic_messages
+                .push_str("Failed to request /.well-known/core\n");
+        } else {
+            self.configuration_requests.push(request);
+        }
     }
 
     pub fn disconnect(&mut self) {
