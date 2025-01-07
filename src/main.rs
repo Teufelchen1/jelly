@@ -13,9 +13,9 @@ use slipmux::create_slipmux_thread;
 //use std::io::stdin;
 //use std::io::BufRead;
 
+mod app;
 mod events;
 mod slipmux;
-mod tui2;
 
 fn reset_terminal() {
     crossterm::terminal::disable_raw_mode().unwrap();

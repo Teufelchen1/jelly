@@ -11,7 +11,7 @@ use ratatui::Terminal;
 
 use serialport::SerialPort;
 
-use crate::tui2::App;
+use crate::app::App;
 
 pub enum Event {
     Diagnostic(String),
@@ -20,7 +20,7 @@ pub enum Event {
     SerialConnect(Box<dyn SerialPort>),
     SerialDisconnect,
     Terminal(KeyEvent),
-    TerminalResize(u16, u16),
+    TerminalResize((), ()),
 }
 
 fn terminal_thread(sender: Sender<Event>) {
@@ -29,8 +29,8 @@ fn terminal_thread(sender: Sender<Event>) {
             crossterm::event::Event::Key(key) => {
                 let _ = sender.send(Event::Terminal(key));
             }
-            crossterm::event::Event::Resize(columns, rows) => {
-                let _ = sender.send(Event::TerminalResize(columns, rows));
+            crossterm::event::Event::Resize(_columns, _rows) => {
+                let _ = sender.send(Event::TerminalResize((), ()));
             }
             _ => (),
         };
@@ -48,34 +48,34 @@ pub fn event_loop(
     let mut app = App::new();
     loop {
         terminal.draw(|frame| app.draw(frame)).unwrap();
-        let event = match event_channel.recv_timeout(Duration::from_millis(20000)) {
+        let event = match event_channel.recv_timeout(Duration::from_millis(200)) {
             Ok(event) => event,
-            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Timeout) => {
+                terminal.draw(|frame| app.draw(frame)).unwrap();
+                continue;
+            }
             Err(RecvTimeoutError::Disconnected) => panic!(),
         };
-        let okay = match event {
+        match event {
             Event::Diagnostic(msg) => {
                 app.on_diagnostic_msg(msg);
-                true
             }
             Event::Configuration(data) => {
                 app.on_configuration_msg(data);
-                true
             }
-            Event::Packet(data) => true,
+            Event::Packet(_data) => (),
             Event::SerialConnect(write_port) => {
                 app.connect(write_port);
-                true
             }
             Event::SerialDisconnect => {
                 app.disconnect();
-                true
             }
-            Event::Terminal(key) => app.on_key(key),
-            Event::TerminalResize(_, _) => true,
+            Event::Terminal(key) => {
+                if !app.on_key(key) {
+                    break;
+                }
+            }
+            Event::TerminalResize(_, _) => (),
         };
-        if !okay {
-            break;
-        }
     }
 }
