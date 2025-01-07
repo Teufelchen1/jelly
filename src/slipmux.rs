@@ -41,6 +41,7 @@ pub fn send_configuration(packet: &Packet) -> ([u8; 256], usize) {
 
 fn read_loop(mut read_port: Box<dyn SerialPort>, sender: &Sender<Event>) {
     let mut slip_decoder = Decoder::new();
+    let mut strbuffer = String::new();
     let mut output = [0; 2024];
     let mut index = 0;
     let _ = slip_decoder.decode(&[0xc0], &mut output);
@@ -73,9 +74,17 @@ fn read_loop(mut read_port: Box<dyn SerialPort>, sender: &Sender<Event>) {
             if end {
                 match output[0] {
                     DIAGNOSTIC => {
-                        let _ = sender.send(Event::Diagnostic(
-                            String::from_utf8_lossy(&output[1..index]).to_string(),
-                        ));
+                        let s = String::from_utf8_lossy(&output[1..index]).to_string();
+                        if s.contains('\n') {
+                            strbuffer.push_str(&s);
+                            let _ = sender.send(Event::Diagnostic(strbuffer.clone()));
+                            strbuffer.clear();
+                        } else {
+                            strbuffer.push_str(&s);
+                        }
+                        // let _ = sender.send(Event::Diagnostic(
+                        //     String::from_utf8_lossy(&output[1..index]).to_string(),
+                        // ));
                     }
                     CONFIGURATION => {
                         let _ = sender.send(Event::Configuration(output[1..index].to_vec()));
