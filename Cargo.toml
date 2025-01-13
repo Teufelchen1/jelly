@@ -8,6 +8,7 @@ edition = "2021"
 authors = ["Bennet Blischke <bennet.blischke@haw-hamburg.de>"]
 
 [dependencies]
+clap = { version = "*", features = ["derive"] }
 crossterm = "*"
 serialport = "*"
 serial-line-ip = "*"

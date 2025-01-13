@@ -5,6 +5,7 @@ use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
+use ratatui::layout::Margin;
 use ratatui::layout::Size;
 use ratatui::prelude::Rect;
 use ratatui::prelude::Stylize;
@@ -46,14 +47,13 @@ impl App<'_> {
         );
         let title = match &self.write_port {
             Some(port) => {
-                let name = port.name().unwrap_or("<unkown>".to_string());
+                let device_path = port.name().unwrap_or("<unkown>".to_string());
                 format!(
                     "✅ connected via {} with RIOT {}",
-                    name,
-                    0 //self.version
+                    device_path, self.riot_version
                 )
             }
-            None => format!("❌ not connected, trying.. /dev/ttyACM0"),
+            None => format!("❌ not connected, trying.."),
         };
         frame.render_widget(
             Block::new()
@@ -92,10 +92,14 @@ impl App<'_> {
         let text: &str = &self.user_command;
         let mut text = Text::from(text);
         if let Some(suggestion) = suggestion {
-            let cmd = &self.known_user_commands[suggestion];
+            let cmd = &self.known_user_commands[suggestion].cmd;
+            let dscr = &self.known_user_commands[suggestion].description;
             let typed_len = self.user_command.len();
             let suggestion_preview = cmd.get(typed_len..).unwrap();
             text.push_span(Span::from(suggestion_preview).patch_style(Style::new().dark_gray()));
+            text.push_span(
+                Span::from(" | ".to_owned() + dscr).patch_style(Style::new().dark_gray()),
+            );
         }
         let paragraph = Paragraph::new(text).block(right_block_down);
         frame.render_widget(paragraph, right_chunk_lower);

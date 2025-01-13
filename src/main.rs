@@ -1,21 +1,26 @@
+use std::fs;
+use std::os::unix::fs::FileTypeExt;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
+
+use clap::Parser;
 
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 
 use events::{create_terminal_thread, event_loop, Event};
-//use slipmux::read_thread;
-//use tui::show;
-
 use slipmux::create_slipmux_thread;
-//use std::io::stdin;
-//use std::io::BufRead;
 
 mod app;
 mod events;
 mod slipmux;
+
+#[derive(Parser)]
+struct Cli {
+    /// The path to the UART TTY interface
+    tty_path: std::path::PathBuf,
+}
 
 fn reset_terminal() {
     crossterm::terminal::disable_raw_mode().unwrap();
@@ -29,10 +34,23 @@ fn reset_terminal() {
 }
 
 fn main() {
+    let args = Cli::parse();
+    if !args.tty_path.exists() {
+        println!("{} could not be found.", args.tty_path.display());
+        return;
+    }
+    let metadata = fs::metadata(args.tty_path.clone()).unwrap();
+    let filetype = metadata.file_type();
+    if !filetype.is_char_device() {
+        println!("{} is not a character device.", args.tty_path.display());
+        return;
+    }
+    let path = args.tty_path.to_str().unwrap();
+
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
     let slipmux_event_sender = event_sender.clone();
     let terminal_event_sender = event_sender.clone();
-    let _ = create_slipmux_thread(slipmux_event_sender);
+    let _ = create_slipmux_thread(slipmux_event_sender, path.to_string());
     let _ = create_terminal_thread(terminal_event_sender);
 
     let original_hook = std::panic::take_hook();
@@ -57,70 +75,4 @@ fn main() {
     event_loop(event_receiver, terminal);
 
     reset_terminal();
-    // let (diagnostic_tx, diagnostic_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
-    // let (configuration_tx, configuration_rx): (Sender<Vec<u8>>, Receiver<Vec<u8>>) =
-    //     mpsc::channel();
-    // let (packet_tx, packet_rx): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
-
-    // //let conf_tx = configuration_tx.clone();
-
-    // let mut port = serialport::new("/dev/ttyACM0", 115200)
-    //     .open()
-    //     .expect("Error");
-    // let _ = port.set_timeout(Duration::from_secs(60));
-    // let read_port = port.try_clone().unwrap();
-    // let mut write_port = port.try_clone().unwrap();
-
-    // // let _ =
-    // //     thread::spawn(move || read_thread(read_port, diagnostic_tx, configuration_tx, packet_tx));
-
-    // // loop {
-    // //     let mut line = String::new();
-    // //     {
-    // //         println!("Reading: ");
-    // //         stdin().lock().read_line(&mut line).unwrap();
-    // //     }
-    // //     let (data, size) = send_diagnostic(&line);
-    // //     let _ = write_port.write(&data[..size]);
-    // //     let _ = write_port.flush();
-    // //     println!("Sending data..");
-    // // }
-
-    // let _ =
-    //     thread::spawn(move || read_thread(read_port, diagnostic_tx, configuration_tx, packet_tx));
-    // show(write_port, diagnostic_rx, configuration_rx, packet_rx);
-    //let ui_loop =
-    //    thread::spawn(move || print_thread(write_port, diagnostic_rx, configuration_rx, packet_rx));
-
-    // let (data, size) = send_diagnostic("help\n");
-    // let _ = port.write(&data[..size]);
-    // let _ = port.flush();
-
-    //let mut request: CoapRequest<String> = CoapRequest::new();
-
-    // request.set_method(Method::Get);
-    // request.set_path("/.well-known/core");
-    // request.message.add_option(CoapOption::Block2, vec![0x05]);
-    // conf_tx.send(request.message.to_bytes().unwrap()).unwrap();
-    // let (data, size) = send_configuration(&request.message);
-    // let _ = port.write(&data[..size]);
-    // let _ = port.flush();
-    // request.set_method(Method::Get);
-    // request.set_path("version");
-    // request.message.add_option(CoapOption::Block2, vec![0x05]);
-    // conf_tx.send(request.message.to_bytes().unwrap()).unwrap();
-    // let (data, size) = send_configuration(&request.message);
-    // let _ = port.write(&data[..size]);
-    // let _ = port.flush();
-    //ui_loop.join().unwrap();
-
-    // loop {
-    //     let mut line = String::new();
-    //     {
-    //         stdin().lock().read_line(&mut line).unwrap();
-    //     }
-    //     let (data, size) = send_diagnostic(&line);
-    //     let _ = port.write(&data[..size]);
-    //     let _ = port.flush();
-    // }
 }

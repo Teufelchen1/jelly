@@ -13,8 +13,8 @@ use crate::events::Event;
 const DIAGNOSTIC: u8 = 0x0a;
 const CONFIGURATION: u8 = 0xA9;
 
-pub fn create_slipmux_thread(sender: Sender<Event>) -> JoinHandle<()> {
-    thread::spawn(move || read_thread(sender))
+pub fn create_slipmux_thread(sender: Sender<Event>, device_path: String) -> JoinHandle<()> {
+    thread::spawn(move || read_thread(sender, device_path))
 }
 
 pub fn send_diagnostic(text: &str) -> ([u8; 256], usize) {
@@ -102,9 +102,10 @@ fn read_loop(mut read_port: Box<dyn SerialPort>, sender: &Sender<Event>) {
     }
 }
 
-pub fn read_thread(sender: Sender<Event>) {
+pub fn read_thread(sender: Sender<Event>, device_path: String) {
+    //let path = device_path.to_str().unwrap();
     loop {
-        let mut port = match serialport::new("/dev/ttyACM0", 115200).open() {
+        let mut port = match serialport::new(&device_path, 115200).open() {
             Ok(p) => p,
             Err(_) => {
                 thread::sleep(time::Duration::from_millis(100));
