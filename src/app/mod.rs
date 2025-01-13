@@ -20,12 +20,38 @@ use serialport::SerialPort;
 
 mod tui3;
 
+struct Command {
+    cmd: String,
+    description: String,
+    location: Option<String>,
+}
+impl Command {
+    pub fn new(cmd: String, description: String) -> Command {
+        self {
+            cmd,
+            description,
+            None,
+        }
+    }
+
+    pub fn from_location(location: String, description: String) -> Command {
+        let cmd: &str = location
+            .strip_prefix("/shell/")
+            .expect("Failed to parse shell command location!");
+        self {
+            cmd.to_string(),
+            description,
+            location,
+        }
+    }
+}
+
 pub struct App<'a> {
     write_port: Option<Box<dyn SerialPort>>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
     diagnostic_messages: Text<'a>,
-    known_user_commands: Vec<String>,
+    known_user_commands: Vec<(String, String)>,
     user_command: String,
     user_command_history: Vec<String>,
     user_command_cursor: usize,
@@ -40,7 +66,13 @@ impl App<'_> {
             configuration_requests: vec![],
             configuration_packets: vec![],
             diagnostic_messages: Text::default(),
-            known_user_commands: vec!["help".to_string(), "/.well-known/core".to_string()],
+            known_user_commands: vec![
+                (
+                    "help".to_string(),
+                    "Prints all available commands".to_string(),
+                ),
+                ("/.well-known/core".to_string(), "".to_string()),
+            ],
             user_command: String::new(),
             user_command_history: vec![],
             user_command_cursor: 0,
@@ -75,7 +107,7 @@ impl App<'_> {
 
     fn suggest_command(&self) -> Option<usize> {
         for (index, known_cmd) in self.known_user_commands.iter().enumerate() {
-            if known_cmd.starts_with(&self.user_command) {
+            if known_cmd.0.starts_with(&self.user_command) {
                 return Some(index);
             };
         }
@@ -91,8 +123,21 @@ impl App<'_> {
                 continue;
             }
             let s = maybe.unwrap().split('>').next().unwrap().to_string();
-            if !self.known_user_commands.contains(&s) && s.starts_with('/') {
-                self.known_user_commands.push(s);
+            if !self
+                .known_user_commands
+                .contains(&(s.clone(), "".to_string()))
+                && s.starts_with('/')
+            {
+                self.known_user_commands.push((s.clone(), "".to_string()));
+                if s.starts_with("/shell/") {
+                    let request: CoapRequest<String> = self.build_request(&s);
+                    if let Err(_) = self.send_request(&request.message) {
+                        self.diagnostic_messages
+                            .push_line(Line::from("Failed to request /.well-known/core\n"));
+                    } else {
+                        self.configuration_requests.push(request);
+                    }
+                }
             }
         }
     }
@@ -162,7 +207,20 @@ impl App<'_> {
                     "/.well-known/core" => {
                         self.on_well_known_core(&response);
                     }
-                    _ => (),
+                    _ => {
+                        if uri_path.starts_with("/shell/") {
+                            let dscr = String::from_utf8_lossy(&response.payload).to_string();
+                            let maybeindex = self
+                                .known_user_commands
+                                .clone()
+                                .into_iter()
+                                .enumerate()
+                                .find(|(_, (name, _))| uri_path.contains(name));
+                            if let Some((index, _)) = maybeindex {
+                                self.known_user_commands[index].1.push_str(&dscr);
+                            }
+                        }
+                    }
                 }
             }
         } else {
@@ -221,7 +279,7 @@ impl App<'_> {
                 if let Some(suggestion) = self.suggest_command() {
                     self.user_command.clear();
                     self.user_command
-                        .push_str(&self.known_user_commands[suggestion]);
+                        .push_str(&self.known_user_commands[suggestion].0);
                 }
             }
             KeyCode::Backspace => {

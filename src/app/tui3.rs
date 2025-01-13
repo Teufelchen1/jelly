@@ -92,10 +92,14 @@ impl App<'_> {
         let text: &str = &self.user_command;
         let mut text = Text::from(text);
         if let Some(suggestion) = suggestion {
-            let cmd = &self.known_user_commands[suggestion];
+            let cmd = &self.known_user_commands[suggestion].0;
+            let dscr = &self.known_user_commands[suggestion].1;
             let typed_len = self.user_command.len();
             let suggestion_preview = cmd.get(typed_len..).unwrap();
             text.push_span(Span::from(suggestion_preview).patch_style(Style::new().dark_gray()));
+            text.push_span(
+                Span::from(" | ".to_owned() + dscr).patch_style(Style::new().dark_gray()),
+            );
         }
         let paragraph = Paragraph::new(text).block(right_block_down);
         frame.render_widget(paragraph, right_chunk_lower);
