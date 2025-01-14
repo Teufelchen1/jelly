@@ -28,22 +28,13 @@ use coap_lite::Packet;
 use crate::app::App;
 
 impl App<'_> {
-    pub fn draw(&mut self, frame: &mut Frame) {
-        let main_layout = Layout::new(
-            Direction::Vertical,
-            [
-                Constraint::Length(1),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ],
-        )
-        .split(frame.size());
+    fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
                 .title("Jelly 🪼: The friendly SLIPMUX for RIOT OS")
                 .title_alignment(Alignment::Center),
-            main_layout[0],
+            header_area,
         );
         let title = match &self.write_port {
             Some(port) => {
@@ -60,53 +51,16 @@ impl App<'_> {
                 .borders(Borders::TOP)
                 .title(title)
                 .title_alignment(Alignment::Right),
-            main_layout[2],
+            footer_area,
         );
+    }
 
-        let horizontal_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(0)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
-            .split(main_layout[1]);
-
-        let horizontal_chunk_left = horizontal_chunks[0];
-        let horizontal_chunk_right = horizontal_chunks[1];
-
-        let right_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(90), Constraint::Percentage(10)].as_ref())
-            .split(horizontal_chunk_right);
-
-        let right_chunk_upper = right_chunks[0];
-        let right_chunk_lower = right_chunks[1];
-
+    fn render_configuration_messages(&self, frame: &mut Frame, area: Rect) {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
             .title_alignment(Alignment::Left)
             .title_style(Style::new().white());
-
-        let right_block_down = Block::bordered()
-            .border_style(Style::new().gray())
-            .title(vec![Span::from("User Input")])
-            .title_alignment(Alignment::Left)
-            .title_style(Style::new().white());
-
-        let suggestion = self.suggest_command();
-        let text: &str = &self.user_command;
-        let mut text = Text::from(text);
-        if let Some(suggestion) = suggestion {
-            let cmd = &self.known_user_commands[suggestion].cmd;
-            let dscr = &self.known_user_commands[suggestion].description;
-            let typed_len = self.user_command.len();
-            let suggestion_preview = cmd.get(typed_len..).unwrap();
-            text.push_span(Span::from(suggestion_preview).patch_style(Style::new().dark_gray()));
-            text.push_span(
-                Span::from(" | ".to_owned() + dscr).patch_style(Style::new().dark_gray()),
-            );
-        }
-        let paragraph = Paragraph::new(text).block(right_block_down);
-        frame.render_widget(paragraph, right_chunk_lower);
 
         let mut state = ScrollViewState::default();
         let mut req_blocks = vec![];
@@ -142,14 +96,14 @@ impl App<'_> {
             sum.try_into().unwrap()
         };
 
-        let width = if right_block_up.inner(right_chunk_upper).height < total_length {
-            right_block_up.inner(right_chunk_upper).width - 1
+        let width = if right_block_up.inner(area).height < total_length {
+            right_block_up.inner(area).width - 1
         } else {
-            right_block_up.inner(right_chunk_upper).width
+            right_block_up.inner(area).width
         };
 
-        if right_block_up.inner(right_chunk_upper).height < total_length {
-            let diff = total_length - right_block_up.inner(right_chunk_upper).height;
+        if right_block_up.inner(area).height < total_length {
+            let diff = total_length - right_block_up.inner(area).height;
             for _ in 0..diff {
                 state.scroll_down();
             }
@@ -157,41 +111,50 @@ impl App<'_> {
 
         let mut scroll_view = ScrollView::new(Size::new(width, total_length));
         let buf = scroll_view.buf_mut();
-        let area = buf.area;
-        let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
+        let scroll_view_area = buf.area;
+        let areas: Vec<Rect> = Layout::vertical(constrains)
+            .split(scroll_view_area)
+            .to_vec();
         for (a, req_b) in zip(areas, req_blocks) {
             req_b.render(a, buf);
         }
         for _request in &self.configuration_requests {}
-        frame.render_stateful_widget(
-            scroll_view,
-            right_block_up.inner(right_chunk_upper),
-            &mut state,
-        );
-        frame.render_widget(right_block_up, right_chunk_upper);
+        frame.render_stateful_widget(scroll_view, right_block_up.inner(area), &mut state);
+        frame.render_widget(right_block_up, area);
+    }
 
-        let left_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-            .split(horizontal_chunk_left);
+    fn render_user_input(&self, frame: &mut Frame, area: Rect) {
+        let right_block_down = Block::bordered()
+            .border_style(Style::new().gray())
+            .title(vec![Span::from("User Input")])
+            .title_alignment(Alignment::Left)
+            .title_style(Style::new().white());
 
-        let left_chunk_upper = left_chunks[0];
-        let left_chunk_lower = left_chunks[1];
+        let suggestion = self.suggest_command();
+        let text: &str = &self.user_command;
+        let mut text = Text::from(text);
+        if let Some(suggestion) = suggestion {
+            let cmd = &self.known_user_commands[suggestion].cmd;
+            let dscr = &self.known_user_commands[suggestion].description;
+            let typed_len = self.user_command.len();
+            let suggestion_preview = cmd.get(typed_len..).unwrap();
+            text.push_span(Span::from(suggestion_preview).patch_style(Style::new().dark_gray()));
+            text.push_span(
+                Span::from(" | ".to_owned() + dscr).patch_style(Style::new().dark_gray()),
+            );
+        }
+        let paragraph = Paragraph::new(text).block(right_block_down);
+        frame.render_widget(paragraph, area);
+    }
 
+    fn render_diagnostic_messages(&self, frame: &mut Frame, area: Rect) {
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
             .title_alignment(Alignment::Left)
             .title_style(Style::new().white());
-
-        let left_block_down = Block::bordered()
-            .border_style(Style::new().gray())
-            .title(vec![Span::from("Configuration")])
-            .title_alignment(Alignment::Left)
-            .title_style(Style::new().white());
-
         let text = &self.diagnostic_messages;
-        let height = left_block_up.inner(left_chunk_upper).height;
+        let height = left_block_up.inner(area).height;
         let scroll = {
             if text.height() > height as usize {
                 text.height() - height as usize
@@ -201,8 +164,15 @@ impl App<'_> {
         };
         let paragraph = Paragraph::new(self.diagnostic_messages.clone()).scroll((scroll as u16, 0));
         let paragraph_block = paragraph.block(left_block_up);
-        frame.render_widget(paragraph_block, left_chunk_upper);
+        frame.render_widget(paragraph_block, area);
+    }
 
+    fn render_configuration_overview(&self, frame: &mut Frame, area: Rect) {
+        let left_block_down = Block::bordered()
+            .border_style(Style::new().gray())
+            .title(vec![Span::from("Configuration")])
+            .title_alignment(Alignment::Left)
+            .title_style(Style::new().white());
         let text = format!(
             "Version: {}\nBoard: {}\n",
             self.riot_version, self.riot_board,
@@ -210,7 +180,57 @@ impl App<'_> {
         let text = Text::from(text);
         let paragraph = Paragraph::new(text);
         let paragraph_block = paragraph.block(left_block_down);
-        frame.render_widget(paragraph_block, left_chunk_lower);
+        frame.render_widget(paragraph_block, area);
+    }
+
+    pub fn draw(&mut self, frame: &mut Frame) {
+        let main_layout = Layout::new(
+            Direction::Vertical,
+            [
+                Constraint::Length(1),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ],
+        )
+        .split(frame.size());
+        let header_area = main_layout[0];
+        let main_area = main_layout[1];
+        let footer_area = main_layout[2];
+
+        let main_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(0)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
+            .split(main_area);
+
+        let main_chunk_left = main_chunks[0];
+        let main_chunk_right = main_chunks[1];
+
+        let right_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
+            .split(main_chunk_right);
+
+        let right_chunk_upper = right_chunks[0];
+        let right_chunk_lower = right_chunks[1];
+
+        let left_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+            .split(main_chunk_left);
+
+        let left_chunk_upper = left_chunks[0];
+        let left_chunk_lower = left_chunks[1];
+
+        self.render_header_footer(frame, header_area, footer_area);
+
+        self.render_configuration_messages(frame, right_chunk_upper);
+
+        self.render_user_input(frame, left_chunk_lower);
+
+        self.render_diagnostic_messages(frame, left_chunk_upper);
+
+        self.render_configuration_overview(frame, right_chunk_lower);
     }
 }
 
