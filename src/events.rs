@@ -8,6 +8,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crossterm::event::KeyEvent;
+use crossterm::event::MouseEvent;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 
@@ -21,7 +22,8 @@ pub enum Event {
     Packet(Vec<u8>),
     SerialConnect(Box<dyn SerialPort>),
     SerialDisconnect,
-    Terminal(KeyEvent),
+    TerminalKey(KeyEvent),
+    TerminalMouse(MouseEvent),
     TerminalResize((), ()),
 }
 
@@ -29,7 +31,10 @@ fn terminal_thread(sender: Sender<Event>) {
     loop {
         match crossterm::event::read().unwrap() {
             crossterm::event::Event::Key(key) => {
-                let _ = sender.send(Event::Terminal(key));
+                let _ = sender.send(Event::TerminalKey(key));
+            }
+            crossterm::event::Event::Mouse(mouse) => {
+                let _ = sender.send(Event::TerminalMouse(mouse));
             }
             crossterm::event::Event::Resize(_columns, _rows) => {
                 let _ = sender.send(Event::TerminalResize((), ()));
@@ -49,8 +54,7 @@ pub fn event_loop(
 ) {
     let mut app = App::new();
     loop {
-        terminal.draw(|frame| app.draw(frame)).unwrap();
-        let event = match event_channel.recv_timeout(Duration::from_millis(200)) {
+        let event = match event_channel.recv_timeout(Duration::from_millis(100)) {
             Ok(event) => event,
             Err(RecvTimeoutError::Timeout) => {
                 terminal.draw(|frame| app.draw(frame)).unwrap();
@@ -72,8 +76,13 @@ pub fn event_loop(
             Event::SerialDisconnect => {
                 app.disconnect();
             }
-            Event::Terminal(key) => {
+            Event::TerminalKey(key) => {
                 if !app.on_key(key) {
+                    break;
+                }
+            }
+            Event::TerminalMouse(mouse) => {
+                if !app.on_mouse(mouse) {
                     break;
                 }
             }
