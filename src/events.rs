@@ -1,4 +1,6 @@
+use std::fs::File;
 use std::io::Stdout;
+use std::io::Write;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::thread::JoinHandle;
@@ -77,5 +79,10 @@ pub fn event_loop(
             }
             Event::TerminalResize(_, _) => (),
         };
+    }
+    let mut file = File::create("foo.txt").unwrap();
+    for line in app.diagnostic_messages {
+        file.write_all(line.to_string().as_bytes());
+        file.write_all(b"\n");
     }
 }

@@ -1,5 +1,7 @@
 use std::fmt::Write;
 use std::io::Error;
+use std::thread;
+use std::time;
 
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -21,28 +23,42 @@ use serialport::SerialPort;
 mod tui3;
 
 struct Command {
-    cmd: String,
-    description: String,
-    location: Option<String>,
+    pub cmd: String,
+    pub description: String,
+    pub location: Option<String>,
 }
 impl Command {
-    pub fn new(cmd: String, description: String) -> Command {
-        self {
-            cmd,
-            description,
-            None,
+    pub fn new(cmd: &str, description: &str) -> Command {
+        Self {
+            cmd: cmd.to_string(),
+            description: description.to_string(),
+            location: None,
         }
     }
 
-    pub fn from_location(location: String, description: String) -> Command {
+    pub fn new_coap_resource(resource: &str, description: &str) -> Command {
+        Self {
+            cmd: resource.to_string(),
+            description: description.to_string(),
+            location: Some(resource.to_string()),
+        }
+    }
+
+    pub fn from_location(location: &str, description: &str) -> Command {
         let cmd: &str = location
             .strip_prefix("/shell/")
             .expect("Failed to parse shell command location!");
-        self {
-            cmd.to_string(),
-            description,
-            location,
+        Self {
+            cmd: cmd.to_string(),
+            description: description.to_string(),
+            location: Some(location.to_string()),
         }
+    }
+}
+
+impl PartialEq for Command {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmd == other.cmd
     }
 }
 
@@ -50,8 +66,8 @@ pub struct App<'a> {
     write_port: Option<Box<dyn SerialPort>>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
-    diagnostic_messages: Text<'a>,
-    known_user_commands: Vec<(String, String)>,
+    pub diagnostic_messages: Text<'a>,
+    known_user_commands: Vec<Command>,
     user_command: String,
     user_command_history: Vec<String>,
     user_command_cursor: usize,
@@ -67,11 +83,8 @@ impl App<'_> {
             configuration_packets: vec![],
             diagnostic_messages: Text::default(),
             known_user_commands: vec![
-                (
-                    "help".to_string(),
-                    "Prints all available commands".to_string(),
-                ),
-                ("/.well-known/core".to_string(), "".to_string()),
+                Command::new("help", "Prints all available commands"),
+                Command::new_coap_resource("/.well-known/core", "Query the wkc"),
             ],
             user_command: String::new(),
             user_command_history: vec![],
@@ -107,7 +120,7 @@ impl App<'_> {
 
     fn suggest_command(&self) -> Option<usize> {
         for (index, known_cmd) in self.known_user_commands.iter().enumerate() {
-            if known_cmd.0.starts_with(&self.user_command) {
+            if known_cmd.cmd.starts_with(&self.user_command) {
                 return Some(index);
             };
         }
@@ -123,13 +136,15 @@ impl App<'_> {
                 continue;
             }
             let s = maybe.unwrap().split('>').next().unwrap().to_string();
-            if !self
-                .known_user_commands
-                .contains(&(s.clone(), "".to_string()))
-                && s.starts_with('/')
-            {
-                self.known_user_commands.push((s.clone(), "".to_string()));
+            if s.starts_with('/') {
                 if s.starts_with("/shell/") {
+                    let new_command = Command::from_location(&s, "A CoAP resource");
+
+                    // Skip commands that we already learned.
+                    if self.known_user_commands.contains(&new_command) {
+                        continue;
+                    }
+                    self.known_user_commands.push(new_command);
                     let request: CoapRequest<String> = self.build_request(&s);
                     if let Err(_) = self.send_request(&request.message) {
                         self.diagnostic_messages
@@ -137,8 +152,18 @@ impl App<'_> {
                     } else {
                         self.configuration_requests.push(request);
                     }
+                } else {
+                    let new_command = Command::new_coap_resource(&s, "A CoAP resource");
+
+                    // Skip commands that we already learned.
+                    if self.known_user_commands.contains(&new_command) {
+                        continue;
+                    }
+                    self.known_user_commands.push(new_command);
                 }
             }
+            // TODO: Fix me
+            thread::sleep(time::Duration::from_millis(10));
         }
     }
 
@@ -212,12 +237,12 @@ impl App<'_> {
                             let dscr = String::from_utf8_lossy(&response.payload).to_string();
                             let maybeindex = self
                                 .known_user_commands
-                                .clone()
-                                .into_iter()
+                                .iter()
                                 .enumerate()
-                                .find(|(_, (name, _))| uri_path.contains(name));
+                                .find(|(_, cmd)| uri_path.contains(&cmd.cmd));
                             if let Some((index, _)) = maybeindex {
-                                self.known_user_commands[index].1.push_str(&dscr);
+                                self.known_user_commands[index].description.clear();
+                                self.known_user_commands[index].description.push_str(&dscr);
                             }
                         }
                     }
@@ -279,7 +304,7 @@ impl App<'_> {
                 if let Some(suggestion) = self.suggest_command() {
                     self.user_command.clear();
                     self.user_command
-                        .push_str(&self.known_user_commands[suggestion].0);
+                        .push_str(&self.known_user_commands[suggestion].cmd);
                 }
             }
             KeyCode::Backspace => {
