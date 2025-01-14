@@ -6,6 +6,7 @@ use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;
+use ratatui::layout::Position;
 use ratatui::layout::Size;
 use ratatui::prelude::Rect;
 use ratatui::prelude::Stylize;
@@ -15,7 +16,7 @@ use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 
 use tui_scrollview::{ScrollView, ScrollViewState};
@@ -55,14 +56,13 @@ impl App<'_> {
         );
     }
 
-    fn render_configuration_messages(&self, frame: &mut Frame, area: Rect) {
+    fn render_configuration_messages(&mut self, frame: &mut Frame, area: Rect) {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
             .title_alignment(Alignment::Left)
             .title_style(Style::new().white());
 
-        let mut state = ScrollViewState::default();
         let mut req_blocks = vec![];
         let mut constrains = vec![];
         let total_length: u16 = {
@@ -97,16 +97,14 @@ impl App<'_> {
         };
 
         let width = if right_block_up.inner(area).height < total_length {
+            // Make room for the scroll bar
             right_block_up.inner(area).width - 1
         } else {
             right_block_up.inner(area).width
         };
 
-        if right_block_up.inner(area).height < total_length {
-            let diff = total_length - right_block_up.inner(area).height;
-            for _ in 0..diff {
-                state.scroll_down();
-            }
+        if self.configuration_scroll_position_follow {
+            self.configuration_scroll_position.scroll_to_bottom();
         }
 
         let mut scroll_view = ScrollView::new(Size::new(width, total_length));
@@ -119,7 +117,11 @@ impl App<'_> {
             req_b.render(a, buf);
         }
         for _request in &self.configuration_requests {}
-        frame.render_stateful_widget(scroll_view, right_block_up.inner(area), &mut state);
+        frame.render_stateful_widget(
+            scroll_view,
+            right_block_up.inner(area),
+            &mut self.configuration_scroll_position,
+        );
         frame.render_widget(right_block_up, area);
     }
 
@@ -154,17 +156,35 @@ impl App<'_> {
             .title_alignment(Alignment::Left)
             .title_style(Style::new().white());
         let text = &self.diagnostic_messages;
+        let text_height = text.height();
         let height = left_block_up.inner(area).height;
-        let scroll = {
-            if text.height() > height as usize {
-                text.height() - height as usize
-            } else {
-                0
-            }
-        };
-        let paragraph = Paragraph::new(self.diagnostic_messages.clone()).scroll((scroll as u16, 0));
+        // let scroll = {
+        //     if text_height > height as usize {
+        //         text_height - height as usize
+        //     } else {
+        //         0
+        //     }
+        // };
+        let paragraph = Paragraph::new(self.diagnostic_messages.clone())
+            .scroll((self.diagnostic_messages_scroll_position as u16, 0));
         let paragraph_block = paragraph.block(left_block_up);
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+
+        let mut scrollbar_state =
+            ScrollbarState::new(text_height).position(self.diagnostic_messages_scroll_position);
         frame.render_widget(paragraph_block, area);
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
     }
 
     fn render_configuration_overview(&self, frame: &mut Frame, area: Rect) {
@@ -174,12 +194,16 @@ impl App<'_> {
             .title_alignment(Alignment::Left)
             .title_style(Style::new().white());
         let text = format!(
-            "Version: {}\nBoard: {}\n",
-            self.riot_version, self.riot_board,
+            "Version: {}\nBoard: {}\n{},{}\n",
+            self.riot_version,
+            self.riot_board,
+            self.configuration_scroll_position.offset().x,
+            self.configuration_scroll_position.offset().y
         );
         let text = Text::from(text);
         let paragraph = Paragraph::new(text);
         let paragraph_block = paragraph.block(left_block_down);
+
         frame.render_widget(paragraph_block, area);
     }
 

@@ -6,10 +6,13 @@ use std::time;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
+use tui_scrollview::ScrollViewState;
 
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
@@ -66,7 +69,10 @@ pub struct App<'a> {
     write_port: Option<Box<dyn SerialPort>>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
+    configuration_scroll_position: ScrollViewState,
+    configuration_scroll_position_follow: bool,
     pub diagnostic_messages: Text<'a>,
+    diagnostic_messages_scroll_position: usize,
     known_user_commands: Vec<Command>,
     user_command: String,
     user_command_history: Vec<String>,
@@ -81,7 +87,10 @@ impl App<'_> {
             write_port: None,
             configuration_requests: vec![],
             configuration_packets: vec![],
+            configuration_scroll_position: ScrollViewState::default(),
+            configuration_scroll_position_follow: true,
             diagnostic_messages: Text::default(),
+            diagnostic_messages_scroll_position: 0,
             known_user_commands: vec![
                 Command::new("help", "Prints all available commands"),
                 Command::new_coap_resource("/.well-known/core", "Query the wkc"),
@@ -267,6 +276,26 @@ impl App<'_> {
         // self.diagnostic_messages.push_str(&format!("[{}]", &msg));
     }
 
+    pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => {
+                self.configuration_scroll_position_follow = false;
+                self.configuration_scroll_position.scroll_down();
+                self.diagnostic_messages_scroll_position =
+                    self.diagnostic_messages_scroll_position.saturating_add(1);
+            }
+            MouseEventKind::ScrollUp => {
+                self.configuration_scroll_position_follow = false;
+                self.configuration_scroll_position.scroll_up();
+                self.diagnostic_messages_scroll_position =
+                    self.diagnostic_messages_scroll_position.saturating_sub(1);
+            }
+
+            _ => {}
+        }
+        true
+    }
+
     pub fn on_key(&mut self, key: KeyEvent) -> bool {
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return false;
@@ -275,9 +304,6 @@ impl App<'_> {
         match key.code {
             KeyCode::Esc => return false,
             KeyCode::Enter => {
-                if self.user_command.is_empty() {
-                    return true;
-                }
                 if self.write_port.is_some() {
                     if self.user_command.starts_with('/') {
                         let mut request: CoapRequest<String> = CoapRequest::new();
