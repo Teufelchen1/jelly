@@ -41,7 +41,7 @@ impl App<'_> {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
-                .title("Jelly 🪼: Friendly SLIPMUX for RIOT OS")
+                .title("Jelly 🪼: The friendly SLIPMUX for RIOT OS")
                 .title_alignment(Alignment::Center),
             main_layout[0],
         );
@@ -81,12 +81,16 @@ impl App<'_> {
         let right_chunk_lower = right_chunks[1];
 
         let right_block_up = Block::bordered()
+            .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(Style::new().white());
 
         let right_block_down = Block::bordered()
+            .border_style(Style::new().gray())
             .title(vec![Span::from("User Input")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(Style::new().white());
 
         let suggestion = self.suggest_command();
         let text: &str = &self.user_command;
@@ -117,6 +121,7 @@ impl App<'_> {
                 }
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
+                    .style(Style::new().gray())
                     .title(vec![Span::from(fmt_packet(&req.message))])
                     .title_alignment(Alignment::Left);
                 match &req.response {
@@ -174,12 +179,16 @@ impl App<'_> {
         let left_chunk_lower = left_chunks[1];
 
         let left_block_up = Block::bordered()
+            .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(Style::new().white());
 
         let left_block_down = Block::bordered()
+            .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(Style::new().white());
 
         let text = &self.diagnostic_messages;
         let height = left_block_up.inner(left_chunk_upper).height;
