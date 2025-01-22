@@ -1,3 +1,4 @@
+//#![feature(trait_upcasting)]
 use std::fs;
 use std::os::unix::fs::FileTypeExt;
 use std::sync::mpsc;
@@ -41,10 +42,10 @@ fn main() {
     }
     let metadata = fs::metadata(args.tty_path.clone()).unwrap();
     let filetype = metadata.file_type();
-    if !filetype.is_char_device() {
-        println!("{} is not a character device.", args.tty_path.display());
-        return;
-    }
+    // if filetype.is_char_device() {
+    //     println!("{} is not a character device.", args.tty_path.display());
+    //     return;
+    // }
     let path = args.tty_path.to_str().unwrap();
 
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();

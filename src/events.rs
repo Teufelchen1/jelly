@@ -12,6 +12,7 @@ use crossterm::event::MouseEvent;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 
+use crate::slipmux::{SendPort, Transmit};
 use serialport::SerialPort;
 
 use crate::app::App;
@@ -20,7 +21,7 @@ pub enum Event {
     Diagnostic(String),
     Configuration(Vec<u8>),
     Packet(Vec<u8>),
-    SerialConnect(Box<dyn SerialPort>),
+    SerialConnect(Box<SendPort>),
     SerialDisconnect,
     TerminalKey(KeyEvent),
     TerminalMouse(MouseEvent),

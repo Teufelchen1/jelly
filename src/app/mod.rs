@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::io;
 use std::io::Error;
 use std::thread;
 use std::time;
@@ -20,7 +21,7 @@ use coap_lite::CoapResponse;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
 
-use crate::slipmux::{send_configuration, send_diagnostic};
+use crate::slipmux::{send_configuration, send_diagnostic, SendPort};
 use serialport::SerialPort;
 
 mod tui3;
@@ -66,7 +67,7 @@ impl PartialEq for Command {
 }
 
 pub struct App<'a> {
-    write_port: Option<Box<dyn SerialPort>>,
+    write_port: Option<Box<SendPort>>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
     configuration_scroll_position: ScrollViewState,
@@ -121,8 +122,8 @@ impl App<'_> {
     fn send_request(&mut self, msg: &Packet) -> Result<(), Error> {
         let (data, size) = send_configuration(msg);
         if let Some(ref mut port) = &mut self.write_port {
-            port.write_all(&data[..size])?;
-            let _ = port.flush();
+            port.send(&data[..size])?;
+            // let _ = port.flush();
         }
         Ok(())
     }
@@ -176,7 +177,7 @@ impl App<'_> {
         }
     }
 
-    pub fn connect(&mut self, write_port: Box<dyn SerialPort>) {
+    pub fn connect(&mut self, write_port: Box<SendPort>) {
         self.write_port = Some(write_port);
 
         let request: CoapRequest<String> = self.build_request("/riot/board");
@@ -312,14 +313,14 @@ impl App<'_> {
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
                         let (data, size) = send_configuration(&request.message);
-                        let _ = self.write_port.as_mut().unwrap().write(&data[..size]);
+                        let _ = self.write_port.as_mut().unwrap().send(&data[..size]);
                         self.configuration_requests.push(request);
                     } else {
                         if !self.user_command.ends_with('\n') {
                             self.user_command.push('\n');
                         }
                         let (data, size) = send_diagnostic(&self.user_command);
-                        let _ = self.write_port.as_mut().unwrap().write(&data[..size]);
+                        let _ = self.write_port.as_mut().unwrap().send(&data[..size]);
                     }
                     self.user_command_history.push(self.user_command.clone());
                     self.user_command_cursor = self.user_command_history.len();

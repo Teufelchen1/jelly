@@ -16,7 +16,7 @@ use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 
 use tui_scrollview::{ScrollView, ScrollViewState};
@@ -39,7 +39,7 @@ impl App<'_> {
         );
         let title = match &self.write_port {
             Some(port) => {
-                let device_path = port.name().unwrap_or("<unkown>".to_string());
+                let device_path = port.name();
                 format!(
                     "✅ connected via {} with RIOT {}",
                     device_path, self.riot_version
@@ -150,6 +150,7 @@ impl App<'_> {
     }
 
     fn render_diagnostic_messages(&self, frame: &mut Frame, area: Rect) {
+        frame.render_widget(Clear, area);
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
@@ -165,7 +166,7 @@ impl App<'_> {
         //         0
         //     }
         // };
-        let paragraph = Paragraph::new(self.diagnostic_messages.clone())
+        let paragraph = Paragraph::new(text.clone())
             .scroll((self.diagnostic_messages_scroll_position as u16, 0));
         let paragraph_block = paragraph.block(left_block_up);
 
