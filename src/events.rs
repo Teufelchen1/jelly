@@ -31,13 +31,13 @@ fn terminal_thread(sender: &Sender<Event>) {
     loop {
         match crossterm::event::read().unwrap() {
             crossterm::event::Event::Key(key) => {
-                let _ = sender.send(Event::TerminalKey(key));
+                sender.send(Event::TerminalKey(key)).unwrap();
             }
             crossterm::event::Event::Mouse(mouse) => {
-                let _ = sender.send(Event::TerminalMouse(mouse));
+                sender.send(Event::TerminalMouse(mouse)).unwrap();
             }
             crossterm::event::Event::Resize(_columns, _rows) => {
-                let _ = sender.send(Event::TerminalResize);
+                sender.send(Event::TerminalResize).unwrap();
             }
             _ => (),
         }
