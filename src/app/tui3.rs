@@ -46,7 +46,7 @@ impl App<'_> {
                     device_path, self.riot_version
                 )
             }
-            None => format!("❌ not connected, trying.."),
+            None => "❌ not connected, trying..".to_owned(),
         };
         frame.render_widget(
             Block::new()
@@ -72,7 +72,7 @@ impl App<'_> {
                 let option_list_ = req.message.get_option(CoapOption::UriPath).unwrap();
                 let mut uri_path = String::new();
                 for option in option_list_ {
-                    _ = write!(uri_path, "{}", String::from_utf8_lossy(option))
+                    _ = write!(uri_path, "{}", String::from_utf8_lossy(option));
                 }
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
@@ -92,7 +92,7 @@ impl App<'_> {
                         sum += 3;
                         constrains.push(Constraint::Min(3));
                     }
-                };
+                }
             }
             sum.try_into().unwrap()
         };
@@ -159,7 +159,7 @@ impl App<'_> {
             .title_style(Style::new().white());
         let text = &self.diagnostic_messages;
         let text_height = text.height();
-        let height = left_block_up.inner(area).height;
+        // let height = left_block_up.inner(area).height;
         // let scroll = {
         //     if text_height > height as usize {
         //         text_height - height as usize
@@ -218,7 +218,7 @@ impl App<'_> {
                 Constraint::Length(1),
             ],
         )
-        .split(frame.size());
+        .split(frame.area());
         let header_area = main_layout[0];
         let main_area = main_layout[1];
         let footer_area = main_layout[2];

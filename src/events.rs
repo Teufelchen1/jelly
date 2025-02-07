@@ -24,10 +24,10 @@ pub enum Event {
     SerialDisconnect,
     TerminalKey(KeyEvent),
     TerminalMouse(MouseEvent),
-    TerminalResize((), ()),
+    TerminalResize,
 }
 
-fn terminal_thread(sender: Sender<Event>) {
+fn terminal_thread(sender: &Sender<Event>) {
     loop {
         match crossterm::event::read().unwrap() {
             crossterm::event::Event::Key(key) => {
@@ -37,19 +37,19 @@ fn terminal_thread(sender: Sender<Event>) {
                 let _ = sender.send(Event::TerminalMouse(mouse));
             }
             crossterm::event::Event::Resize(_columns, _rows) => {
-                let _ = sender.send(Event::TerminalResize((), ()));
+                let _ = sender.send(Event::TerminalResize);
             }
             _ => (),
-        };
+        }
     }
 }
 
 pub fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
-    thread::spawn(move || terminal_thread(sender))
+    thread::spawn(move || terminal_thread(&sender))
 }
 
 pub fn event_loop(
-    event_channel: Receiver<Event>,
+    event_channel: &Receiver<Event>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
     let mut app = App::new();
@@ -63,19 +63,11 @@ pub fn event_loop(
             Err(RecvTimeoutError::Disconnected) => panic!(),
         };
         match event {
-            Event::Diagnostic(msg) => {
-                app.on_diagnostic_msg(msg);
-            }
-            Event::Configuration(data) => {
-                app.on_configuration_msg(data);
-            }
+            Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
+            Event::Configuration(data) => app.on_configuration_msg(&data),
             Event::Packet(_data) => (),
-            Event::SerialConnect(write_port) => {
-                app.connect(write_port);
-            }
-            Event::SerialDisconnect => {
-                app.disconnect();
-            }
+            Event::SerialConnect(write_port) => app.connect(write_port),
+            Event::SerialDisconnect => app.disconnect(),
             Event::TerminalKey(key) => {
                 if !app.on_key(key) {
                     break;
@@ -86,12 +78,12 @@ pub fn event_loop(
                     break;
                 }
             }
-            Event::TerminalResize(_, _) => (),
-        };
+            Event::TerminalResize => (),
+        }
     }
     let mut file = File::create("foo.txt").unwrap();
     for line in app.diagnostic_messages {
-        file.write_all(line.to_string().as_bytes());
-        file.write_all(b"\n");
+        file.write_all(line.to_string().as_bytes()).unwrap();
+        file.write_all(b"\n").unwrap();
     }
 }

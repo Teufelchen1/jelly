@@ -1,5 +1,4 @@
 //#![feature(trait_upcasting)]
-use std::fs;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
@@ -40,19 +39,21 @@ fn main() {
         println!("{} could not be found.", args.tty_path.display());
         return;
     }
-    let metadata = fs::metadata(args.tty_path.clone()).unwrap();
-    let filetype = metadata.file_type();
-    // if filetype.is_char_device() {
+    // if args
+    //     .tty_path
+    //     .metadata()
+    //     .expect("Could not read metadata of tty-path")
+    //     .file_type()
+    //     .is_char_device()
+    // {
     //     println!("{} is not a character device.", args.tty_path.display());
     //     return;
     // }
     let path = args.tty_path.to_str().unwrap();
 
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
-    let slipmux_event_sender = event_sender.clone();
-    let terminal_event_sender = event_sender.clone();
-    let _ = create_slipmux_thread(slipmux_event_sender, path.to_string());
-    let _ = create_terminal_thread(terminal_event_sender);
+    let _ = create_slipmux_thread(event_sender.clone(), path.to_string());
+    let _ = create_terminal_thread(event_sender);
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
@@ -73,7 +74,7 @@ fn main() {
 
     terminal.clear().unwrap();
 
-    event_loop(event_receiver, terminal);
+    event_loop(&event_receiver, terminal);
 
     reset_terminal();
 }
