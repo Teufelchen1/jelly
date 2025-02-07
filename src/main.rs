@@ -51,8 +51,8 @@ fn main() {
     // }
 
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
-    let _ = create_slipmux_thread(event_sender.clone(), args.tty_path);
-    let _ = create_terminal_thread(event_sender);
+    create_slipmux_thread(event_sender.clone(), args.tty_path);
+    create_terminal_thread(event_sender);
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {

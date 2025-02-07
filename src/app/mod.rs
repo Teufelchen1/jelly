@@ -306,14 +306,22 @@ impl App<'_> {
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
                         let (data, size) = send_configuration(&request.message);
-                        let _ = self.write_port.as_mut().unwrap().send(&data[..size]);
+                        self.write_port
+                            .as_mut()
+                            .unwrap()
+                            .send(&data[..size])
+                            .unwrap();
                         self.configuration_requests.push(request);
                     } else {
                         if !self.user_command.ends_with('\n') {
                             self.user_command.push('\n');
                         }
                         let (data, size) = send_diagnostic(&self.user_command);
-                        let _ = self.write_port.as_mut().unwrap().send(&data[..size]);
+                        self.write_port
+                            .as_mut()
+                            .unwrap()
+                            .send(&data[..size])
+                            .unwrap();
                     }
                     self.user_command_history.push(self.user_command.clone());
                     self.user_command_cursor = self.user_command_history.len();

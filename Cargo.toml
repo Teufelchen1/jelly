@@ -10,6 +10,7 @@ unsafe_code = "forbid"
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+let_underscore_untyped = "warn"
 str_to_string = "warn"
 
 cast_possible_truncation = "allow"

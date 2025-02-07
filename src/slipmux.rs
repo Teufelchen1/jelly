@@ -90,7 +90,9 @@ pub fn read_thread(sender: &Sender<Event>, device_path: &Path) {
         let socket = SocketWrapper::new(device_path);
         let read_port = socket.clone_socket();
         let send_port = SendPort::new(Box::new(socket), device_path.to_string_lossy().to_string());
-        let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
+        sender
+            .send(Event::SerialConnect(Box::new(send_port)))
+            .unwrap();
         read_loop(read_port, sender);
     }
     // loop {
@@ -136,7 +138,7 @@ fn read_loop(mut read_port: impl Read, sender: &Sender<Event>) {
     let mut strbuffer = String::new();
     let mut output = [0; 2024];
     let mut index = 0;
-    let _ = slip_decoder.decode(&[0xc0], &mut output);
+    slip_decoder.decode(&[0xc0], &mut output).unwrap();
     loop {
         let mut buffer = [0; 1024];
         let mut offset = 0;
@@ -146,7 +148,7 @@ fn read_loop(mut read_port: impl Read, sender: &Sender<Event>) {
                 Ok(num) => num,
                 Err(_) => {
                     // TODO: Catch timeout
-                    let _ = sender.send(Event::SerialDisconnect);
+                    sender.send(Event::SerialDisconnect).unwrap();
                     break;
                 }
             }
@@ -169,22 +171,22 @@ fn read_loop(mut read_port: impl Read, sender: &Sender<Event>) {
                         let s = String::from_utf8_lossy(&output[1..index]);
                         strbuffer.push_str(&s);
                         if s.contains('\n') {
-                            let _ = sender.send(Event::Diagnostic(strbuffer.clone()));
+                            sender.send(Event::Diagnostic(strbuffer.clone())).unwrap();
                             strbuffer.clear();
                         }
                         // let _ = sender.send(Event::Diagnostic(
                         //     String::from_utf8_lossy(&output[1..index]).to_string(),
                         // ));
                     }
-                    CONFIGURATION => {
-                        let _ = sender.send(Event::Configuration(output[1..index].to_vec()));
-                    }
-                    _ => {
-                        let _ = sender.send(Event::Packet(output[0..index].to_vec()));
-                    }
+                    CONFIGURATION => sender
+                        .send(Event::Configuration(output[1..index].to_vec()))
+                        .unwrap(),
+                    _ => sender
+                        .send(Event::Packet(output[0..index].to_vec()))
+                        .unwrap(),
                 }
                 slip_decoder = Decoder::new();
-                let _ = slip_decoder.decode(&[0xc0], &mut output);
+                slip_decoder.decode(&[0xc0], &mut output).unwrap();
                 output = [0; 2024];
                 index = 0;
             }
