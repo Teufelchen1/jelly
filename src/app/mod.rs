@@ -1,5 +1,4 @@
 use std::fmt::Write;
-use std::io::Error;
 use std::thread;
 use std::time;
 
@@ -30,7 +29,7 @@ struct Command {
     pub location: Option<String>,
 }
 impl Command {
-    pub fn new(cmd: &str, description: &str) -> Command {
+    pub fn new(cmd: &str, description: &str) -> Self {
         Self {
             cmd: cmd.to_string(),
             description: description.to_string(),
@@ -38,7 +37,7 @@ impl Command {
         }
     }
 
-    pub fn new_coap_resource(resource: &str, description: &str) -> Command {
+    pub fn new_coap_resource(resource: &str, description: &str) -> Self {
         Self {
             cmd: resource.to_string(),
             description: description.to_string(),
@@ -46,7 +45,7 @@ impl Command {
         }
     }
 
-    pub fn from_location(location: &str, description: &str) -> Command {
+    pub fn from_location(location: &str, description: &str) -> Self {
         let cmd: &str = location
             .strip_prefix("/shell/")
             .expect("Failed to parse shell command location!");
@@ -117,9 +116,9 @@ impl App<'_> {
         request
     }
 
-    fn send_request(&mut self, msg: &Packet) -> Result<(), Error> {
+    fn send_request(&mut self, msg: &Packet) -> std::io::Result<()> {
         let (data, size) = send_configuration(msg);
-        if let Some(ref mut port) = &mut self.write_port {
+        if let Some(port) = &mut self.write_port {
             port.send(&data[..size])?;
             // let _ = port.flush();
         }
@@ -130,7 +129,7 @@ impl App<'_> {
         for (index, known_cmd) in self.known_user_commands.iter().enumerate() {
             if known_cmd.cmd.starts_with(&self.user_command) {
                 return Some(index);
-            };
+            }
         }
         None
     }
@@ -154,7 +153,7 @@ impl App<'_> {
                     }
                     self.known_user_commands.push(new_command);
                     let request: CoapRequest<String> = self.build_request(&s);
-                    if let Err(_) = self.send_request(&request.message) {
+                    if self.send_request(&request.message).is_err() {
                         self.diagnostic_messages
                             .push_line(Line::from("Failed to request /.well-known/core\n"));
                     } else {
@@ -179,7 +178,7 @@ impl App<'_> {
         self.write_port = Some(write_port);
 
         let request: CoapRequest<String> = self.build_request("/riot/board");
-        if let Err(_) = self.send_request(&request.message) {
+        if self.send_request(&request.message).is_err() {
             self.diagnostic_messages
                 .push_line(Line::from("Failed to request /riot/board\n"));
         } else {
@@ -190,7 +189,7 @@ impl App<'_> {
         //thread::sleep(time::Duration::from_millis(10));
 
         let request: CoapRequest<String> = self.build_request("/riot/ver");
-        if let Err(_) = self.send_request(&request.message) {
+        if self.send_request(&request.message).is_err() {
             self.diagnostic_messages
                 .push_line(Line::from("Failed to request /riot/ver\n"));
         } else {
@@ -201,7 +200,7 @@ impl App<'_> {
         //thread::sleep(time::Duration::from_millis(20));
 
         let request: CoapRequest<String> = self.build_request("/.well-known/core");
-        if let Err(_) = self.send_request(&request.message) {
+        if self.send_request(&request.message).is_err() {
             self.diagnostic_messages
                 .push_line(Line::from("Failed to request /.well-known/core\n"));
         } else {
@@ -213,8 +212,8 @@ impl App<'_> {
         self.write_port = None;
     }
 
-    pub fn on_configuration_msg(&mut self, data: Vec<u8>) {
-        let response = Packet::from_bytes(&data).unwrap();
+    pub fn on_configuration_msg(&mut self, data: &[u8]) {
+        let response = Packet::from_bytes(data).unwrap();
         let token = response.get_token();
         let found_matching_request = self
             .configuration_requests
@@ -228,18 +227,16 @@ impl App<'_> {
             if let Some(option_list) = option_list_ {
                 let mut uri_path = String::new();
                 for option in option_list {
-                    _ = write!(uri_path, "/{}", String::from_utf8_lossy(option))
+                    _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
                 }
                 match uri_path.as_str() {
                     "/riot/board" => {
-                        self.riot_board = String::from_utf8_lossy(&response.payload).to_string()
+                        self.riot_board = String::from_utf8_lossy(&response.payload).to_string();
                     }
                     "/riot/ver" => {
-                        self.riot_version = String::from_utf8_lossy(&response.payload).to_string()
+                        self.riot_version = String::from_utf8_lossy(&response.payload).to_string();
                     }
-                    "/.well-known/core" => {
-                        self.on_well_known_core(&response);
-                    }
+                    "/.well-known/core" => self.on_well_known_core(&response),
                     _ => {
                         if uri_path.starts_with("/shell/") {
                             let dscr = String::from_utf8_lossy(&response.payload).to_string();
@@ -263,7 +260,7 @@ impl App<'_> {
         }
     }
 
-    pub fn on_diagnostic_msg(&mut self, msg: String) {
+    pub fn on_diagnostic_msg(&mut self, msg: &str) {
         for chr in msg.chars() {
             match chr {
                 '\n' => self.diagnostic_messages.push_line(Line::default()),
@@ -301,7 +298,6 @@ impl App<'_> {
         }
 
         match key.code {
-            KeyCode::Esc => return false,
             KeyCode::Enter => {
                 if self.write_port.is_some() {
                     if self.user_command.starts_with('/') {
@@ -358,7 +354,7 @@ impl App<'_> {
                 self.user_command.push(to_insert);
             }
             _ => return false,
-        };
+        }
         true
     }
 }

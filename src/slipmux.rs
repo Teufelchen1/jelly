@@ -1,12 +1,9 @@
-use std::io::Error;
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::JoinHandle;
-use std::time;
-use std::time::Duration;
 
 use coap_lite::Packet;
 use serial_line_ip::Decoder;
@@ -19,7 +16,7 @@ const DIAGNOSTIC: u8 = 0x0a;
 const CONFIGURATION: u8 = 0xA9;
 
 pub trait Transmit {
-    fn transmit(&mut self, data: &[u8]) -> Result<(), Error>;
+    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()>;
 }
 
 pub struct SendPort {
@@ -32,11 +29,11 @@ impl SendPort {
         Self { tx, name }
     }
 
-    pub fn name(&self) -> &String {
+    pub const fn name(&self) -> &String {
         &self.name
     }
 
-    pub fn send(&mut self, data: &[u8]) -> Result<(), Error> {
+    pub fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
         self.tx.transmit(data)
     }
 }
@@ -46,13 +43,13 @@ struct SerialPortWrapper {
 }
 
 impl SerialPortWrapper {
-    pub fn new(port: Box<dyn SerialPort>) -> Box<Self> {
-        Box::new(Self { port })
+    pub fn new(port: Box<dyn SerialPort>) -> Self {
+        Self { port }
     }
 }
 
 impl Transmit for SerialPortWrapper {
-    fn transmit(&mut self, data: &[u8]) -> Result<(), Error> {
+    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()> {
         self.port.write_all(data)
     }
 }
@@ -62,12 +59,12 @@ struct SocketWrapper {
 }
 
 impl SocketWrapper {
-    pub fn new(socket_path: String) -> Box<Self> {
+    pub fn new(socket_path: String) -> Self {
         let socket = match UnixStream::connect(socket_path) {
             Ok(s) => s,
             Err(e) => panic!("{}", e),
         };
-        Box::new(Self { socket })
+        Self { socket }
     }
 
     pub fn clone_socket(&self) -> UnixStream {
@@ -76,39 +73,38 @@ impl SocketWrapper {
 }
 
 impl Transmit for SocketWrapper {
-    fn transmit(&mut self, data: &[u8]) -> Result<(), Error> {
-        let err = self.socket.write_all(data);
-        self.socket.flush();
-        err
+    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()> {
+        self.socket.write_all(data)?;
+        self.socket.flush()
     }
 }
 
 pub fn create_slipmux_thread(sender: Sender<Event>, device_path: String) -> JoinHandle<()> {
-    thread::spawn(move || read_thread(sender, device_path))
+    thread::spawn(move || read_thread(&sender, &device_path))
 }
 
-pub fn read_thread(sender: Sender<Event>, device_path: String) {
+pub fn read_thread(sender: &Sender<Event>, device_path: &str) {
     loop {
-        let socket = SocketWrapper::new(device_path.clone());
+        let socket = SocketWrapper::new(device_path.to_owned());
         let read_port = socket.clone_socket();
-        let send_port = SendPort::new(socket, device_path.clone());
+        let send_port = SendPort::new(Box::new(socket), device_path.to_owned());
         let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
-        read_loop(read_port, &sender);
+        read_loop(read_port, sender);
     }
-    loop {
-        let mut port = match serialport::new(&device_path, 115200).open() {
-            Ok(p) => p,
-            Err(_) => {
-                thread::sleep(time::Duration::from_millis(100));
-                continue;
-            }
-        };
-        let _ = port.set_timeout(Duration::from_secs(600));
-        let read_port = port.try_clone().unwrap();
-        let send_port = SendPort::new(SerialPortWrapper::new(port), device_path.clone());
-        let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
-        read_loop(read_port, &sender);
-    }
+    // loop {
+    //     let mut port = match serialport::new(&device_path, 115200).open() {
+    //         Ok(p) => p,
+    //         Err(_) => {
+    //             thread::sleep(Duration::from_millis(100));
+    //             continue;
+    //         }
+    //     };
+    //     let _ = port.set_timeout(Duration::from_secs(600));
+    //     let read_port = port.try_clone().unwrap();
+    //     let send_port = SendPort::new(SerialPortWrapper::new(port), device_path.clone());
+    //     let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
+    //     read_loop(read_port, &sender);
+    // }
 }
 
 pub fn send_diagnostic(text: &str) -> ([u8; 256], usize) {
@@ -168,13 +164,11 @@ fn read_loop(mut read_port: impl Read, sender: &Sender<Event>) {
             if end {
                 match output[0] {
                     DIAGNOSTIC => {
-                        let s = String::from_utf8_lossy(&output[1..index]).to_string();
+                        let s = String::from_utf8_lossy(&output[1..index]);
+                        strbuffer.push_str(&s);
                         if s.contains('\n') {
-                            strbuffer.push_str(&s);
                             let _ = sender.send(Event::Diagnostic(strbuffer.clone()));
                             strbuffer.clear();
-                        } else {
-                            strbuffer.push_str(&s);
                         }
                         // let _ = sender.send(Event::Diagnostic(
                         //     String::from_utf8_lossy(&output[1..index]).to_string(),
