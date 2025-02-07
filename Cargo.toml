@@ -5,6 +5,11 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Bennet Blischke <bennet.blischke@haw-hamburg.de>"]
 
+[profile.release]
+# See https://doc.rust-lang.org/cargo/reference/profiles.html
+codegen-units = 1
+lto = true
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 coap-lite = "0.13"
