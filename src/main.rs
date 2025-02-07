@@ -49,10 +49,9 @@ fn main() {
     //     println!("{} is not a character device.", args.tty_path.display());
     //     return;
     // }
-    let path = args.tty_path.to_str().unwrap();
 
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
-    let _ = create_slipmux_thread(event_sender.clone(), path.to_string());
+    let _ = create_slipmux_thread(event_sender.clone(), args.tty_path);
     let _ = create_terminal_thread(event_sender);
 
     let original_hook = std::panic::take_hook();

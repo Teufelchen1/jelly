@@ -1,6 +1,8 @@
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::JoinHandle;
@@ -59,7 +61,7 @@ struct SocketWrapper {
 }
 
 impl SocketWrapper {
-    pub fn new(socket_path: String) -> Self {
+    pub fn new(socket_path: &Path) -> Self {
         let socket = match UnixStream::connect(socket_path) {
             Ok(s) => s,
             Err(e) => panic!("{}", e),
@@ -79,15 +81,15 @@ impl Transmit for SocketWrapper {
     }
 }
 
-pub fn create_slipmux_thread(sender: Sender<Event>, device_path: String) -> JoinHandle<()> {
+pub fn create_slipmux_thread(sender: Sender<Event>, device_path: PathBuf) -> JoinHandle<()> {
     thread::spawn(move || read_thread(&sender, &device_path))
 }
 
-pub fn read_thread(sender: &Sender<Event>, device_path: &str) {
+pub fn read_thread(sender: &Sender<Event>, device_path: &Path) {
     loop {
-        let socket = SocketWrapper::new(device_path.to_owned());
+        let socket = SocketWrapper::new(device_path);
         let read_port = socket.clone_socket();
-        let send_port = SendPort::new(Box::new(socket), device_path.to_owned());
+        let send_port = SendPort::new(Box::new(socket), device_path.to_string_lossy().to_string());
         let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
         read_loop(read_port, sender);
     }
