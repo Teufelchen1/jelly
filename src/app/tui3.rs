@@ -1,30 +1,31 @@
 use std::fmt::Write;
 use std::iter::zip;
 
+use coap_lite::CoapOption;
+use coap_lite::ContentFormat;
+use coap_lite::MessageClass;
+use coap_lite::Packet;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Margin;
-use ratatui::layout::Position;
+use ratatui::layout::Rect;
 use ratatui::layout::Size;
-use ratatui::prelude::Rect;
-use ratatui::prelude::Stylize;
-use ratatui::prelude::Widget;
 use ratatui::style::Style;
+use ratatui::style::Stylize;
 use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
-use ratatui::widgets::{Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::Clear;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Scrollbar;
+use ratatui::widgets::ScrollbarOrientation;
+use ratatui::widgets::ScrollbarState;
+use ratatui::widgets::Widget;
 use ratatui::Frame;
-
-use tui_scrollview::{ScrollView, ScrollViewState};
-
-use coap_lite::CoapOption;
-use coap_lite::ContentFormat;
-use coap_lite::MessageClass;
-use coap_lite::Packet;
+use tui_scrollview::ScrollView;
 
 use crate::app::App;
 
