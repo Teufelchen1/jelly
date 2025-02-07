@@ -1,15 +1,17 @@
-use std::fs::File;
-use std::io::{Error, Read, Write};
+use std::io::Error;
+use std::io::Read;
+use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::Sender;
+use std::thread;
 use std::thread::JoinHandle;
+use std::time;
 use std::time::Duration;
-use std::{thread, time};
 
 use coap_lite::Packet;
 use serial_line_ip::Decoder;
 use serial_line_ip::Encoder;
-use serialport::{SerialPort, TTYPort};
+use serialport::SerialPort;
 
 use crate::events::Event;
 

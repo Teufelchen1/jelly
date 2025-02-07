@@ -1,28 +1,26 @@
 use std::fmt::Write;
-use std::io;
 use std::io::Error;
 use std::thread;
 use std::time;
-
-use ratatui::text::Line;
-use ratatui::text::Span;
-use ratatui::text::Text;
-use tui_scrollview::ScrollViewState;
-
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use crossterm::event::MouseEvent;
-use crossterm::event::MouseEventKind;
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::CoapResponse;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::text::Text;
+use tui_scrollview::ScrollViewState;
 
-use crate::slipmux::{send_configuration, send_diagnostic, SendPort};
-use serialport::SerialPort;
+use crate::slipmux::send_configuration;
+use crate::slipmux::send_diagnostic;
+use crate::slipmux::SendPort;
 
 mod tui3;
 

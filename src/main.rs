@@ -1,17 +1,17 @@
 //#![feature(trait_upcasting)]
 use std::fs;
-use std::os::unix::fs::FileTypeExt;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 
 use clap::Parser;
-
-use ratatui::prelude::CrosstermBackend;
+use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use events::{create_terminal_thread, event_loop, Event};
-use slipmux::create_slipmux_thread;
+use crate::events::create_terminal_thread;
+use crate::events::event_loop;
+use crate::events::Event;
+use crate::slipmux::create_slipmux_thread;
 
 mod app;
 mod events;

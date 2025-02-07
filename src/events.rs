@@ -1,21 +1,20 @@
 use std::fs::File;
 use std::io::Stdout;
 use std::io::Write;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::JoinHandle;
-
 use std::time::Duration;
 
 use crossterm::event::KeyEvent;
 use crossterm::event::MouseEvent;
-use ratatui::prelude::CrosstermBackend;
+use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use crate::slipmux::{SendPort, Transmit};
-use serialport::SerialPort;
-
 use crate::app::App;
+use crate::slipmux::SendPort;
 
 pub enum Event {
     Diagnostic(String),
