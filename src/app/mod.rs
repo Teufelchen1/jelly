@@ -31,28 +31,28 @@ struct Command {
 impl Command {
     pub fn new(cmd: &str, description: &str) -> Self {
         Self {
-            cmd: cmd.to_string(),
-            description: description.to_string(),
+            cmd: cmd.to_owned(),
+            description: description.to_owned(),
             location: None,
         }
     }
 
     pub fn new_coap_resource(resource: &str, description: &str) -> Self {
         Self {
-            cmd: resource.to_string(),
-            description: description.to_string(),
-            location: Some(resource.to_string()),
+            cmd: resource.to_owned(),
+            description: description.to_owned(),
+            location: Some(resource.to_owned()),
         }
     }
 
     pub fn from_location(location: &str, description: &str) -> Self {
-        let cmd: &str = location
+        let cmd = location
             .strip_prefix("/shell/")
             .expect("Failed to parse shell command location!");
         Self {
-            cmd: cmd.to_string(),
-            description: description.to_string(),
-            location: Some(location.to_string()),
+            cmd: cmd.to_owned(),
+            description: description.to_owned(),
+            location: Some(location.to_owned()),
         }
     }
 }
@@ -97,8 +97,8 @@ impl App<'_> {
             user_command_history: vec![],
             user_command_cursor: 0,
             token_count: 0,
-            riot_board: "Unkown".to_string(),
-            riot_version: "Unkown".to_string(),
+            riot_board: "Unkown".to_owned(),
+            riot_version: "Unkown".to_owned(),
         }
     }
 
@@ -137,22 +137,21 @@ impl App<'_> {
     fn on_well_known_core(&mut self, response: &Packet) {
         // Poor mans clif parser
         for s in String::from_utf8_lossy(&response.payload).split(',') {
-            let tmp = s.to_string();
-            let maybe = tmp.strip_prefix('<');
+            let maybe = s.strip_prefix('<');
             if maybe.is_none() {
                 continue;
             }
-            let s = maybe.unwrap().split('>').next().unwrap().to_string();
+            let s = maybe.unwrap().split('>').next().unwrap();
             if s.starts_with('/') {
                 if s.starts_with("/shell/") {
-                    let new_command = Command::from_location(&s, "A CoAP resource");
+                    let new_command = Command::from_location(s, "A CoAP resource");
 
                     // Skip commands that we already learned.
                     if self.known_user_commands.contains(&new_command) {
                         continue;
                     }
                     self.known_user_commands.push(new_command);
-                    let request: CoapRequest<String> = self.build_request(&s);
+                    let request: CoapRequest<String> = self.build_request(s);
                     if self.send_request(&request.message).is_err() {
                         self.diagnostic_messages
                             .push_line(Line::from("Failed to request /.well-known/core\n"));
@@ -160,7 +159,7 @@ impl App<'_> {
                         self.configuration_requests.push(request);
                     }
                 } else {
-                    let new_command = Command::new_coap_resource(&s, "A CoAP resource");
+                    let new_command = Command::new_coap_resource(s, "A CoAP resource");
 
                     // Skip commands that we already learned.
                     if self.known_user_commands.contains(&new_command) {
@@ -239,7 +238,7 @@ impl App<'_> {
                     "/.well-known/core" => self.on_well_known_core(&response),
                     _ => {
                         if uri_path.starts_with("/shell/") {
-                            let dscr = String::from_utf8_lossy(&response.payload).to_string();
+                            let dscr = String::from_utf8_lossy(&response.payload);
                             let maybeindex = self
                                 .known_user_commands
                                 .iter()
