@@ -19,7 +19,7 @@ use tui_scrollview::ScrollViewState;
 
 use crate::slipmux::send_configuration;
 use crate::slipmux::send_diagnostic;
-use crate::slipmux::SendPort;
+use crate::transport::SendPort;
 
 mod tui3;
 

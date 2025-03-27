@@ -1,195 +1,119 @@
-use std::io::Read;
-use std::io::Write;
-use std::os::unix::net::UnixStream;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::mpsc::Sender;
-use std::thread;
-use std::thread::JoinHandle;
-
 use coap_lite::Packet;
 use serial_line_ip::Decoder;
+use serial_line_ip::EncodeTotals;
 use serial_line_ip::Encoder;
-use serialport::SerialPort;
+use serial_line_ip::Error;
 
-use crate::events::Event;
 
 const DIAGNOSTIC: u8 = 0x0a;
 const CONFIGURATION: u8 = 0xA9;
 
-pub trait Transmit {
-    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()>;
-}
-
-pub struct SendPort {
-    tx: Box<dyn Transmit + Send>,
-    name: String,
-}
-
-impl SendPort {
-    pub fn new(tx: Box<dyn Transmit + Send>, name: String) -> Self {
-        Self { tx, name }
-    }
-
-    pub const fn name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.tx.transmit(data)
-    }
-}
-
-struct SerialPortWrapper {
-    port: Box<dyn SerialPort>,
-}
-
-impl SerialPortWrapper {
-    pub fn new(port: Box<dyn SerialPort>) -> Self {
-        Self { port }
-    }
-}
-
-impl Transmit for SerialPortWrapper {
-    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.port.write_all(data)
-    }
-}
-
-struct SocketWrapper {
-    socket: UnixStream,
-}
-
-impl SocketWrapper {
-    pub fn new(socket_path: &Path) -> Self {
-        let socket = match UnixStream::connect(socket_path) {
-            Ok(s) => s,
-            Err(e) => panic!("{}", e),
-        };
-        Self { socket }
-    }
-
-    pub fn clone_socket(&self) -> UnixStream {
-        self.socket.try_clone().unwrap()
-    }
-}
-
-impl Transmit for SocketWrapper {
-    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.socket.write_all(data)?;
-        self.socket.flush()
-    }
-}
-
-pub fn create_slipmux_thread(sender: Sender<Event>, device_path: PathBuf) -> JoinHandle<()> {
-    thread::spawn(move || read_thread(&sender, &device_path))
-}
-
-pub fn read_thread(sender: &Sender<Event>, device_path: &Path) {
-    loop {
-        let socket = SocketWrapper::new(device_path);
-        let read_port = socket.clone_socket();
-        let send_port = SendPort::new(Box::new(socket), device_path.to_string_lossy().to_string());
-        sender
-            .send(Event::SerialConnect(Box::new(send_port)))
-            .unwrap();
-        read_loop(read_port, sender);
-    }
-    // loop {
-    //     let mut port = match serialport::new(&device_path, 115200).open() {
-    //         Ok(p) => p,
-    //         Err(_) => {
-    //             thread::sleep(Duration::from_millis(100));
-    //             continue;
-    //         }
-    //     };
-    //     let _ = port.set_timeout(Duration::from_secs(600));
-    //     let read_port = port.try_clone().unwrap();
-    //     let send_port = SendPort::new(SerialPortWrapper::new(port), device_path.clone());
-    //     let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
-    //     read_loop(read_port, &sender);
-    // }
-}
 
 pub fn send_diagnostic(text: &str) -> ([u8; 256], usize) {
-    let mut output: [u8; 256] = [0; 256];
-    let mut slip = Encoder::new();
-    let mut totals = slip.encode(&[DIAGNOSTIC], &mut output).unwrap();
-    totals += slip
-        .encode(text.as_bytes(), &mut output[totals.written..])
-        .unwrap();
-    totals += slip.finish(&mut output[totals.written..]).unwrap();
-    (output, totals.written)
+    encode(Slipmux::Diagnostic(text.to_string()))
 }
 
 pub fn send_configuration(packet: &Packet) -> ([u8; 256], usize) {
-    let mut output: [u8; 256] = [0; 256];
-    let mut slip = Encoder::new();
-    let mut totals = slip.encode(&[CONFIGURATION], &mut output).unwrap();
-    totals += slip
-        .encode(&packet.to_bytes().unwrap(), &mut output[totals.written..])
-        .unwrap();
-    totals += slip.finish(&mut output[totals.written..]).unwrap();
-    (output, totals.written)
+    encode(Slipmux::Configuration(packet.to_bytes().unwrap()))
 }
 
-fn read_loop(mut read_port: impl Read, sender: &Sender<Event>) {
-    let mut slip_decoder = Decoder::new();
-    let mut strbuffer = String::new();
-    let mut output = [0; 2024];
-    let mut index = 0;
-    slip_decoder.decode(&[0xc0], &mut output).unwrap();
-    loop {
-        let mut buffer = [0; 1024];
+pub fn encode(input: Slipmux) -> ([u8; 256], usize) {
+    let mut buffer = [0; 256];
+    let mut slip = Encoder::new();
+    let mut totals = EncodeTotals{ read: 0, written: 0};
+    match input {
+        Slipmux::Diagnostic(s) => {
+            totals += slip.encode(&[DIAGNOSTIC], &mut buffer).unwrap();
+            totals += slip.encode(s.as_bytes(), &mut buffer[totals.written..]).unwrap();
+        }
+        Slipmux::Configuration(conf) => {
+            totals += slip.encode(&[CONFIGURATION], &mut buffer).unwrap();
+            totals += slip.encode(&conf, &mut buffer[totals.written..]).unwrap();
+        }
+        Slipmux::Packet(packet) => {
+            totals += slip.encode(&packet, &mut buffer[totals.written..]).unwrap();
+        }
+    }
+    totals += slip.finish(&mut buffer[totals.written..]).unwrap();
+    (buffer, totals.written)
+}
+
+
+pub enum Slipmux {
+    Diagnostic(String),
+    Configuration(Vec<u8>),
+    Packet(Vec<u8>),
+}
+
+enum SlipmuxState {
+    Fin(Result<Slipmux, Error>, usize),
+    Error(Error),
+    Incomplete(),
+}
+
+pub struct SlipmuxDecoder {
+    slip_decoder: Decoder,
+    index: usize,
+    buffer: [u8; 10240],
+}
+
+impl SlipmuxDecoder {
+    pub fn new() -> Self {
+        Self {
+            slip_decoder: Decoder::new(),
+            index: 0,
+            buffer: [0; 10240],
+        }
+    }
+
+    pub fn decode(&mut self, input: &[u8]) -> Vec<Result<Slipmux, Error>> {
+        let mut result_vec = Vec::new();
         let mut offset = 0;
-        let res = read_port.read(&mut buffer);
-        let num = {
-            match res {
-                Ok(num) => num,
-                Err(_) => {
-                    // TODO: Catch timeout
-                    sender.send(Event::SerialDisconnect).unwrap();
-                    break;
-                }
-            }
-        };
-        'inner: while offset < num {
-            let (used, out, end) = {
-                match slip_decoder.decode(&buffer[offset..num], &mut output[index..]) {
-                    Ok((used, out, end)) => (used, out, end),
-                    Err(_) => {
-                        break 'inner;
+        while offset < input.len() {
+            let used_bytes = {
+                match self.decode_partial(&input[offset..input.len()]) {
+                    SlipmuxState::Fin(data, bytes_consumed) => {
+                        result_vec.push(data);
+                        bytes_consumed
                     }
+                    SlipmuxState::Error(err) => {
+                        result_vec.push(Err(err));
+                        break;
+                    }
+                    SlipmuxState::Incomplete() => input.len()
                 }
             };
-            index += out.len();
-            offset += used;
+            offset += used_bytes;
+        }
+        result_vec
+    }
 
-            if end {
-                match output[0] {
+    fn decode_partial(&mut self, input: &[u8]) -> SlipmuxState {
+        let partial_result = self.slip_decoder.decode(input, &mut self.buffer[self.index..]);
+        if partial_result.is_err() {
+            return SlipmuxState::Error(partial_result.unwrap_err());
+        }
+        let (used_bytes_from_input, out, end) = partial_result.unwrap();
+        self.index += out.len();
+
+        if end {
+            let retval = {
+                match self.buffer[0] {
                     DIAGNOSTIC => {
-                        let s = String::from_utf8_lossy(&output[1..index]);
-                        strbuffer.push_str(&s);
-                        if s.contains('\n') {
-                            sender.send(Event::Diagnostic(strbuffer.clone())).unwrap();
-                            strbuffer.clear();
-                        }
-                        // let _ = sender.send(Event::Diagnostic(
-                        //     String::from_utf8_lossy(&output[1..index]).to_string(),
-                        // ));
+                        let s = String::from_utf8_lossy(&self.buffer[1..self.index]).to_string();
+                        Ok(Slipmux::Diagnostic(s))
                     }
-                    CONFIGURATION => sender
-                        .send(Event::Configuration(output[1..index].to_vec()))
-                        .unwrap(),
-                    _ => sender
-                        .send(Event::Packet(output[0..index].to_vec()))
-                        .unwrap(),
+                    CONFIGURATION => Ok(Slipmux::Configuration(self.buffer[1..self.index].to_vec())),
+                    _ => Ok(Slipmux::Packet(self.buffer[1..self.index].to_vec())),
                 }
-                slip_decoder = Decoder::new();
-                slip_decoder.decode(&[0xc0], &mut output).unwrap();
-                output = [0; 2024];
-                index = 0;
-            }
+            };
+
+            self.slip_decoder = Decoder::new();
+            self.index = 0;
+            SlipmuxState::Fin(retval, used_bytes_from_input)
+        } else {
+            assert!(used_bytes_from_input == input.len());
+            SlipmuxState::Incomplete()
         }
     }
 }

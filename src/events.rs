@@ -14,7 +14,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::app::App;
-use crate::slipmux::SendPort;
+use crate::transport::SendPort;
 
 pub enum Event {
     Diagnostic(String),

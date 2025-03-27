@@ -10,11 +10,13 @@ use ratatui::Terminal;
 use crate::events::create_terminal_thread;
 use crate::events::event_loop;
 use crate::events::Event;
-use crate::slipmux::create_slipmux_thread;
+use crate::hardware::create_slipmux_thread;
 
 mod app;
 mod events;
 mod slipmux;
+mod transport;
+mod hardware;
 
 #[derive(Parser)]
 struct Cli {
