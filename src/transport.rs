@@ -5,8 +5,6 @@ use std::path::Path;
 
 use serialport::SerialPort;
 
-
-
 pub trait Transmit {
     fn transmit(&mut self, data: &[u8]) -> std::io::Result<()>;
 }

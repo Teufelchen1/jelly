@@ -7,10 +7,9 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::JoinHandle;
 
-use crate::slipmux::{SlipmuxDecoder, Slipmux};
 use crate::events::Event;
-use crate::transport::{SocketWrapper, SendPort};
-
+use crate::slipmux::{Slipmux, SlipmuxDecoder};
+use crate::transport::{SendPort, SocketWrapper};
 
 pub fn create_slipmux_thread(sender: Sender<Event>, device_path: PathBuf) -> JoinHandle<()> {
     thread::spawn(move || read_thread(&sender, &device_path))
@@ -42,7 +41,6 @@ pub fn read_thread(sender: &Sender<Event>, device_path: &Path) {
     // }
 }
 
-
 fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
     let mut slipmux_decoder = SlipmuxDecoder::new();
 
@@ -59,7 +57,9 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                 }
             }
         };
-        sender.send(Event::Diagnostic(format!("Read {bytes_read} bytes\n"))).unwrap();
+        sender
+            .send(Event::Diagnostic(format!("Read {bytes_read} bytes\n")))
+            .unwrap();
 
         for slipframe in slipmux_decoder.decode(&buffer[..bytes_read]) {
             match slipframe.unwrap() {

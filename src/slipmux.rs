@@ -4,10 +4,8 @@ use serial_line_ip::EncodeTotals;
 use serial_line_ip::Encoder;
 use serial_line_ip::Error;
 
-
 const DIAGNOSTIC: u8 = 0x0a;
 const CONFIGURATION: u8 = 0xA9;
-
 
 pub fn send_diagnostic(text: &str) -> ([u8; 256], usize) {
     encode(Slipmux::Diagnostic(text.to_string()))
@@ -20,11 +18,16 @@ pub fn send_configuration(packet: &Packet) -> ([u8; 256], usize) {
 pub fn encode(input: Slipmux) -> ([u8; 256], usize) {
     let mut buffer = [0; 256];
     let mut slip = Encoder::new();
-    let mut totals = EncodeTotals{ read: 0, written: 0};
+    let mut totals = EncodeTotals {
+        read: 0,
+        written: 0,
+    };
     match input {
         Slipmux::Diagnostic(s) => {
             totals += slip.encode(&[DIAGNOSTIC], &mut buffer).unwrap();
-            totals += slip.encode(s.as_bytes(), &mut buffer[totals.written..]).unwrap();
+            totals += slip
+                .encode(s.as_bytes(), &mut buffer[totals.written..])
+                .unwrap();
         }
         Slipmux::Configuration(conf) => {
             totals += slip.encode(&[CONFIGURATION], &mut buffer).unwrap();
@@ -37,7 +40,6 @@ pub fn encode(input: Slipmux) -> ([u8; 256], usize) {
     totals += slip.finish(&mut buffer[totals.written..]).unwrap();
     (buffer, totals.written)
 }
-
 
 pub enum Slipmux {
     Diagnostic(String),
@@ -80,7 +82,7 @@ impl SlipmuxDecoder {
                         result_vec.push(Err(err));
                         break;
                     }
-                    SlipmuxState::Incomplete() => input.len()
+                    SlipmuxState::Incomplete() => input.len(),
                 }
             };
             offset += used_bytes;
@@ -89,7 +91,9 @@ impl SlipmuxDecoder {
     }
 
     fn decode_partial(&mut self, input: &[u8]) -> SlipmuxState {
-        let partial_result = self.slip_decoder.decode(input, &mut self.buffer[self.index..]);
+        let partial_result = self
+            .slip_decoder
+            .decode(input, &mut self.buffer[self.index..]);
         if partial_result.is_err() {
             return SlipmuxState::Error(partial_result.unwrap_err());
         }
@@ -103,7 +107,9 @@ impl SlipmuxDecoder {
                         let s = String::from_utf8_lossy(&self.buffer[1..self.index]).to_string();
                         Ok(Slipmux::Diagnostic(s))
                     }
-                    CONFIGURATION => Ok(Slipmux::Configuration(self.buffer[1..self.index].to_vec())),
+                    CONFIGURATION => {
+                        Ok(Slipmux::Configuration(self.buffer[1..self.index].to_vec()))
+                    }
                     _ => Ok(Slipmux::Packet(self.buffer[1..self.index].to_vec())),
                 }
             };
