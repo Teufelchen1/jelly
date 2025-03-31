@@ -46,15 +46,17 @@ fn main() {
     //     .metadata()
     //     .expect("Could not read metadata of tty-path")
     //     .file_type()
-    //     .is_char_device()
+    //     .is_char_device(
     // {
     //     println!("{} is not a character device.", args.tty_path.display());
     //     return;
     // }
 
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
-    create_slipmux_thread(event_sender.clone(), args.tty_path);
-    create_terminal_thread(event_sender);
+    let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
+        mpsc::channel();
+    create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
+    create_terminal_thread(event_sender.clone());
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
@@ -75,7 +77,12 @@ fn main() {
 
     terminal.clear().unwrap();
 
-    event_loop(&event_receiver, terminal);
+    event_loop(
+        &event_receiver,
+        event_sender,
+        hardware_event_sender,
+        terminal,
+    );
 
     reset_terminal();
 }

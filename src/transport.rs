@@ -2,6 +2,7 @@ use std::io::Read;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
+use std::time::Duration;
 
 use serialport::SerialPort;
 
@@ -49,12 +50,11 @@ pub struct SocketWrapper {
 }
 
 impl SocketWrapper {
-    pub fn new(socket_path: &Path) -> Self {
-        let socket = match UnixStream::connect(socket_path) {
-            Ok(s) => s,
-            Err(e) => panic!("{}", e),
-        };
-        Self { socket }
+    pub fn new(socket_path: &Path) -> Result<Self, std::io::Error> {
+        let socket = UnixStream::connect(socket_path)?;
+        socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+        socket.set_write_timeout(Some(Duration::new(1, 0))).unwrap();
+        Ok(Self { socket })
     }
 
     pub fn clone_socket(&self) -> UnixStream {

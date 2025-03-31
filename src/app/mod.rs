@@ -17,6 +17,9 @@ use ratatui::text::Span;
 use ratatui::text::Text;
 use tui_scrollview::ScrollViewState;
 
+use crate::events::Event;
+use std::sync::mpsc::Sender;
+
 use crate::slipmux::send_configuration;
 use crate::slipmux::send_diagnostic;
 use crate::transport::SendPort;
@@ -64,7 +67,8 @@ impl PartialEq for Command {
 }
 
 pub struct App<'a> {
-    write_port: Option<Box<SendPort>>,
+    event_sender: Sender<Event>,
+    write_port: Option<String>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
     configuration_scroll_position: ScrollViewState,
@@ -80,8 +84,9 @@ pub struct App<'a> {
     riot_version: String,
 }
 impl App<'_> {
-    pub fn new() -> Self {
+    pub fn new(event_sender: Sender<Event>) -> Self {
         Self {
+            event_sender,
             write_port: None,
             configuration_requests: vec![],
             configuration_packets: vec![],
@@ -118,10 +123,13 @@ impl App<'_> {
 
     fn send_request(&mut self, msg: &Packet) -> std::io::Result<()> {
         let (data, size) = send_configuration(msg);
-        if let Some(port) = &mut self.write_port {
-            port.send(&data[..size])?;
-            // let _ = port.flush();
-        }
+        self.event_sender
+            .send(Event::SendConfiguration(data[..size].to_vec()))
+            .unwrap();
+        // if let Some(port) = &mut self.write_port {
+        //     port.send(&data[..size])?;
+        //     // let _ = port.flush();
+        // }
         Ok(())
     }
 
@@ -173,8 +181,8 @@ impl App<'_> {
         }
     }
 
-    pub fn connect(&mut self, write_port: Box<SendPort>) {
-        self.write_port = Some(write_port);
+    pub fn connect(&mut self, name: String) {
+        self.write_port = Some(name);
 
         let request: CoapRequest<String> = self.build_request("/riot/board");
         if self.send_request(&request.message).is_err() {
@@ -306,22 +314,28 @@ impl App<'_> {
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
                         let (data, size) = send_configuration(&request.message);
-                        self.write_port
-                            .as_mut()
-                            .unwrap()
-                            .send(&data[..size])
+                        self.event_sender
+                            .send(Event::SendConfiguration(data[..size].to_vec()))
                             .unwrap();
+                        // self.write_port
+                        //     .as_mut()
+                        //     .unwrap()
+                        //     .send(&data[..size])
+                        //     .unwrap();
                         self.configuration_requests.push(request);
                     } else {
                         if !self.user_command.ends_with('\n') {
                             self.user_command.push('\n');
                         }
-                        let (data, size) = send_diagnostic(&self.user_command);
-                        self.write_port
-                            .as_mut()
-                            .unwrap()
-                            .send(&data[..size])
+                        //let (data, size) = send_diagnostic(&self.user_command);
+                        self.event_sender
+                            .send(Event::SendDiagnostic(self.user_command.clone()))
                             .unwrap();
+                        // self.write_port
+                        //     .as_mut()
+                        //     .unwrap()
+                        //     .send(&data[..size])
+                        //     .unwrap();
                     }
                     self.user_command_history.push(self.user_command.clone());
                     self.user_command_cursor = self.user_command_history.len();

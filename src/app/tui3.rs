@@ -40,7 +40,7 @@ impl App<'_> {
         );
         let title = match &self.write_port {
             Some(port) => {
-                let device_path = port.name();
+                let device_path = port;
                 format!(
                     "✅ connected via {} with RIOT {}",
                     device_path, self.riot_version
