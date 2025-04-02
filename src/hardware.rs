@@ -45,8 +45,7 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<impl Wri
 
                     if let Some(port) = (*write_port).as_mut() {
                         let _ = port.write_all(&data[..size]);
-
-                        // let _ = port.flush();
+                        let _ = port.flush();
                     } else {
                         // Nothing to do, drop the message silently
                         continue;
@@ -56,7 +55,7 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<impl Wri
                     let mut write_port = port_guard.lock().unwrap();
                     if let Some(port) = (*write_port).as_mut() {
                         let _ = port.write_all(&conf);
-                        // let _ = port.flush();
+                        let _ = port.flush();
                     } else {
                         // Nothing to do, drop the message silently
                         continue;
@@ -128,9 +127,6 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                         continue;
                     }
                     _ => {
-                        //let errkind = err.kind();
-                        //panic!("{errkind}");
-                        // TODO: Catch timeout
                         sender.send(Event::SerialDisconnect).unwrap();
                         break;
                     }

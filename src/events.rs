@@ -54,11 +54,12 @@ pub fn event_loop(
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
     let mut app = App::new(event_sender);
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+
     loop {
-        let event = match event_channel.recv_timeout(Duration::from_millis(100)) {
+        let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
             Ok(event) => event,
             Err(RecvTimeoutError::Timeout) => {
-                terminal.draw(|frame| app.draw(frame)).unwrap();
                 continue;
             }
             Err(RecvTimeoutError::Disconnected) => panic!(),
@@ -87,5 +88,6 @@ pub fn event_loop(
             }
             Event::TerminalResize => (),
         }
+        terminal.draw(|frame| app.draw(frame)).unwrap();
     }
 }

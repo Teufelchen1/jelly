@@ -16,10 +16,7 @@ impl ReaderWriter for UnixStream {}
 pub fn new_port(
     device_path: &Path,
 ) -> Result<(Box<dyn ReaderWriter>, Box<dyn ReaderWriter>), Error> {
-    let file_type = device_path
-        .metadata()
-        .expect("Could not read metadata of tty-path")
-        .file_type();
+    let file_type = device_path.metadata()?.file_type();
     let (read_writeable0, read_writeable1): (Box<dyn ReaderWriter>, Box<dyn ReaderWriter>) =
         if file_type.is_char_device() {
             let mut port = serialport::new(device_path.to_string_lossy(), 115200).open()?;

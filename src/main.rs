@@ -41,16 +41,6 @@ fn main() {
         println!("{} could not be found.", args.tty_path.display());
         return;
     }
-    // if args
-    //     .tty_path
-    //     .metadata()
-    //     .expect("Could not read metadata of tty-path")
-    //     .file_type()
-    //     .is_char_device(
-    // {
-    //     println!("{} is not a character device.", args.tty_path.display());
-    //     return;
-    // }
 
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
     let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
@@ -85,4 +75,5 @@ fn main() {
     );
 
     reset_terminal();
+    println!("Thank you for using Jelly 🪼")
 }

@@ -21,7 +21,7 @@ use tui_scrollview::ScrollViewState;
 use crate::events::Event;
 use crate::slipmux::send_configuration;
 
-mod tui3;
+mod tui;
 
 struct Command {
     pub cmd: String,
@@ -123,10 +123,6 @@ impl App<'_> {
         self.event_sender
             .send(Event::SendConfiguration(data[..size].to_vec()))
             .unwrap();
-        // if let Some(port) = &mut self.write_port {
-        //     port.send(&data[..size])?;
-        //     // let _ = port.flush();
-        // }
         Ok(())
     }
 
@@ -174,7 +170,7 @@ impl App<'_> {
                 }
             }
             // TODO: Fix me
-            thread::sleep(time::Duration::from_millis(10));
+            //thread::sleep(time::Duration::from_millis(10));
         }
     }
 
@@ -273,7 +269,6 @@ impl App<'_> {
                     .push_span(Span::from(chr.to_string())),
             }
         }
-        // self.diagnostic_messages.push_str(&format!("[{}]", &msg));
     }
 
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
@@ -304,14 +299,6 @@ impl App<'_> {
         match key.code {
             KeyCode::Enter => {
                 if self.write_port.is_some() {
-                    // if self.user_command.starts_with("dump") {
-                    //     self.diagnostic_messages.push_line(Line::from("Dumping\n"));
-                    //     for cmd in &self.known_user_commands {
-                    //         let cmdname = &cmd.cmd;
-                    //         self.diagnostic_messages
-                    //             .push_line(Line::from(format!("{cmdname}\n")));
-                    //     }
-                    // }
                     if self.user_command.starts_with('/') {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
@@ -322,25 +309,14 @@ impl App<'_> {
                         self.event_sender
                             .send(Event::SendConfiguration(data[..size].to_vec()))
                             .unwrap();
-                        // self.write_port
-                        //     .as_mut()
-                        //     .unwrap()
-                        //     .send(&data[..size])
-                        //     .unwrap();
                         self.configuration_requests.push(request);
                     } else {
                         if !self.user_command.ends_with('\n') {
                             self.user_command.push('\n');
                         }
-                        //let (data, size) = send_diagnostic(&self.user_command);
                         self.event_sender
                             .send(Event::SendDiagnostic(self.user_command.clone()))
                             .unwrap();
-                        // self.write_port
-                        //     .as_mut()
-                        //     .unwrap()
-                        //     .send(&data[..size])
-                        //     .unwrap();
                     }
                     self.user_command_history.push(self.user_command.clone());
                     self.user_command_cursor = self.user_command_history.len();
