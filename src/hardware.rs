@@ -1,21 +1,22 @@
-use std::fs::File;
-use std::fs::OpenOptions;
 use std::io::ErrorKind::WouldBlock;
 use std::io::Read;
 use std::io::Write;
-use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::events::Event;
-use crate::slipmux::{send_diagnostic, Slipmux, SlipmuxDecoder};
-use crate::transport::{SendPort, SocketWrapper};
+use crate::slipmux::send_diagnostic;
+use crate::slipmux::Slipmux;
+use crate::slipmux::SlipmuxDecoder;
+use crate::transport::new_port;
+use crate::transport::ReaderWriter;
 
 pub fn create_slipmux_thread(
     sender: Sender<Event>,
@@ -34,7 +35,7 @@ pub fn create_slipmux_thread(
         .unwrap()
 }
 
-fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<SendPort>>>) {
+fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<impl Write>>>) {
     loop {
         match receiver.recv() {
             Ok(event) => match event {
@@ -43,7 +44,7 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<SendPort
                     let mut write_port = port_guard.lock().unwrap();
 
                     if let Some(port) = (*write_port).as_mut() {
-                        let _ = port.send(&data[..size]);
+                        let _ = port.write_all(&data[..size]);
 
                         // let _ = port.flush();
                     } else {
@@ -54,12 +55,13 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<SendPort
                 Event::SendConfiguration(conf) => {
                     let mut write_port = port_guard.lock().unwrap();
                     if let Some(port) = (*write_port).as_mut() {
-                        let _ = port.send(&conf);
+                        let _ = port.write_all(&conf);
                         // let _ = port.flush();
                     } else {
                         // Nothing to do, drop the message silently
                         continue;
                     }
+                    thread::sleep(Duration::from_millis(100));
                 }
                 _ => todo!(),
             },
@@ -71,21 +73,20 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<SendPort
 fn read_thread(
     sender: &Sender<Event>,
     device_path: &Path,
-    port_guard: Arc<Mutex<Option<SendPort>>>,
+    port_guard: Arc<Mutex<Option<Box<dyn ReaderWriter>>>>,
 ) {
     loop {
-        let socket = match SocketWrapper::new(device_path) {
-            Ok(s) => s,
+        let (mut read_port, write_port) = match new_port(&device_path) {
+            Ok((r, w)) => (r, w),
             Err(_) => {
                 thread::sleep(Duration::from_millis(2500));
                 continue;
             }
         };
-        let mut read_port = socket.clone_socket();
-        let send_port = SendPort::new(Box::new(socket), device_path.to_string_lossy().to_string());
+
         {
-            let mut write_port = port_guard.lock().unwrap();
-            *write_port = Some(send_port);
+            let mut write_port_lock = port_guard.lock().unwrap();
+            *write_port_lock = Some(write_port);
         }
         sender
             .send(Event::SerialConnect(
@@ -95,28 +96,14 @@ fn read_thread(
         read_loop(&mut read_port, sender);
 
         {
-            let mut write_port = port_guard.lock().unwrap();
-            *write_port = None;
+            let mut write_port_lock = port_guard.lock().unwrap();
+            *write_port_lock = None;
         }
         sender
             .send(Event::Diagnostic("Port died, waiting 3s\n".to_owned()))
             .unwrap();
         thread::sleep(Duration::from_millis(3000));
     }
-    // loop {
-    //     let mut port = match serialport::new(&device_path, 115200).open() {
-    //         Ok(p) => p,
-    //         Err(_) => {
-    //             thread::sleep(Duration::from_millis(100));
-    //             continue;
-    //         }
-    //     };
-    //     let _ = port.set_timeout(Duration::from_secs(600));
-    //     let read_port = port.try_clone().unwrap();
-    //     let send_port = SendPort::new(SerialPortWrapper::new(port), device_path.clone());
-    //     let _ = sender.send(Event::SerialConnect(Box::new(send_port)));
-    //     read_loop(read_port, &sender);
-    // }
 }
 
 fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
@@ -137,9 +124,7 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                 }
                 Err(err) => match err.kind() {
                     WouldBlock => {
-                        sender
-                            .send(Event::Diagnostic("Time out?\n".to_owned()))
-                            .unwrap();
+                        // This means timeout
                         continue;
                     }
                     _ => {
@@ -153,11 +138,13 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
             }
         };
 
-        sender
-            .send(Event::Diagnostic(format!("Read {bytes_read} bytes\n")))
-            .unwrap();
-
         for slipframe in slipmux_decoder.decode(&buffer[..bytes_read]) {
+            if slipframe.is_err() {
+                sender
+                    .send(Event::Diagnostic("Received garbage\n".to_owned()))
+                    .unwrap();
+                continue;
+            }
             match slipframe.unwrap() {
                 Slipmux::Diagnostic(s) => {
                     sender.send(Event::Diagnostic(s)).unwrap();

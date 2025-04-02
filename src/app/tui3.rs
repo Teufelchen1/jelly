@@ -159,16 +159,15 @@ impl App<'_> {
             .title_style(Style::new().white());
         let text = &self.diagnostic_messages;
         let text_height = text.height();
-        // let height = left_block_up.inner(area).height;
-        // let scroll = {
-        //     if text_height > height as usize {
-        //         text_height - height as usize
-        //     } else {
-        //         0
-        //     }
-        // };
-        let paragraph = Paragraph::new(text.clone())
-            .scroll((self.diagnostic_messages_scroll_position as u16, 0));
+        let height = left_block_up.inner(area).height;
+        let scroll = {
+            if text_height > height as usize {
+                text_height - height as usize
+            } else {
+                0
+            }
+        };
+        let paragraph = Paragraph::new(text.clone()).scroll((scroll as u16, 0)); //(self.diagnostic_messages_scroll_position as u16, 0));
         let paragraph_block = paragraph.block(left_block_up);
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)

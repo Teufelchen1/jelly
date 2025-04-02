@@ -61,11 +61,20 @@ pub struct SlipmuxDecoder {
 
 impl SlipmuxDecoder {
     pub fn new() -> Self {
+        let mut decoder = Decoder::new();
+        let mut buffer = [0; 10240];
+        decoder.decode(&[0xc0], &mut buffer).unwrap();
         Self {
-            slip_decoder: Decoder::new(),
+            slip_decoder: decoder,
             index: 0,
-            buffer: [0; 10240],
+            buffer,
         }
+    }
+
+    fn reset(&mut self) {
+        self.slip_decoder = Decoder::new();
+        self.slip_decoder.decode(&[0xc0], &mut self.buffer).unwrap();
+        self.index = 0;
     }
 
     pub fn decode(&mut self, input: &[u8]) -> Vec<Result<Slipmux, Error>> {
@@ -114,8 +123,7 @@ impl SlipmuxDecoder {
                 }
             };
 
-            self.slip_decoder = Decoder::new();
-            self.index = 0;
+            self.reset();
             SlipmuxState::Fin(retval, used_bytes_from_input)
         } else {
             assert!(used_bytes_from_input == input.len());

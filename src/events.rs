@@ -1,6 +1,4 @@
-use std::fs::File;
 use std::io::Stdout;
-use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
@@ -14,8 +12,6 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::app::App;
-use crate::hardware;
-use crate::transport::SendPort;
 
 pub enum Event {
     Diagnostic(String),
@@ -91,10 +87,5 @@ pub fn event_loop(
             }
             Event::TerminalResize => (),
         }
-    }
-    let mut file = File::create("foo.txt").unwrap();
-    for line in app.diagnostic_messages {
-        file.write_all(line.to_string().as_bytes()).unwrap();
-        file.write_all(b"\n").unwrap();
     }
 }

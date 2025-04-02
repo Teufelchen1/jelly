@@ -1,70 +1,37 @@
+use std::io::Error;
 use std::io::Read;
 use std::io::Write;
+use std::os::unix::fs::FileTypeExt;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::Duration;
 
 use serialport::SerialPort;
 
-pub trait Transmit {
-    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()>;
-}
+pub trait ReaderWriter: Read + Write + Send {}
 
-pub struct SendPort {
-    tx: Box<dyn Transmit + Send>,
-    name: String,
-}
+impl ReaderWriter for Box<dyn SerialPort> {}
+impl ReaderWriter for UnixStream {}
 
-impl SendPort {
-    pub fn new(tx: Box<dyn Transmit + Send>, name: String) -> Self {
-        Self { tx, name }
-    }
-
-    pub const fn name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.tx.transmit(data)
-    }
-}
-
-struct SerialPortWrapper {
-    port: Box<dyn SerialPort>,
-}
-
-impl SerialPortWrapper {
-    pub fn new(port: Box<dyn SerialPort>) -> Self {
-        Self { port }
-    }
-}
-
-impl Transmit for SerialPortWrapper {
-    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.port.write_all(data)
-    }
-}
-
-pub struct SocketWrapper {
-    socket: UnixStream,
-}
-
-impl SocketWrapper {
-    pub fn new(socket_path: &Path) -> Result<Self, std::io::Error> {
-        let socket = UnixStream::connect(socket_path)?;
-        socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-        socket.set_write_timeout(Some(Duration::new(1, 0))).unwrap();
-        Ok(Self { socket })
-    }
-
-    pub fn clone_socket(&self) -> UnixStream {
-        self.socket.try_clone().unwrap()
-    }
-}
-
-impl Transmit for SocketWrapper {
-    fn transmit(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.socket.write_all(data)?;
-        self.socket.flush()
-    }
+pub fn new_port(
+    device_path: &Path,
+) -> Result<(Box<dyn ReaderWriter>, Box<dyn ReaderWriter>), Error> {
+    let file_type = device_path
+        .metadata()
+        .expect("Could not read metadata of tty-path")
+        .file_type();
+    let (read_writeable0, read_writeable1): (Box<dyn ReaderWriter>, Box<dyn ReaderWriter>) =
+        if file_type.is_char_device() {
+            let mut port = serialport::new(device_path.to_string_lossy(), 115200).open()?;
+            let _ = port.set_timeout(Duration::from_secs(600));
+            (Box::new(port.try_clone().unwrap()), Box::new(port))
+        } else if file_type.is_socket() {
+            let socket = UnixStream::connect(&device_path)?;
+            socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+            socket.set_write_timeout(Some(Duration::new(1, 0))).unwrap();
+            (Box::new(socket.try_clone().unwrap()), Box::new(socket))
+        } else {
+            panic!();
+        };
+    Ok((read_writeable0, read_writeable1))
 }

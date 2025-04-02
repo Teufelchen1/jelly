@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time;
 
@@ -18,25 +19,21 @@ use ratatui::text::Text;
 use tui_scrollview::ScrollViewState;
 
 use crate::events::Event;
-use std::sync::mpsc::Sender;
-
 use crate::slipmux::send_configuration;
-use crate::slipmux::send_diagnostic;
-use crate::transport::SendPort;
 
 mod tui3;
 
 struct Command {
     pub cmd: String,
     pub description: String,
-    pub location: Option<String>,
+    pub _location: Option<String>,
 }
 impl Command {
     pub fn new(cmd: &str, description: &str) -> Self {
         Self {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
-            location: None,
+            _location: None,
         }
     }
 
@@ -44,7 +41,7 @@ impl Command {
         Self {
             cmd: resource.to_owned(),
             description: description.to_owned(),
-            location: Some(resource.to_owned()),
+            _location: Some(resource.to_owned()),
         }
     }
 
@@ -55,7 +52,7 @@ impl Command {
         Self {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
-            location: Some(location.to_owned()),
+            _location: Some(location.to_owned()),
         }
     }
 }
@@ -162,7 +159,7 @@ impl App<'_> {
                     let request: CoapRequest<String> = self.build_request(s);
                     if self.send_request(&request.message).is_err() {
                         self.diagnostic_messages
-                            .push_line(Line::from("Failed to request /.well-known/core\n"));
+                            .push_line(Line::from("Failed to request...\n"));
                     } else {
                         self.configuration_requests.push(request);
                     }
@@ -193,7 +190,7 @@ impl App<'_> {
         }
 
         // TODO: Fix me
-        //thread::sleep(time::Duration::from_millis(10));
+        //thread::sleep(time::Duration::from_millis(1000));
 
         let request: CoapRequest<String> = self.build_request("/riot/ver");
         if self.send_request(&request.message).is_err() {
@@ -204,7 +201,7 @@ impl App<'_> {
         }
 
         // TODO: Fix me
-        //thread::sleep(time::Duration::from_millis(20));
+        //thread::sleep(time::Duration::from_millis(2000));
 
         let request: CoapRequest<String> = self.build_request("/.well-known/core");
         if self.send_request(&request.message).is_err() {
@@ -307,6 +304,14 @@ impl App<'_> {
         match key.code {
             KeyCode::Enter => {
                 if self.write_port.is_some() {
+                    // if self.user_command.starts_with("dump") {
+                    //     self.diagnostic_messages.push_line(Line::from("Dumping\n"));
+                    //     for cmd in &self.known_user_commands {
+                    //         let cmdname = &cmd.cmd;
+                    //         self.diagnostic_messages
+                    //             .push_line(Line::from(format!("{cmdname}\n")));
+                    //     }
+                    // }
                     if self.user_command.starts_with('/') {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
