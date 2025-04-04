@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::time;
+use rand::Rng;
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
@@ -79,6 +80,7 @@ pub struct App<'a> {
     token_count: u16,
     riot_board: String,
     riot_version: String,
+    next_mid: u16,
 }
 impl App<'_> {
     pub fn new(event_sender: Sender<Event>) -> Self {
@@ -101,6 +103,8 @@ impl App<'_> {
             token_count: 0,
             riot_board: "Unkown".to_owned(),
             riot_version: "Unkown".to_owned(),
+
+            next_mid: rand::rng().random(),
         }
     }
 
@@ -109,10 +113,16 @@ impl App<'_> {
         self.token_count.to_le_bytes().to_vec()
     }
 
+    fn get_new_message_id(&mut self) -> u16 {
+        self.next_mid = self.next_mid.wrapping_add(1);
+        self.next_mid
+    }
+
     fn build_request(&mut self, path: &str) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         request.set_path(path);
+        request.message.header.message_id = self.get_new_message_id();
         request.message.set_token(self.get_new_token());
         request.message.add_option(CoapOption::Block2, vec![0x05]);
         request
