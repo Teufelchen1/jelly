@@ -16,10 +16,10 @@ use crossterm::event::MouseEventKind;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
+use slipmux::encode_configuration;
 use tui_scrollview::ScrollViewState;
 
 use crate::events::Event;
-use crate::slipmux::send_configuration;
 
 mod tui;
 
@@ -119,7 +119,7 @@ impl App<'_> {
     }
 
     fn send_request(&mut self, msg: &Packet) -> std::io::Result<()> {
-        let (data, size) = send_configuration(msg);
+        let (data, size) = encode_configuration(msg);
         self.event_sender
             .send(Event::SendConfiguration(data[..size].to_vec()))
             .unwrap();
@@ -305,7 +305,7 @@ impl App<'_> {
                         request.set_path(&self.user_command);
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
-                        let (data, size) = send_configuration(&request.message);
+                        let (data, size) = encode_configuration(&request.message);
                         self.event_sender
                             .send(Event::SendConfiguration(data[..size].to_vec()))
                             .unwrap();

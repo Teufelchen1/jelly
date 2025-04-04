@@ -15,7 +15,6 @@ use crate::hardware::create_slipmux_thread;
 mod app;
 mod events;
 mod hardware;
-mod slipmux;
 mod transport;
 
 #[derive(Parser)]
