@@ -3,6 +3,20 @@
 version = 4
 
 [[package]]
+name = "Jelly"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "coap-lite",
+ "crossterm",
+ "ratatui",
+ "serial-line-ip",
+ "serialport",
+ "slipmux",
+ "tui-scrollview",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -170,19 +184,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "185d26bfc9862ae17a065d361725e2301072125cb7200836d4b795285fded1f7"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "coap-shell"
-version = "0.1.0"
-dependencies = [
- "clap",
- "coap-lite",
- "crossterm",
- "ratatui",
- "serial-line-ip",
- "serialport",
- "tui-scrollview",
 ]
 
 [[package]]
@@ -892,6 +893,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "slipmux"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a573cb59ea752893db8b49b9f9fe23fd36caa9a55bc77e32d508e87b071e999a"
+dependencies = [
+ "serial-line-ip",
 ]
 
 [[package]]

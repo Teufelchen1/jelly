@@ -29,5 +29,5 @@ crossterm = "0.28"
 ratatui = "0.29"
 serial-line-ip = "0.5"
 serialport = "4"
-slipmux = { path = "../slipmux/"}
+slipmux = "0.1"
 tui-scrollview = "0.5"

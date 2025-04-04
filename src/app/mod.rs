@@ -119,7 +119,7 @@ impl App<'_> {
     }
 
     fn send_request(&mut self, msg: &Packet) -> std::io::Result<()> {
-        let (data, size) = encode_configuration(msg);
+        let (data, size) = encode_configuration(msg.to_bytes().unwrap());
         self.event_sender
             .send(Event::SendConfiguration(data[..size].to_vec()))
             .unwrap();
@@ -305,7 +305,8 @@ impl App<'_> {
                         request.set_path(&self.user_command);
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
-                        let (data, size) = encode_configuration(&request.message);
+                        let (data, size) =
+                            encode_configuration(request.message.to_bytes().unwrap());
                         self.event_sender
                             .send(Event::SendConfiguration(data[..size].to_vec()))
                             .unwrap();
