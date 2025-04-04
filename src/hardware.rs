@@ -11,10 +11,11 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use slipmux::encode_diagnostic;
+use slipmux::Decoder;
+use slipmux::Slipmux;
+
 use crate::events::Event;
-use crate::slipmux::send_diagnostic;
-use crate::slipmux::Slipmux;
-use crate::slipmux::SlipmuxDecoder;
 use crate::transport::new_port;
 use crate::transport::ReaderWriter;
 
@@ -40,7 +41,7 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<impl Wri
         match receiver.recv() {
             Ok(event) => match event {
                 Event::SendDiagnostic(msg) => {
-                    let (data, size) = send_diagnostic(&msg);
+                    let (data, size) = encode_diagnostic(&msg);
                     let mut write_port = port_guard.lock().unwrap();
 
                     if let Some(port) = (*write_port).as_mut() {
@@ -106,7 +107,7 @@ fn read_thread(
 }
 
 fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
-    let mut slipmux_decoder = SlipmuxDecoder::new();
+    let mut slipmux_decoder = Decoder::new();
 
     loop {
         let mut buffer = [0; 10240];
