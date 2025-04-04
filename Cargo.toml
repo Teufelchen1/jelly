@@ -26,6 +26,7 @@ lto = true
 clap = { version = "4", features = ["derive"] }
 coap-lite = "0.13"
 crossterm = "0.28"
+rand = "0.9.0"
 ratatui = "0.29"
 serial-line-ip = "0.5"
 serialport = "4"
