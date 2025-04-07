@@ -80,8 +80,8 @@ pub fn event_loop(
             Event::SendConfiguration(c) => hardware_event_sender
                 .send(Event::SendConfiguration(c))
                 .unwrap(),
-            Event::SerialConnect(name) => app.connect(name),
-            Event::SerialDisconnect => app.disconnect(),
+            Event::SerialConnect(name) => app.on_connect(name),
+            Event::SerialDisconnect => app.on_disconnect(),
             Event::TerminalKey(key) => {
                 if !app.on_key(key) {
                     break;
