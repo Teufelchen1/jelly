@@ -13,17 +13,17 @@ pub trait ReaderWriter: Read + Write + Send {}
 impl ReaderWriter for Box<dyn SerialPort> {}
 impl ReaderWriter for UnixStream {}
 
-pub fn new_port(
-    device_path: &Path,
-) -> Result<(Box<dyn ReaderWriter>, Box<dyn ReaderWriter>), Error> {
+pub type PortTuple = (Box<dyn ReaderWriter>, Box<dyn ReaderWriter>);
+
+pub fn new_port(device_path: &Path) -> Result<PortTuple, Error> {
     let file_type = device_path.metadata()?.file_type();
     let (read_writeable0, read_writeable1): (Box<dyn ReaderWriter>, Box<dyn ReaderWriter>) =
         if file_type.is_char_device() {
-            let mut port = serialport::new(device_path.to_string_lossy(), 115200).open()?;
-            let _ = port.set_timeout(Duration::from_secs(600));
+            let mut port = serialport::new(device_path.to_string_lossy(), 115_200).open()?;
+            port.set_timeout(Duration::from_secs(600)).unwrap();
             (Box::new(port.try_clone().unwrap()), Box::new(port))
         } else if file_type.is_socket() {
-            let socket = UnixStream::connect(&device_path)?;
+            let socket = UnixStream::connect(device_path)?;
             socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
             socket.set_write_timeout(Some(Duration::new(1, 0))).unwrap();
             (Box::new(socket.try_clone().unwrap()), Box::new(socket))

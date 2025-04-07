@@ -50,7 +50,7 @@ pub fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
 pub fn event_loop(
     event_channel: &Receiver<Event>,
     event_sender: Sender<Event>,
-    hardware_event_sender: Sender<Event>,
+    hardware_event_sender: &Sender<Event>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
     let mut app = App::new(event_sender);

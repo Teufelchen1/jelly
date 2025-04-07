@@ -1,8 +1,5 @@
 use std::fmt::Write;
 use std::sync::mpsc::Sender;
-use std::thread;
-use std::time;
-use rand::Rng;
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
@@ -14,6 +11,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
+use rand::Rng;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
@@ -113,7 +111,7 @@ impl App<'_> {
         self.token_count.to_le_bytes().to_vec()
     }
 
-    fn get_new_message_id(&mut self) -> u16 {
+    const fn get_new_message_id(&mut self) -> u16 {
         self.next_mid = self.next_mid.wrapping_add(1);
         self.next_mid
     }
@@ -128,12 +126,11 @@ impl App<'_> {
         request
     }
 
-    fn send_request(&mut self, msg: &Packet) -> std::io::Result<()> {
+    fn send_request(&self, msg: &Packet) {
         let (data, size) = encode_configuration(msg.to_bytes().unwrap());
         self.event_sender
             .send(Event::SendConfiguration(data[..size].to_vec()))
             .unwrap();
-        Ok(())
     }
 
     fn suggest_command(&self) -> Option<usize> {
@@ -163,12 +160,8 @@ impl App<'_> {
                     }
                     self.known_user_commands.push(new_command);
                     let request: CoapRequest<String> = self.build_request(s);
-                    if self.send_request(&request.message).is_err() {
-                        self.diagnostic_messages
-                            .push_line(Line::from("Failed to request...\n"));
-                    } else {
-                        self.configuration_requests.push(request);
-                    }
+                    self.send_request(&request.message);
+                    self.configuration_requests.push(request);
                 } else {
                     let new_command = Command::new_coap_resource(s, "A CoAP resource");
 
@@ -188,34 +181,22 @@ impl App<'_> {
         self.write_port = Some(name);
 
         let request: CoapRequest<String> = self.build_request("/riot/board");
-        if self.send_request(&request.message).is_err() {
-            self.diagnostic_messages
-                .push_line(Line::from("Failed to request /riot/board\n"));
-        } else {
-            self.configuration_requests.push(request);
-        }
+        self.send_request(&request.message);
+        self.configuration_requests.push(request);
 
         // TODO: Fix me
         //thread::sleep(time::Duration::from_millis(1000));
 
         let request: CoapRequest<String> = self.build_request("/riot/ver");
-        if self.send_request(&request.message).is_err() {
-            self.diagnostic_messages
-                .push_line(Line::from("Failed to request /riot/ver\n"));
-        } else {
-            self.configuration_requests.push(request);
-        }
+        self.send_request(&request.message);
+        self.configuration_requests.push(request);
 
         // TODO: Fix me
         //thread::sleep(time::Duration::from_millis(2000));
 
         let request: CoapRequest<String> = self.build_request("/.well-known/core");
-        if self.send_request(&request.message).is_err() {
-            self.diagnostic_messages
-                .push_line(Line::from("Failed to request /.well-known/core\n"));
-        } else {
-            self.configuration_requests.push(request);
-        }
+        self.send_request(&request.message);
+        self.configuration_requests.push(request);
     }
 
     pub fn disconnect(&mut self) {

@@ -28,44 +28,40 @@ pub fn create_slipmux_thread(
     let cloned_port_guard = Arc::clone(&port_guard);
     thread::Builder::new()
         .name("HardwareWriter".to_owned())
-        .spawn(move || write_thread(receiver, cloned_port_guard))
+        .spawn(move || write_thread(&receiver, &cloned_port_guard))
         .unwrap();
     thread::Builder::new()
         .name("HardwareReader".to_owned())
-        .spawn(move || read_thread(&sender, &device_path, port_guard))
+        .spawn(move || read_thread(&sender, &device_path, &port_guard))
         .unwrap()
 }
 
-fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<impl Write>>>) {
-    loop {
-        match receiver.recv() {
-            Ok(event) => match event {
-                Event::SendDiagnostic(msg) => {
-                    let (data, size) = encode_diagnostic(&msg);
-                    let mut write_port = port_guard.lock().unwrap();
+fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl Write>>>) {
+    while let Ok(event) = receiver.recv() {
+        match event {
+            Event::SendDiagnostic(msg) => {
+                let (data, size) = encode_diagnostic(&msg);
+                let mut write_port = port_guard.lock().unwrap();
 
-                    if let Some(port) = (*write_port).as_mut() {
-                        let _ = port.write_all(&data[..size]);
-                        let _ = port.flush();
-                    } else {
-                        // Nothing to do, drop the message silently
-                        continue;
-                    }
+                if let Some(port) = (*write_port).as_mut() {
+                    port.write_all(&data[..size]).unwrap();
+                    port.flush().unwrap();
+                } else {
+                    // Nothing to do, drop the message silently
                 }
-                Event::SendConfiguration(conf) => {
-                    let mut write_port = port_guard.lock().unwrap();
-                    if let Some(port) = (*write_port).as_mut() {
-                        let _ = port.write_all(&conf);
-                        let _ = port.flush();
-                    } else {
-                        // Nothing to do, drop the message silently
-                        continue;
-                    }
-                    thread::sleep(Duration::from_millis(100));
+            }
+            Event::SendConfiguration(conf) => {
+                if let Some(port) = (*port_guard.lock().unwrap()).as_mut() {
+                    port.write_all(&conf).unwrap();
+                    port.flush().unwrap();
+                } else {
+                    // Nothing to do, drop the message silently
+                    continue;
                 }
-                _ => todo!(),
-            },
-            Err(_) => break,
+                // Pseudo rate limit the outgoing data as to not overwhelm embedded devices
+                thread::sleep(Duration::from_millis(100));
+            }
+            _ => todo!(),
         }
     }
 }
@@ -73,15 +69,12 @@ fn write_thread(receiver: Receiver<Event>, port_guard: Arc<Mutex<Option<impl Wri
 fn read_thread(
     sender: &Sender<Event>,
     device_path: &Path,
-    port_guard: Arc<Mutex<Option<Box<dyn ReaderWriter>>>>,
+    port_guard: &Arc<Mutex<Option<Box<dyn ReaderWriter>>>>,
 ) {
     loop {
-        let (mut read_port, write_port) = match new_port(&device_path) {
-            Ok((r, w)) => (r, w),
-            Err(_) => {
-                thread::sleep(Duration::from_millis(2500));
-                continue;
-            }
+        let Ok((mut read_port, write_port)) = new_port(device_path) else {
+            thread::sleep(Duration::from_millis(2500));
+            continue;
         };
 
         {

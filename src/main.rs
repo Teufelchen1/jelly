@@ -69,10 +69,10 @@ fn main() {
     event_loop(
         &event_receiver,
         event_sender,
-        hardware_event_sender,
+        &hardware_event_sender,
         terminal,
     );
 
     reset_terminal();
-    println!("Thank you for using Jelly 🪼")
+    println!("Thank you for using Jelly 🪼");
 }
