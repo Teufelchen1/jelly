@@ -29,6 +29,7 @@ crossterm = "0.28"
 rand = "0.9.0"
 ratatui = "0.29"
 serial-line-ip = "0.5"
-serialport = "4"
+# This disables the libudev-sys dependencies, making auto enumeration unavailable
+serialport = { version = "4", default-features = false }
 slipmux = "0.1"
 tui-scrollview = "0.5"
