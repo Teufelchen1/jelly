@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crossterm::event::KeyEvent;
 use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
@@ -33,7 +34,12 @@ fn terminal_thread(sender: &Sender<Event>) {
                 sender.send(Event::TerminalKey(key)).unwrap();
             }
             crossterm::event::Event::Mouse(mouse) => {
-                sender.send(Event::TerminalMouse(mouse)).unwrap();
+                if matches!(
+                    mouse.kind,
+                    MouseEventKind::ScrollDown | MouseEventKind::ScrollUp
+                ) {
+                    sender.send(Event::TerminalMouse(mouse)).unwrap();
+                }
             }
             crossterm::event::Event::Resize(_columns, _rows) => {
                 sender.send(Event::TerminalResize).unwrap();
