@@ -16,7 +16,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
 use slipmux::encode_configuration;
-use tui_scrollview::ScrollViewState;
+use tui_widgets::scrollview::ScrollViewState;
 
 use crate::events::Event;
 
@@ -67,10 +67,12 @@ pub struct App<'a> {
     write_port: Option<String>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
-    configuration_scroll_position: ScrollViewState,
-    configuration_scroll_position_follow: bool,
+    configuration_scroll_state: ScrollViewState,
+    configuration_scroll_follow: bool,
     pub diagnostic_messages: Text<'a>,
+    diagnostic_messages_scroll_state: ScrollViewState,
     diagnostic_messages_scroll_position: usize,
+    diagnostic_messages_scroll_follow: bool,
     known_user_commands: Vec<Command>,
     user_command: String,
     user_command_history: Vec<String>,
@@ -87,10 +89,12 @@ impl App<'_> {
             write_port: None,
             configuration_requests: vec![],
             configuration_packets: vec![],
-            configuration_scroll_position: ScrollViewState::default(),
-            configuration_scroll_position_follow: true,
+            configuration_scroll_state: ScrollViewState::default(),
+            configuration_scroll_follow: true,
             diagnostic_messages: Text::default(),
+            diagnostic_messages_scroll_state: ScrollViewState::default(),
             diagnostic_messages_scroll_position: 0,
+            diagnostic_messages_scroll_follow: true,
             known_user_commands: vec![
                 Command::new("help", "Prints all available commands"),
                 Command::new_coap_resource("/.well-known/core", "Query the wkc"),
@@ -255,6 +259,7 @@ impl App<'_> {
         for chr in msg.chars() {
             match chr {
                 '\n' => self.diagnostic_messages.push_line(Line::default()),
+                '\t' | '\r' => (),
                 _ => self
                     .diagnostic_messages
                     .push_span(Span::from(chr.to_string())),
@@ -265,18 +270,27 @@ impl App<'_> {
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
-                self.configuration_scroll_position_follow = false;
-                self.configuration_scroll_position.scroll_down();
-                self.diagnostic_messages_scroll_position =
-                    self.diagnostic_messages_scroll_position.saturating_add(1);
-            }
-            MouseEventKind::ScrollUp => {
-                self.configuration_scroll_position_follow = false;
-                self.configuration_scroll_position.scroll_up();
                 self.diagnostic_messages_scroll_position =
                     self.diagnostic_messages_scroll_position.saturating_sub(1);
-            }
+                self.diagnostic_messages_scroll_follow =
+                    self.diagnostic_messages_scroll_position == 0;
+                self.diagnostic_messages_scroll_state.scroll_down();
 
+                // For now, just have one global scrolling behavior
+                self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
+                self.configuration_scroll_state.scroll_down();
+            }
+            MouseEventKind::ScrollUp => {
+                self.diagnostic_messages_scroll_follow = false;
+                if self.diagnostic_messages_scroll_state.offset().y != 0 {
+                    self.diagnostic_messages_scroll_position =
+                        self.diagnostic_messages_scroll_position.saturating_add(1);
+                }
+                self.diagnostic_messages_scroll_state.scroll_up();
+
+                self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
+                self.configuration_scroll_state.scroll_up();
+            }
             _ => {}
         }
         true
