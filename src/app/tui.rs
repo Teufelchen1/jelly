@@ -64,11 +64,6 @@ impl App<'_> {
         let total_length: u16 = {
             let mut sum = 0;
             for req in &self.configuration_requests {
-                let option_list_ = req.message.get_option(CoapOption::UriPath).unwrap();
-                let mut uri_path = String::new();
-                for option in option_list_ {
-                    _ = write!(uri_path, "{}", String::from_utf8_lossy(option));
-                }
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
                     .style(Style::new().gray())
