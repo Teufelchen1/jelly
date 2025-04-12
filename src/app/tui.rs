@@ -253,9 +253,12 @@ fn fmt_packet(packet: &Packet) -> String {
         MessageClass::Empty => _ = write!(out, "Empty"),
         MessageClass::Request(rtype) => {
             _ = write!(out, " ← Req({rtype:?} ");
-            let option_list = packet.get_option(CoapOption::UriPath).unwrap();
-            for option in option_list {
-                _ = write!(out, "/{}", String::from_utf8_lossy(option));
+            if let Some(option_list) = packet.get_option(CoapOption::UriPath) {
+                for option in option_list {
+                    _ = write!(out, "/{}", String::from_utf8_lossy(option));
+                }
+            } else {
+                _ = write!(out, "/");
             }
             _ = write!(
                 out,

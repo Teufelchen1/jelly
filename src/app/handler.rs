@@ -174,7 +174,11 @@ impl App<'_> {
                     if self.user_command.starts_with('/') {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
-                        request.set_path(&self.user_command);
+                        if self.user_command != "/" {
+                            // Might also be a bug in coap-lite that "/" should be turned into an
+                            // empty option set; documentation isn't quite conclusive.
+                            request.set_path(&self.user_command);
+                        }
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
                         let (data, size) =
