@@ -10,6 +10,7 @@ use slipmux::encode_configuration;
 use tui_widgets::scrollview::ScrollViewState;
 
 use crate::app::commands::Command;
+use crate::app::commands::CommandLibrary;
 use crate::events::Event;
 
 mod commands;
@@ -27,8 +28,8 @@ pub struct App<'a> {
     diagnostic_messages_scroll_state: ScrollViewState,
     diagnostic_messages_scroll_position: usize,
     diagnostic_messages_scroll_follow: bool,
-    known_user_commands: Vec<Command>,
-    user_command: String,
+    known_commands: CommandLibrary,
+    user_input: String,
     user_command_history: Vec<String>,
     user_command_cursor: usize,
     token_count: u16,
@@ -49,11 +50,8 @@ impl App<'_> {
             diagnostic_messages_scroll_state: ScrollViewState::default(),
             diagnostic_messages_scroll_position: 0,
             diagnostic_messages_scroll_follow: true,
-            known_user_commands: vec![
-                Command::new("help", "Prints all available commands"),
-                Command::new_coap_resource("/.well-known/core", "Query the wkc"),
-            ],
-            user_command: String::new(),
+            known_commands: CommandLibrary::default(),
+            user_input: String::new(),
             user_command_history: vec![],
             user_command_cursor: 0,
             token_count: 0,
@@ -91,12 +89,7 @@ impl App<'_> {
             .unwrap();
     }
 
-    fn suggest_command(&self) -> Option<usize> {
-        for (index, known_cmd) in self.known_user_commands.iter().enumerate() {
-            if known_cmd.cmd.starts_with(&self.user_command) {
-                return Some(index);
-            }
-        }
-        None
+    fn suggest_command(&self) -> Option<&Command> {
+        self.known_commands.matching_prefix_by_cmd(&self.user_input)
     }
 }

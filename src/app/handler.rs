@@ -14,8 +14,8 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use slipmux::encode_configuration;
 
+use crate::app::commands::Command;
 use crate::app::App;
-use crate::app::Command;
 use crate::events::Event;
 
 impl App<'_> {
@@ -28,29 +28,23 @@ impl App<'_> {
             }
             let s = maybe.unwrap().split('>').next().unwrap();
             if s.starts_with('/') {
+                // Skip commands that we already learned.
+                if self.known_commands.find_by_location(s).is_some() {
+                    continue;
+                }
                 if s.starts_with("/shell/") {
                     let new_command = Command::from_location(s, "A CoAP resource");
+                    self.known_commands.add(new_command);
 
-                    // Skip commands that we already learned.
-                    if self.known_user_commands.contains(&new_command) {
-                        continue;
-                    }
-                    self.known_user_commands.push(new_command);
+                    // Fetch description
                     let request: CoapRequest<String> = self.build_request(s);
                     self.send_configuration_request(&request.message);
                     self.configuration_requests.push(request);
                 } else {
-                    let new_command = Command::new_coap_resource(s, "A CoAP resource");
-
-                    // Skip commands that we already learned.
-                    if self.known_user_commands.contains(&new_command) {
-                        continue;
-                    }
-                    self.known_user_commands.push(new_command);
+                    let new_command = Command::from_coap_resource(s, "A CoAP resource");
+                    self.known_commands.add(new_command);
                 }
             }
-            // TODO: Fix me
-            //thread::sleep(time::Duration::from_millis(10));
         }
     }
 
@@ -101,15 +95,10 @@ impl App<'_> {
                     "/.well-known/core" => self.on_well_known_core(&response),
                     _ => {
                         if uri_path.starts_with("/shell/") {
-                            let dscr = String::from_utf8_lossy(&response.payload);
-                            let maybeindex = self
-                                .known_user_commands
-                                .iter()
-                                .enumerate()
-                                .find(|(_, cmd)| uri_path.contains(&cmd.cmd));
-                            if let Some((index, _)) = maybeindex {
-                                self.known_user_commands[index].description.clear();
-                                self.known_user_commands[index].description.push_str(&dscr);
+                            // If we already know this command, update it's description
+                            if let Some(cmd) = self.known_commands.find_by_location_mut(&uri_path) {
+                                let dscr = String::from_utf8_lossy(&response.payload);
+                                cmd.update_description(&dscr);
                             }
                         }
                     }
@@ -171,13 +160,13 @@ impl App<'_> {
         match key.code {
             KeyCode::Enter => {
                 if self.write_port.is_some() {
-                    if self.user_command.starts_with('/') {
+                    if self.user_input.starts_with('/') {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
-                        if self.user_command != "/" {
+                        if self.user_input != "/" {
                             // Might also be a bug in coap-lite that "/" should be turned into an
                             // empty option set; documentation isn't quite conclusive.
-                            request.set_path(&self.user_command);
+                            request.set_path(&self.user_input);
                         }
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
@@ -188,49 +177,50 @@ impl App<'_> {
                             .unwrap();
                         self.configuration_requests.push(request);
                     } else {
-                        if !self.user_command.ends_with('\n') {
-                            self.user_command.push('\n');
+                        if !self.user_input.ends_with('\n') {
+                            self.user_input.push('\n');
                         }
                         self.event_sender
-                            .send(Event::SendDiagnostic(self.user_command.clone()))
+                            .send(Event::SendDiagnostic(self.user_input.clone()))
                             .unwrap();
                     }
-                    self.user_command_history.push(self.user_command.clone());
+                    self.user_command_history.push(self.user_input.clone());
                     self.user_command_cursor = self.user_command_history.len();
-                    self.user_command.clear();
+                    self.user_input.clear();
                 }
             }
             KeyCode::Tab | KeyCode::Right => {
-                if let Some(suggestion) = self.suggest_command() {
-                    self.user_command.clear();
-                    self.user_command
-                        .push_str(&self.known_user_commands[suggestion].cmd);
+                if let Some(suggestion) =
+                    self.known_commands.matching_prefix_by_cmd(&self.user_input)
+                {
+                    self.user_input.clear();
+                    self.user_input.push_str(&suggestion.cmd);
                 }
             }
             KeyCode::Backspace => {
-                self.user_command.pop();
+                self.user_input.pop();
             }
             KeyCode::Up => {
                 if self.user_command_cursor > 0 {
-                    self.user_command.clear();
+                    self.user_input.clear();
                     self.user_command_cursor -= 1;
-                    self.user_command = self.user_command_history[self.user_command_cursor].clone();
+                    self.user_input = self.user_command_history[self.user_command_cursor].clone();
                 }
             }
             KeyCode::Down => {
                 if self.user_command_cursor < self.user_command_history.len() {
-                    self.user_command.clear();
+                    self.user_input.clear();
                     self.user_command_cursor += 1;
                     if self.user_command_cursor == self.user_command_history.len() {
-                        self.user_command.clear();
+                        self.user_input.clear();
                     } else {
-                        self.user_command =
+                        self.user_input =
                             self.user_command_history[self.user_command_cursor].clone();
                     }
                 }
             }
             KeyCode::Char(to_insert) => {
-                self.user_command.push(to_insert);
+                self.user_input.push(to_insert);
             }
             _ => return false,
         }
