@@ -271,15 +271,16 @@ fn fmt_packet(packet: &Packet) -> String {
             let cf = packet.get_content_format();
             let payload_formatted = match (cf, &packet.payload) {
                 (Some(ContentFormat::ApplicationLinkFormat), payload) => {
-                        // change me back | ContentFormat::TextPlain
-                        String::from_utf8_lossy(payload).replace(',', "\n  ")
-                    },
-                (Some(ContentFormat::TextPlain), payload) =>
-                        String::from_utf8_lossy(payload).to_string(),
+                    // change me back | ContentFormat::TextPlain
+                    String::from_utf8_lossy(payload).replace(',', "\n  ")
+                }
+                (Some(ContentFormat::TextPlain), payload) => {
+                    String::from_utf8_lossy(payload).to_string()
+                }
                 // this is a cheap-in-terms-of-dependencies hex formatting; `aa bb cc` would be
                 // prettier than `[aa, bb, cc]`, but needs extra dependencies.
                 (_, payload) => format!("{payload:02x?}"),
-                };
+            };
             let slash_cf = cf.map(|c| format!("{c:?}")).unwrap_or_default();
             _ = write!(out, "");
             _ = write!(
@@ -290,7 +291,11 @@ fn fmt_packet(packet: &Packet) -> String {
             if packet.payload.is_empty() {
                 _ = write!(out, "\n  Empty Payload");
             } else {
-                _ = write!(out, ": {} bytes\n  {payload_formatted}", packet.payload.len());
+                _ = write!(
+                    out,
+                    ": {} bytes\n  {payload_formatted}",
+                    packet.payload.len()
+                );
             }
         }
         MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
