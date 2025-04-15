@@ -94,6 +94,7 @@ impl App<'_> {
                     }
                     "/.well-known/core" => self.on_well_known_core(&response),
                     _ => {
+                        // RIOT specific hook
                         if uri_path.starts_with("/shell/") {
                             // If we already know this command, update it's description
                             if let Some(cmd) = self.known_commands.find_by_location_mut(&uri_path) {
@@ -190,12 +191,12 @@ impl App<'_> {
                 }
             }
             KeyCode::Tab | KeyCode::Right => {
-                if let Some(suggestion) =
-                    self.known_commands.matching_prefix_by_cmd(&self.user_input)
-                {
-                    self.user_input.clear();
-                    self.user_input.push_str(&suggestion.cmd);
-                }
+                let (suggestion, _) = self
+                    .known_commands
+                    .longest_common_prefixed_by_cmd(&self.user_input);
+
+                self.user_input.clear();
+                self.user_input.push_str(&suggestion);
             }
             KeyCode::Backspace => {
                 self.user_input.pop();
