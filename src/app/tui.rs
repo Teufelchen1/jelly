@@ -272,7 +272,7 @@ fn fmt_packet(packet: &Packet) -> String {
             let payload_formatted = match (cf, &packet.payload) {
                 (Some(ContentFormat::ApplicationLinkFormat), payload) => {
                     // change me back | ContentFormat::TextPlain
-                    String::from_utf8_lossy(payload).replace(',', "\n  ")
+                    String::from_utf8_lossy(payload).replace(",<", ",\n  <")
                 }
                 (Some(ContentFormat::TextPlain), payload) => {
                     String::from_utf8_lossy(payload).to_string()
