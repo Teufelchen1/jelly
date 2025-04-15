@@ -281,7 +281,7 @@ fn fmt_packet(packet: &Packet) -> String {
                 // prettier than `[aa, bb, cc]`, but needs extra dependencies.
                 (_, payload) => format!("{payload:02x?}"),
             };
-            let slash_cf = cf.map(|c| format!("{c:?}")).unwrap_or_default();
+            let slash_cf = cf.map(|c| format!("/{c:?}")).unwrap_or_default();
             _ = write!(out, "");
             _ = write!(
                 out,
