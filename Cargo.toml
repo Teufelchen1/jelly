@@ -23,6 +23,7 @@ codegen-units = 1
 lto = true
 
 [dependencies]
+cbor-edn = { version = "0.0.9", default-features = false }
 clap = { version = "4", features = ["derive"] }
 coap-lite = "0.13"
 crossterm = "0.28"
