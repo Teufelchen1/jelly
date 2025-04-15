@@ -190,12 +190,14 @@ impl App<'_> {
                 }
             }
             KeyCode::Tab | KeyCode::Right => {
-                if let Some(suggestion) =
-                    self.known_commands.matching_prefix_by_cmd(&self.user_input)
-                {
+                let (suggestion, _) = self.known_commands.longest_common_prefixed_by_cmd(&self.user_input);
+
+                // if let Some(suggestion) =
+                //     self.known_commands.matching_prefix_by_cmd(&self.user_input).pop()
+                // {
                     self.user_input.clear();
-                    self.user_input.push_str(&suggestion.cmd);
-                }
+                    self.user_input.push_str(&suggestion);
+                // }
             }
             KeyCode::Backspace => {
                 self.user_input.pop();

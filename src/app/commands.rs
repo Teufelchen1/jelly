@@ -11,14 +11,41 @@ impl CommandLibrary {
         }
     }
 
+    pub fn list_by_cmd(&self) -> Vec<String> {
+        self.cmds.iter().map(|x| x.cmd.clone()).collect()
+    }
+
     pub fn add(&mut self, cmd: Command) {
         self.cmds.push(cmd);
     }
 
-    pub fn matching_prefix_by_cmd(&self, cmd: &str) -> Option<&Command> {
+    pub fn matching_prefix_by_cmd(&self, cmd: &str) -> Vec<&Command> {
         self.cmds
             .iter()
-            .find(|known_cmd| known_cmd.starts_with(cmd))
+            .filter(|known_cmd| known_cmd.starts_with(cmd)).collect()
+    }
+
+    pub fn longest_common_prefixed_by_cmd(&self, prefix: &str) -> (String, Vec<&Command>) {
+        let cmds = self.matching_prefix_by_cmd(prefix);
+
+        let actual_prefix = match cmds.len() {
+            0 => prefix.to_owned(),
+            1 => cmds[0].cmd.clone(),
+            _ => {
+                let mut common_prefix = prefix.to_owned();
+                let first_cmd = &cmds[0].cmd;
+                'outer: for (i, character) in first_cmd.chars().enumerate().skip(prefix.len()) {
+                    for othercmd in cmds.iter().skip(1) {
+                        if i >= othercmd.cmd.len() || othercmd.cmd.chars().nth(i) != Some(character) {
+                            break 'outer;
+                        }
+                    }
+                    common_prefix.push(character);
+                }
+                common_prefix
+            }
+        };
+        (actual_prefix, cmds)
     }
 
     pub fn _find_by_cmd(&self, cmd: &str) -> Option<&Command> {
