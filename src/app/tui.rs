@@ -279,6 +279,12 @@ fn fmt_packet(packet: &Packet) -> String {
                 }
                 // this is a cheap-in-terms-of-dependencies hex formatting; `aa bb cc` would be
                 // prettier than `[aa, bb, cc]`, but needs extra dependencies.
+                (Some(ContentFormat::ApplicationCBOR), payload) => {
+                    cbor_edn::StandaloneItem::from_cbor(payload).map_or_else(
+                        |e| format!("Parsing error {e}, content {payload:02x?}"),
+                        |c| c.serialize(),
+                    )
+                }
                 (_, payload) => format!("{payload:02x?}"),
             };
             let slash_cf = cf.map(|c| format!("{c:?}")).unwrap_or_default();
