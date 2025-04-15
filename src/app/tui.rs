@@ -123,14 +123,15 @@ impl App<'_> {
             .title_alignment(Alignment::Left)
             .title_style(Style::new().white());
 
-        let suggestion = self.suggest_command();
-        let text: &str = &self.user_command;
+        let text: &str = &self.user_input;
         let mut text = Text::from(text);
-        if let Some(suggestion) = suggestion {
-            let cmd = &self.known_user_commands[suggestion].cmd;
-            let dscr = &self.known_user_commands[suggestion].description;
-            let typed_len = self.user_command.len();
+
+        if let Some(suggestion) = self.suggest_command() {
+            let cmd = &suggestion.cmd;
+            let dscr = &suggestion.description;
+            let typed_len = self.user_input.len();
             let suggestion_preview = cmd.get(typed_len..).unwrap();
+
             text.push_span(Span::from(suggestion_preview).patch_style(Style::new().dark_gray()));
             text.push_span(
                 Span::from(" | ".to_owned() + dscr).patch_style(Style::new().dark_gray()),
