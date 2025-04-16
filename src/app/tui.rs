@@ -67,12 +67,20 @@ impl App<'_> {
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
                     .style(Style::new().gray())
-                    .title(vec![Span::from(fmt_packet(&req.message))])
+                    // Realistically, there is exactly one line in a request; long term, we might
+                    // want to use the rest too.
+                    .title(
+                        fmt_packet(&req.message)
+                            .lines
+                            .drain(..)
+                            .next()
+                            .unwrap_or_default(),
+                    )
                     .title_alignment(Alignment::Left);
                 match &req.response {
                     Some(resp) => {
                         let text = fmt_packet(&resp.message);
-                        let linecount = text.lines().count();
+                        let linecount = text.lines.len();
                         sum += linecount + 2;
                         constrains.push(Constraint::Min((linecount + 2).try_into().unwrap()));
                         req_blocks.push(Paragraph::new(text).block(block));
@@ -246,7 +254,7 @@ impl App<'_> {
     }
 }
 
-fn fmt_packet(packet: &Packet) -> String {
+fn fmt_packet(packet: &Packet) -> Text {
     // When writing to a String `write!` will never fail.
     // Therefore the Result is ignored with `_ = write!()`.
     let mut out = String::new();
@@ -300,5 +308,5 @@ fn fmt_packet(packet: &Packet) -> String {
         }
         MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
     }
-    out
+    Text::from(out)
 }
