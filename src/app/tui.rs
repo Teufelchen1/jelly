@@ -13,6 +13,7 @@ use ratatui::layout::Rect;
 use ratatui::layout::Size;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
+use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
@@ -296,6 +297,13 @@ fn fmt_packet(packet: &Packet) -> Text {
             );
         }
         MessageClass::Response(rtype) => {
+            let responsestyle = match rtype {
+                // FIXME: Use classification instead
+                coap_lite::ResponseType::Content => Style::new().green(),
+                coap_lite::ResponseType::NotFound => Style::new().red(),
+                _ => Style::new(),
+            };
+
             let cf = packet.get_content_format();
             let payload_formatted = match (cf, &packet.payload) {
                 (Some(ContentFormat::ApplicationLinkFormat), payload) => {
@@ -316,21 +324,21 @@ fn fmt_packet(packet: &Packet) -> Text {
                 (_, payload) => format!("{payload:02x?}"),
             };
             let slash_cf = cf.map(|c| format!("/{c:?}")).unwrap_or_default();
-            _ = write!(out, "");
-            _ = write!(
-                out,
+            let mut out = Text::default();
+            let mut firstline = format!(
                 " → Res({rtype:?}{slash_cf})[0x{:04x}]",
                 u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff])),
             );
-            if packet.payload.is_empty() {
-                _ = write!(out, "\n  Empty Payload");
+            let tail = if packet.payload.is_empty() {
+                "  Empty Payload".to_owned()
             } else {
-                _ = write!(
-                    out,
-                    ": {} bytes\n  {payload_formatted}",
-                    packet.payload.len()
-                );
-            }
+                _ = write!(firstline, ": {} bytes", packet.payload.len());
+                format!("  {payload_formatted}")
+            };
+            out.lines.push(Line::styled(firstline, responsestyle));
+            // FIXME: Is there no easier way to create an iterator of Line from a String?
+            out.lines.extend(Text::from(tail).lines);
+            return out;
         }
         MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
     }
