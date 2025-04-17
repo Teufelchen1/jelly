@@ -272,13 +272,19 @@ fn fmt_packet(packet: &Packet) -> String {
             let payload_formatted = match (cf, &packet.payload) {
                 (Some(ContentFormat::ApplicationLinkFormat), payload) => {
                     // change me back | ContentFormat::TextPlain
-                    String::from_utf8_lossy(payload).replace(',', "\n  ")
+                    String::from_utf8_lossy(payload).replace(",<", ",\n  <")
                 }
                 (Some(ContentFormat::TextPlain), payload) => {
                     String::from_utf8_lossy(payload).to_string()
                 }
                 // this is a cheap-in-terms-of-dependencies hex formatting; `aa bb cc` would be
                 // prettier than `[aa, bb, cc]`, but needs extra dependencies.
+                (Some(ContentFormat::ApplicationCBOR), payload) => {
+                    cbor_edn::StandaloneItem::from_cbor(payload).map_or_else(
+                        |e| format!("Parsing error {e}, content {payload:02x?}"),
+                        |c| c.serialize(),
+                    )
+                }
                 (_, payload) => format!("{payload:02x?}"),
             };
             let slash_cf = cf.map(|c| format!("/{c:?}")).unwrap_or_default();
