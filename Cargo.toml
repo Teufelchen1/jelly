@@ -33,4 +33,6 @@ serial-line-ip = "0.5"
 # This disables the libudev-sys dependencies, making auto enumeration unavailable
 serialport = { version = "4", default-features = false }
 slipmux = "0.1"
+syntect = "5.2.0"
+syntect-tui = "3.0.5"
 tui-widgets = "0.4"
