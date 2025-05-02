@@ -57,7 +57,7 @@ impl App<'_> {
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
             .title_alignment(Alignment::Left)
-            .title_style(Style::new().white());
+            .title_style(Style::new().black());
 
         let mut req_blocks = vec![];
         let mut constrains = vec![];
@@ -66,7 +66,7 @@ impl App<'_> {
             for req in &self.configuration_requests {
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
-                    .style(Style::new().gray())
+                    .style(Style::new())
                     .title(vec![Span::from(fmt_packet(&req.message))])
                     .title_alignment(Alignment::Left);
                 match &req.response {
@@ -121,22 +121,42 @@ impl App<'_> {
             .border_style(Style::new().gray())
             .title(vec![Span::from("User Input")])
             .title_alignment(Alignment::Left)
-            .title_style(Style::new().white());
+            .title_style(Style::new().black());
 
+        if self.user_input.is_empty() {
+            let mut text = Text::from(
+                Span::from("Type a command, for example: ").patch_style(Style::new().dark_gray()),
+            );
+            text.push_span(
+                Span::from(self.known_commands.list_by_cmd().join(", "))
+                    .patch_style(Style::new().dark_gray()),
+            );
+            let paragraph = Paragraph::new(text).block(right_block_down);
+            frame.render_widget(paragraph, area);
+            return;
+        }
         let text: &str = &self.user_input;
         let mut text = Text::from(text);
 
-        if let Some(suggestion) = self.suggest_command() {
-            let cmd = &suggestion.cmd;
-            let dscr = &suggestion.description;
-            let typed_len = self.user_input.len();
-            let suggestion_preview = cmd.get(typed_len..).unwrap();
-
-            text.push_span(Span::from(suggestion_preview).patch_style(Style::new().dark_gray()));
-            text.push_span(
-                Span::from(" | ".to_owned() + dscr).patch_style(Style::new().dark_gray()),
-            );
-        }
+        let (suggestion, cmds) = self
+            .known_commands
+            .longest_common_prefixed_by_cmd(&self.user_input);
+        text.push_span(
+            Span::from(suggestion.get(self.user_input.len()..).unwrap_or(""))
+                .patch_style(Style::new().dark_gray()),
+        );
+        let command_options: String = match cmds.len() {
+            0 => String::new(),
+            1 => cmds[0].description.clone(),
+            _ => cmds
+                .iter()
+                .map(|x| x.cmd.clone())
+                .collect::<Vec<String>>()
+                .join(" "),
+        };
+        text.push_span(
+            Span::from(" | ".to_owned() + &command_options).patch_style(Style::new().dark_gray()),
+        );
         let paragraph = Paragraph::new(text).block(right_block_down);
         frame.render_widget(paragraph, area);
     }
@@ -147,7 +167,7 @@ impl App<'_> {
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
             .title_alignment(Alignment::Left)
-            .title_style(Style::new().white());
+            .title_style(Style::new().black());
         let content_width = left_block_up.inner(area).width;
 
         let mut scroll_view = ScrollView::new(Size::new(
@@ -183,7 +203,7 @@ impl App<'_> {
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration")])
             .title_alignment(Alignment::Left)
-            .title_style(Style::new().white());
+            .title_style(Style::new().black());
         let text = format!(
             "Version: {}\nBoard: {}\n",
             self.riot_version, self.riot_board,

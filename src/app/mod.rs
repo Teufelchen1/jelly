@@ -9,7 +9,6 @@ use ratatui::text::Text;
 use slipmux::encode_configuration;
 use tui_widgets::scrollview::ScrollViewState;
 
-use crate::app::commands::Command;
 use crate::app::commands::CommandLibrary;
 use crate::events::Event;
 
@@ -17,14 +16,14 @@ mod commands;
 mod handler;
 mod tui;
 
-pub struct App<'a> {
+pub struct App<'text> {
     event_sender: Sender<Event>,
     write_port: Option<String>,
     configuration_requests: Vec<CoapRequest<String>>,
     configuration_packets: Vec<Packet>,
     configuration_scroll_state: ScrollViewState,
     configuration_scroll_follow: bool,
-    pub diagnostic_messages: Text<'a>,
+    diagnostic_messages: Text<'text>,
     diagnostic_messages_scroll_state: ScrollViewState,
     diagnostic_messages_scroll_position: usize,
     diagnostic_messages_scroll_follow: bool,
@@ -87,9 +86,5 @@ impl App<'_> {
         self.event_sender
             .send(Event::SendConfiguration(data[..size].to_vec()))
             .unwrap();
-    }
-
-    fn suggest_command(&self) -> Option<&Command> {
-        self.known_commands.matching_prefix_by_cmd(&self.user_input)
     }
 }
