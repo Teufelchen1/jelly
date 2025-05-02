@@ -13,6 +13,7 @@ use ratatui::layout::Rect;
 use ratatui::layout::Size;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
+use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
 use ratatui::widgets::Block;
@@ -66,13 +67,21 @@ impl App<'_> {
             for req in &self.configuration_requests {
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
-                    .style(Style::new())
-                    .title(vec![Span::from(fmt_packet(&req.message))])
+                    .style(Style::new().gray())
+                    // Realistically, there is exactly one line in a request; long term, we might
+                    // want to use the rest too.
+                    .title(
+                        fmt_packet(&req.message)
+                            .lines
+                            .drain(..)
+                            .next()
+                            .unwrap_or_default(),
+                    )
                     .title_alignment(Alignment::Left);
                 match &req.response {
                     Some(resp) => {
                         let text = fmt_packet(&resp.message);
-                        let linecount = text.lines().count();
+                        let linecount = text.lines.len();
                         sum += linecount + 2;
                         constrains.push(Constraint::Min((linecount + 2).try_into().unwrap()));
                         req_blocks.push(Paragraph::new(text).block(block));
@@ -266,7 +275,7 @@ impl App<'_> {
     }
 }
 
-fn fmt_packet(packet: &Packet) -> String {
+fn fmt_packet(packet: &Packet) -> Text {
     // When writing to a String `write!` will never fail.
     // Therefore the Result is ignored with `_ = write!()`.
     let mut out = String::new();
@@ -288,6 +297,13 @@ fn fmt_packet(packet: &Packet) -> String {
             );
         }
         MessageClass::Response(rtype) => {
+            let responsestyle = match rtype {
+                // FIXME: Use classification instead
+                coap_lite::ResponseType::Content => Style::new().green(),
+                coap_lite::ResponseType::NotFound => Style::new().red(),
+                _ => Style::new(),
+            };
+
             let cf = packet.get_content_format();
             let payload_formatted = match (cf, &packet.payload) {
                 (Some(ContentFormat::ApplicationLinkFormat), payload) => {
@@ -308,23 +324,23 @@ fn fmt_packet(packet: &Packet) -> String {
                 (_, payload) => format!("{payload:02x?}"),
             };
             let slash_cf = cf.map(|c| format!("/{c:?}")).unwrap_or_default();
-            _ = write!(out, "");
-            _ = write!(
-                out,
+            let mut out = Text::default();
+            let mut firstline = format!(
                 " → Res({rtype:?}{slash_cf})[0x{:04x}]",
                 u16::from_le_bytes(packet.get_token().try_into().unwrap_or([0xff, 0xff])),
             );
-            if packet.payload.is_empty() {
-                _ = write!(out, "\n  Empty Payload");
+            let tail = if packet.payload.is_empty() {
+                "  Empty Payload".to_owned()
             } else {
-                _ = write!(
-                    out,
-                    ": {} bytes\n  {payload_formatted}",
-                    packet.payload.len()
-                );
-            }
+                _ = write!(firstline, ": {} bytes", packet.payload.len());
+                format!("  {payload_formatted}")
+            };
+            out.lines.push(Line::styled(firstline, responsestyle));
+            // FIXME: Is there no easier way to create an iterator of Line from a String?
+            out.lines.extend(Text::from(tail).lines);
+            return out;
         }
         MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
     }
-    out
+    Text::from(out)
 }
