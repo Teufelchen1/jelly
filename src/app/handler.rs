@@ -105,6 +105,17 @@ impl App<'_> {
                         }
                     }
                 }
+                match self
+                    .known_commands
+                    .find_by_location(uri_path.as_str())
+                    .and_then(|cmd| cmd.display)
+                {
+                    Some(disp) => {
+                        let dis = disp(response.payload);
+                        self.on_diagnostic_msg(&dis);
+                    }
+                    None => (),
+                }
             }
         } else {
             // This should never happen, as it means that the riot node
@@ -182,11 +193,44 @@ impl App<'_> {
                         if !self.user_input.ends_with('\n') {
                             self.user_input.push('\n');
                         }
-                        self.event_sender
-                            .send(Event::SendDiagnostic(self.user_input.clone()))
-                            .unwrap();
+
+                        let maybe_cmd = self
+                            .known_commands
+                            .find_by_cmd(&self.user_input.split(' ').next().unwrap());
+
+                        match maybe_cmd {
+                            Some(cmd) => match cmd.handler {
+                                Some(f) => {
+                                    let res = f(self.user_input.clone());
+                                    match res {
+                                        Ok(payload) => {
+                                            let req = self.build_post_request(
+                                                &cmd.location.as_ref().unwrap().clone(),
+                                                &payload,
+                                            );
+                                            self.send_configuration_request(&req.message);
+                                            self.configuration_requests.push(req);
+                                        }
+                                        Err(e) => {
+                                            self.on_diagnostic_msg(&e);
+                                        }
+                                    }
+                                }
+                                None => {
+                                    self.event_sender
+                                        .send(Event::SendDiagnostic(self.user_input.clone()))
+                                        .unwrap();
+                                }
+                            },
+                            None => {
+                                self.event_sender
+                                    .send(Event::SendDiagnostic(self.user_input.clone()))
+                                    .unwrap();
+                            }
+                        }
                     }
-                    self.user_command_history.push(self.user_input.clone());
+                    self.user_command_history
+                        .push(self.user_input.clone().trim_end().to_string());
                     self.user_command_cursor = self.user_command_history.len();
                     self.user_input.clear();
                 }
