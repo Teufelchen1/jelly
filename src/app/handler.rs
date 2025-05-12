@@ -15,8 +15,8 @@ use ratatui::text::Span;
 use slipmux::encode_configuration;
 
 use super::SelectedTab;
-use crate::app::commands::Command;
 use crate::app::App;
+use crate::commands::Command;
 use crate::events::Event;
 
 impl App<'_> {

@@ -10,10 +10,9 @@ use ratatui::text::Text;
 use slipmux::encode_configuration;
 use tui_widgets::scrollview::ScrollViewState;
 
-use crate::app::commands::CommandLibrary;
+use crate::commands::CommandLibrary;
 use crate::events::Event;
 
-mod commands;
 mod handler;
 mod tui;
 
