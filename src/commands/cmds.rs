@@ -2,8 +2,23 @@ use std::fmt::Write;
 
 use clap::Parser;
 use clap::Subcommand;
+use coap_lite::CoapRequest;
+use coap_lite::RequestType as Method;
+use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
+
+pub fn wkc_display(payload: Vec<u8>) -> String {
+    let buffer = String::from_utf8_lossy(&payload);
+    buffer.replace(" ", "\n")
+}
+
+pub fn wkc_handler(_args: String, path: &str) -> Result<CoapRequest<String>, String> {
+    let mut request: CoapRequest<String> = CoapRequest::new();
+    request.set_method(Method::Get);
+    request.set_path(path);
+    Ok(request)
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "SampleCommand")]
@@ -22,7 +37,7 @@ pub fn sample_command_display(payload: Vec<u8>) -> String {
     buffer.replace(" ", "\n")
 }
 
-pub fn sample_command_handler(args: String) -> Result<Vec<u8>, String> {
+pub fn sample_command_handler(args: String, path: &str) -> Result<CoapRequest<String>, String> {
     let cmd = SampleCommand::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
 
     let mut buffer: [u8; 4] = [0; 4];
@@ -36,7 +51,15 @@ pub fn sample_command_handler(args: String) -> Result<Vec<u8>, String> {
         .u8(cmd.repeats.try_into().unwrap())
         .unwrap()
         .end();
-    Ok(buffer.to_vec())
+
+    let mut request: CoapRequest<String> = CoapRequest::new();
+    request.set_method(Method::Post);
+    request.set_path(path);
+    request
+        .message
+        .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+    request.message.set_payload(&buffer.to_vec()).unwrap();
+    Ok(request)
 }
 
 #[derive(Parser, Debug)]
@@ -161,7 +184,7 @@ pub fn saul_display(payload: Vec<u8>) -> String {
     out
 }
 
-pub fn saul_handler(args: String) -> Result<Vec<u8>, String> {
+pub fn saul_handler(args: String, path: &str) -> Result<CoapRequest<String>, String> {
     let cmd = Saul::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
 
     let mut buffer: [u8; 12] = [0; 12];
@@ -191,5 +214,12 @@ pub fn saul_handler(args: String) -> Result<Vec<u8>, String> {
         }
     };
 
-    Ok(buffer.to_vec())
+    let mut request: CoapRequest<String> = CoapRequest::new();
+    request.set_method(Method::Post);
+    request.set_path(path);
+    request
+        .message
+        .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+    request.message.set_payload(&buffer.to_vec()).unwrap();
+    Ok(request)
 }

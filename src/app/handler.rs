@@ -34,12 +34,18 @@ impl App<'_> {
                     continue;
                 }
                 if s.starts_with("/shell/") {
-                    let new_command = Command::from_location(s, "A CoAP resource");
+                    let new_command = Command::from_location(s, "A RIOT shell command");
                     self.known_commands.add(new_command);
 
+                    let new_endpoint = Command::from_coap_resource(
+                        s,
+                        "A CoAP resource describing a RIOT shell command",
+                    );
+                    self.known_commands.add(new_endpoint);
+
                     // Fetch description
-                    let request: CoapRequest<String> = self.build_request(s);
-                    self.send_configuration_request(&request.message);
+                    let mut request: CoapRequest<String> = self.build_get_request(s);
+                    self.send_configuration_request(&mut request.message);
                     self.configuration_requests.push(request);
                 } else {
                     let new_command = Command::from_coap_resource(s, "A CoAP resource");
@@ -52,16 +58,16 @@ impl App<'_> {
     pub fn on_connect(&mut self, name: String) {
         self.write_port = Some(name);
 
-        let request: CoapRequest<String> = self.build_request("/riot/board");
-        self.send_configuration_request(&request.message);
+        let mut request: CoapRequest<String> = self.build_get_request("/riot/board");
+        self.send_configuration_request(&mut request.message);
         self.configuration_requests.push(request);
 
-        let request: CoapRequest<String> = self.build_request("/riot/ver");
-        self.send_configuration_request(&request.message);
+        let mut request: CoapRequest<String> = self.build_get_request("/riot/ver");
+        self.send_configuration_request(&mut request.message);
         self.configuration_requests.push(request);
 
-        let request: CoapRequest<String> = self.build_request("/.well-known/core");
-        self.send_configuration_request(&request.message);
+        let mut request: CoapRequest<String> = self.build_get_request("/.well-known/core");
+        self.send_configuration_request(&mut request.message);
         self.configuration_requests.push(request);
     }
 
@@ -99,6 +105,13 @@ impl App<'_> {
                         if uri_path.starts_with("/shell/") {
                             // If we already know this command, update it's description
                             if let Some(cmd) = self.known_commands.find_by_location_mut(&uri_path) {
+                                let dscr = String::from_utf8_lossy(&response.payload);
+                                cmd.update_description(&dscr);
+                            }
+                            if let Some(cmd) = self
+                                .known_commands
+                                .find_by_cmd_mut(&uri_path.strip_prefix("/shell/").unwrap())
+                            {
                                 let dscr = String::from_utf8_lossy(&response.payload);
                                 cmd.update_description(&dscr);
                             }
@@ -176,8 +189,11 @@ impl App<'_> {
             RawCommand,
             /// This input is a known command with a coap endpoint
             /// Treated as configuration message
-            JellyCoap(&'a Command),
-            /// This input is a known command without an coap endpoint
+            JellyCoap(()),
+            /// This input is a known command with a coap endpoint and a handler
+            /// Treated as configuration message
+            JellyCoapCommand(&'a Command),
+            /// This input is a known command without a coap endpoint
             /// Treated as diagnostic message
             JellyCommand(&'a Command),
         }
@@ -187,8 +203,12 @@ impl App<'_> {
                 .find_by_cmd(&input.split(' ').next().unwrap());
             match maybe_cmd {
                 Some(cmd) => {
-                    if cmd.handler.is_some() {
-                        InputType::JellyCoap(cmd)
+                    if cmd.location.is_some() {
+                        if cmd.handler.is_some() {
+                            InputType::JellyCoapCommand(cmd)
+                        } else {
+                            InputType::JellyCoap(() /* cmd */)
+                        }
                     } else {
                         InputType::JellyCommand(cmd)
                     }
@@ -214,7 +234,7 @@ impl App<'_> {
                 }
 
                 match classify_input(&self.user_input) {
-                    InputType::RawCoap => {
+                    InputType::RawCoap | InputType::JellyCoap(_) => {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
                         if self.user_input != "/" {
@@ -239,16 +259,12 @@ impl App<'_> {
                             .send(Event::SendDiagnostic(self.user_input.clone()))
                             .unwrap();
                     }
-                    InputType::JellyCoap(cmd) => {
+                    InputType::JellyCoapCommand(cmd) => {
                         let handler = cmd.handler.unwrap();
-                        let res = handler(self.user_input.clone());
+                        let res = handler(self.user_input.clone(), cmd.location.as_ref().unwrap());
                         match res {
-                            Ok(payload) => {
-                                let req = self.build_post_request(
-                                    &cmd.location.as_ref().unwrap().clone(),
-                                    &payload,
-                                );
-                                self.send_configuration_request(&req.message);
+                            Ok(mut req) => {
+                                self.send_configuration_request(&mut req.message);
                                 self.configuration_requests.push(req);
                             }
                             Err(e) => {

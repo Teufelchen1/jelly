@@ -1,3 +1,5 @@
+use coap_lite::CoapRequest;
+
 use crate::commands::cmds::*;
 
 mod cmds;
@@ -28,6 +30,13 @@ impl CommandLibrary {
                     location: Some("/Saul".to_owned()),
                     handler: Some(saul_handler),
                     display: Some(saul_display),
+                },
+                Command {
+                    cmd: "wkc".to_owned(),
+                    description: "Query the wkc".to_owned(),
+                    location: Some("/.well-known/core".to_owned()),
+                    handler: Some(wkc_handler),
+                    display: Some(wkc_display),
                 },
             ],
         }
@@ -88,7 +97,7 @@ impl CommandLibrary {
     }
 
     /// Finds the `Command` whose `cmd` matches exactly the input, returns mutable
-    pub fn _find_by_cmd_mut(&mut self, cmd: &str) -> Option<&mut Command> {
+    pub fn find_by_cmd_mut(&mut self, cmd: &str) -> Option<&mut Command> {
         let cmd_clean = cmd.trim_ascii_end();
         self.cmds
             .iter_mut()
@@ -120,7 +129,7 @@ impl CommandLibrary {
     }
 }
 
-type Handler = fn(String) -> Result<Vec<u8>, String>;
+type Handler = fn(String, &str) -> Result<CoapRequest<String>, String>;
 type Displayer = fn(Vec<u8>) -> String;
 
 /// Represents a command that the user can type into jelly
@@ -170,7 +179,7 @@ impl Command {
         Self {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
-            location: Some(location.to_owned()),
+            location: None,
             handler: None,
             display: None,
         }
