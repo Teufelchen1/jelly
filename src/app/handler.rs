@@ -166,14 +166,55 @@ impl App<'_> {
     }
 
     pub fn on_key(&mut self, key: KeyEvent) -> bool {
+        enum InputType<'a> {
+            /// The user input something that is not known to Jelly but it
+            /// starts with a `/` so it likely is a coap endpoint
+            /// Treated as configuration message
+            RawCoap,
+            /// The user input something that is not known to Jelly
+            /// Treated as diagnostic message
+            RawCommand,
+            /// This input is a known command with a coap endpoint
+            /// Treated as configuration message
+            JellyCoap(&'a Command),
+            /// This input is a known command without an coap endpoint
+            /// Treated as diagnostic message
+            JellyCommand(&'a Command),
+        }
+        let classify_input = |input: &str| {
+            let maybe_cmd = self
+                .known_commands
+                .find_by_cmd(&input.split(' ').next().unwrap());
+            match maybe_cmd {
+                Some(cmd) => {
+                    if cmd.handler.is_some() {
+                        InputType::JellyCoap(cmd)
+                    } else {
+                        InputType::JellyCommand(cmd)
+                    }
+                }
+                None => {
+                    if input.starts_with('/') {
+                        InputType::RawCoap
+                    } else {
+                        InputType::RawCommand
+                    }
+                }
+            }
+        };
+
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return false;
         }
 
         match key.code {
             KeyCode::Enter => {
-                if self.write_port.is_some() {
-                    if self.user_input.starts_with('/') {
+                if self.write_port.is_none() {
+                    return true;
+                }
+
+                match classify_input(&self.user_input) {
+                    InputType::RawCoap => {
                         let mut request: CoapRequest<String> = CoapRequest::new();
                         request.set_method(Method::Get);
                         if self.user_input != "/" {
@@ -189,51 +230,46 @@ impl App<'_> {
                             .send(Event::SendConfiguration(data[..size].to_vec()))
                             .unwrap();
                         self.configuration_requests.push(request);
-                    } else {
+                    }
+                    InputType::RawCommand => {
                         if !self.user_input.ends_with('\n') {
                             self.user_input.push('\n');
                         }
-
-                        let maybe_cmd = self
-                            .known_commands
-                            .find_by_cmd(&self.user_input.split(' ').next().unwrap());
-
-                        match maybe_cmd {
-                            Some(cmd) => match cmd.handler {
-                                Some(f) => {
-                                    let res = f(self.user_input.clone());
-                                    match res {
-                                        Ok(payload) => {
-                                            let req = self.build_post_request(
-                                                &cmd.location.as_ref().unwrap().clone(),
-                                                &payload,
-                                            );
-                                            self.send_configuration_request(&req.message);
-                                            self.configuration_requests.push(req);
-                                        }
-                                        Err(e) => {
-                                            self.on_diagnostic_msg(&e);
-                                        }
-                                    }
-                                }
-                                None => {
-                                    self.event_sender
-                                        .send(Event::SendDiagnostic(self.user_input.clone()))
-                                        .unwrap();
-                                }
-                            },
-                            None => {
-                                self.event_sender
-                                    .send(Event::SendDiagnostic(self.user_input.clone()))
-                                    .unwrap();
+                        self.event_sender
+                            .send(Event::SendDiagnostic(self.user_input.clone()))
+                            .unwrap();
+                    }
+                    InputType::JellyCoap(cmd) => {
+                        let handler = cmd.handler.unwrap();
+                        let res = handler(self.user_input.clone());
+                        match res {
+                            Ok(payload) => {
+                                let req = self.build_post_request(
+                                    &cmd.location.as_ref().unwrap().clone(),
+                                    &payload,
+                                );
+                                self.send_configuration_request(&req.message);
+                                self.configuration_requests.push(req);
+                            }
+                            Err(e) => {
+                                self.on_diagnostic_msg(&e);
                             }
                         }
                     }
-                    self.user_command_history
-                        .push(self.user_input.clone().trim_end().to_string());
-                    self.user_command_cursor = self.user_command_history.len();
-                    self.user_input.clear();
+                    InputType::JellyCommand(_cmd) => {
+                        if !self.user_input.ends_with('\n') {
+                            self.user_input.push('\n');
+                        }
+                        self.event_sender
+                            .send(Event::SendDiagnostic(self.user_input.clone()))
+                            .unwrap();
+                    }
                 }
+
+                self.user_command_history
+                    .push(self.user_input.clone().trim_end().to_string());
+                self.user_command_cursor = self.user_command_history.len();
+                self.user_input.clear();
             }
             KeyCode::Tab | KeyCode::Right => {
                 let (suggestion, _) = self
