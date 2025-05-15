@@ -1,3 +1,9 @@
+use coap_lite::CoapRequest;
+
+use crate::commands::cmds::*;
+
+mod cmds;
+
 /// The command library maintains all known commands and provides easy access to them
 pub struct CommandLibrary {
     cmds: Vec<Command>,
@@ -11,6 +17,27 @@ impl CommandLibrary {
             cmds: vec![
                 Command::new("help", "Prints all available commands"),
                 Command::from_coap_resource("/.well-known/core", "Query the wkc"),
+                Command {
+                    cmd: "SampleCommand".to_owned(),
+                    description: "An example coap based command".to_owned(),
+                    location: Some("/SampleCommand".to_owned()),
+                    handler: Some(sample_command_handler),
+                    display: Some(sample_command_display),
+                },
+                Command {
+                    cmd: "Saul".to_owned(),
+                    description: "Saul over coap".to_owned(),
+                    location: Some("/Saul".to_owned()),
+                    handler: Some(saul_handler),
+                    display: Some(saul_display),
+                },
+                Command {
+                    cmd: "wkc".to_owned(),
+                    description: "Query the wkc".to_owned(),
+                    location: Some("/.well-known/core".to_owned()),
+                    handler: Some(wkc_handler),
+                    display: Some(wkc_display),
+                },
             ],
         }
     }
@@ -62,13 +89,19 @@ impl CommandLibrary {
     }
 
     /// Finds the `Command` whose `cmd` matches exactly the input
-    pub fn _find_by_cmd(&self, cmd: &str) -> Option<&Command> {
-        self.cmds.iter().find(|known_cmd| known_cmd.cmd == cmd)
+    pub fn find_by_cmd(&self, cmd: &str) -> Option<&Command> {
+        let cmd_clean = cmd.trim_ascii_end();
+        self.cmds
+            .iter()
+            .find(|known_cmd| known_cmd.cmd == cmd_clean)
     }
 
     /// Finds the `Command` whose `cmd` matches exactly the input, returns mutable
-    pub fn _find_by_cmd_mut(&mut self, cmd: &str) -> Option<&mut Command> {
-        self.cmds.iter_mut().find(|known_cmd| known_cmd.cmd == cmd)
+    pub fn find_by_cmd_mut(&mut self, cmd: &str) -> Option<&mut Command> {
+        let cmd_clean = cmd.trim_ascii_end();
+        self.cmds
+            .iter_mut()
+            .find(|known_cmd| known_cmd.cmd == cmd_clean)
     }
 
     /// Finds the `Command` whose `location` matches exactly the input
@@ -96,6 +129,9 @@ impl CommandLibrary {
     }
 }
 
+type Handler = fn(String, &str) -> Result<CoapRequest<String>, String>;
+type Displayer = fn(Vec<u8>) -> String;
+
 /// Represents a command that the user can type into jelly
 pub struct Command {
     /// The name of the command, this is what the user types into jelly
@@ -104,6 +140,10 @@ pub struct Command {
     pub description: String,
     /// The CoAP end-point this command belongs to, if any
     pub location: Option<String>,
+
+    pub handler: Option<Handler>,
+
+    pub display: Option<Displayer>,
 }
 
 impl Command {
@@ -113,6 +153,8 @@ impl Command {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
             location: None,
+            handler: None,
+            display: None,
         }
     }
 
@@ -123,6 +165,8 @@ impl Command {
             cmd: resource.to_owned(),
             description: description.to_owned(),
             location: Some(resource.to_owned()),
+            handler: None,
+            display: None,
         }
     }
 
@@ -135,7 +179,9 @@ impl Command {
         Self {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
-            location: Some(location.to_owned()),
+            location: None,
+            handler: None,
+            display: None,
         }
     }
 

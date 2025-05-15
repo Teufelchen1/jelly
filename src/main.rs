@@ -13,6 +13,7 @@ use crate::events::Event;
 use crate::hardware::create_slipmux_thread;
 
 mod app;
+mod commands;
 mod events;
 mod hardware;
 mod transport;

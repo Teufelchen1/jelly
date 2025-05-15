@@ -9,10 +9,9 @@ use ratatui::text::Text;
 use slipmux::encode_configuration;
 use tui_widgets::scrollview::ScrollViewState;
 
-use crate::app::commands::CommandLibrary;
+use crate::commands::CommandLibrary;
 use crate::events::Event;
 
-mod commands;
 mod handler;
 mod tui;
 
@@ -82,17 +81,18 @@ impl App<'_> {
         self.next_mid
     }
 
-    fn build_request(&mut self, path: &str) -> CoapRequest<String> {
+    fn build_get_request(&mut self, path: &str) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         request.set_path(path);
-        request.message.header.message_id = self.get_new_message_id();
-        request.message.set_token(self.get_new_token());
-        request.message.add_option(CoapOption::Block2, vec![0x05]);
         request
     }
 
-    fn send_configuration_request(&self, msg: &Packet) {
+    fn send_configuration_request(&mut self, msg: &mut Packet) {
+        msg.header.message_id = self.get_new_message_id();
+        msg.set_token(self.get_new_token());
+        msg.add_option(CoapOption::Block2, vec![0x05]);
+
         let (data, size) = encode_configuration(msg.to_bytes().unwrap());
         self.event_sender
             .send(Event::SendConfiguration(data[..size].to_vec()))
