@@ -14,6 +14,7 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use slipmux::encode_configuration;
 
+use super::SelectedTab;
 use crate::app::commands::Command;
 use crate::app::App;
 use crate::events::Event;
@@ -222,6 +223,15 @@ impl App<'_> {
             }
             KeyCode::Char(to_insert) => {
                 self.user_input.push(to_insert);
+            }
+            KeyCode::F(1) => {
+                self.current_tab = SelectedTab::Combined;
+            }
+            KeyCode::F(2) => {
+                self.current_tab = SelectedTab::Diagnostic;
+            }
+            KeyCode::F(3) => {
+                self.current_tab = SelectedTab::Configuration;
             }
             _ => return false,
         }

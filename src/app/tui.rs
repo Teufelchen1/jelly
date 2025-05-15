@@ -11,6 +11,7 @@ use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
+use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -19,6 +20,7 @@ use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
@@ -27,14 +29,33 @@ use crate::app::App;
 
 impl App<'_> {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
+        let tab_titles = ["Overview (F1)", "Diagnostic (F2)", "Configuration (F3)"];
+        let title = if frame.area().width < 90 {
+            "Jelly 🪼"
+        } else {
+            "Jelly 🪼: The friendly SLIPMUX for RIOT OS"
+        };
+
+        let title_area =
+            Layout::horizontal([Constraint::Length(49), Constraint::Fill(1)]).split(header_area);
+
+        frame.render_widget(
+            Tabs::new(tab_titles)
+                .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
+                .select(self.current_tab as usize)
+                .padding("", "")
+                .divider(" "),
+            title_area[0],
+        );
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
-                .title("Jelly 🪼: The friendly SLIPMUX for RIOT OS")
+                .title(title)
                 .title_alignment(Alignment::Center),
-            header_area,
+            title_area[1],
         );
-        let title = match &self.write_port {
+
+        let footer_title = match &self.write_port {
             Some(port) => {
                 let device_path = port;
                 format!(
@@ -47,7 +68,7 @@ impl App<'_> {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
-                .title(title)
+                .title(footer_title)
                 .title_alignment(Alignment::Right),
             footer_area,
         );
@@ -57,8 +78,7 @@ impl App<'_> {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
-            .title_alignment(Alignment::Left)
-            .title_style(Style::new().black());
+            .title_alignment(Alignment::Left);
 
         let mut req_blocks = vec![];
         let mut constrains = vec![];
@@ -89,7 +109,7 @@ impl App<'_> {
                     None => {
                         req_blocks.push(Paragraph::new("Awaiting response").block(block));
                         sum += 3;
-                        constrains.push(Constraint::Min(3));
+                        constrains.push(Constraint::Length(3));
                     }
                 }
             }
@@ -129,8 +149,7 @@ impl App<'_> {
         let right_block_down = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("User Input")])
-            .title_alignment(Alignment::Left)
-            .title_style(Style::new().black());
+            .title_alignment(Alignment::Left);
 
         if self.user_input.is_empty() {
             let mut text = Text::from(
@@ -175,8 +194,7 @@ impl App<'_> {
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
-            .title_alignment(Alignment::Left)
-            .title_style(Style::new().black());
+            .title_alignment(Alignment::Left);
         let content_width = left_block_up.inner(area).width;
 
         let mut scroll_view = ScrollView::new(Size::new(
@@ -211,8 +229,7 @@ impl App<'_> {
         let left_block_down = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration")])
-            .title_alignment(Alignment::Left)
-            .title_style(Style::new().black());
+            .title_alignment(Alignment::Left);
         let text = format!(
             "Version: {}\nBoard: {}\n",
             self.riot_version, self.riot_board,
@@ -238,40 +255,65 @@ impl App<'_> {
         let main_area = main_layout[1];
         let footer_area = main_layout[2];
 
-        let main_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(0)
-            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)].as_ref())
-            .split(main_area);
-
-        let main_chunk_left = main_chunks[0];
-        let main_chunk_right = main_chunks[1];
-
-        let right_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1), Constraint::Max(5)].as_ref())
-            .split(main_chunk_right);
-
-        let right_chunk_upper = right_chunks[0];
-        let right_chunk_lower = right_chunks[1];
-
-        let left_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
-            .split(main_chunk_left);
-
-        let left_chunk_upper = left_chunks[0];
-        let left_chunk_lower = left_chunks[1];
-
         self.render_header_footer(frame, header_area, footer_area);
 
-        self.render_configuration_messages(frame, right_chunk_upper);
+        match self.current_tab {
+            super::SelectedTab::Combined => {
+                let main_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .margin(0)
+                    .constraints([Constraint::Percentage(65), Constraint::Percentage(35)].as_ref())
+                    .split(main_area);
 
-        self.render_user_input(frame, left_chunk_lower);
+                let main_chunk_left = main_chunks[0];
+                let main_chunk_right = main_chunks[1];
 
-        self.render_diagnostic_messages(frame, left_chunk_upper);
+                let right_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1), Constraint::Max(5)].as_ref())
+                    .split(main_chunk_right);
 
-        self.render_configuration_overview(frame, right_chunk_lower);
+                let right_chunk_upper = right_chunks[0];
+                let right_chunk_lower = right_chunks[1];
+
+                let left_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+                    .split(main_chunk_left);
+
+                let left_chunk_upper = left_chunks[0];
+                let left_chunk_lower = left_chunks[1];
+
+                self.render_configuration_messages(frame, right_chunk_upper);
+                self.render_diagnostic_messages(frame, left_chunk_upper);
+                self.render_configuration_overview(frame, right_chunk_lower);
+                self.render_user_input(frame, left_chunk_lower);
+            }
+            super::SelectedTab::Configuration => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+                    .split(main_area);
+
+                let chunk_upper = chunks[0];
+                let chunk_lower = chunks[1];
+
+                self.render_configuration_messages(frame, chunk_upper);
+                self.render_user_input(frame, chunk_lower);
+            }
+            super::SelectedTab::Diagnostic => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+                    .split(main_area);
+
+                let chunk_upper = chunks[0];
+                let chunk_lower = chunks[1];
+
+                self.render_diagnostic_messages(frame, chunk_upper);
+                self.render_user_input(frame, chunk_lower);
+            }
+        }
     }
 }
 
@@ -307,7 +349,6 @@ fn fmt_packet(packet: &Packet) -> Text {
             let cf = packet.get_content_format();
             let payload_formatted = match (cf, &packet.payload) {
                 (Some(ContentFormat::ApplicationLinkFormat), payload) => {
-                    // change me back | ContentFormat::TextPlain
                     String::from_utf8_lossy(payload).replace(",<", ",\n  <")
                 }
                 (Some(ContentFormat::TextPlain), payload) => {
