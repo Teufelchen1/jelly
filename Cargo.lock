@@ -1072,9 +1072,9 @@ dependencies = [
 
 [[package]]
 name = "slipmux"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a573cb59ea752893db8b49b9f9fe23fd36caa9a55bc77e32d508e87b071e999a"
+checksum = "ef74412f6a53deb193025421eb2a15256a10f0f5498742a1b494d84d9908c2ef"
 dependencies = [
  "serial-line-ip",
 ]
