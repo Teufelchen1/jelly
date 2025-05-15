@@ -16,6 +16,14 @@ mod commands;
 mod handler;
 mod tui;
 
+#[derive(Default, Clone, Copy)]
+enum SelectedTab {
+    #[default]
+    Combined,
+    Diagnostic,
+    Configuration,
+}
+
 pub struct App<'text> {
     event_sender: Sender<Event>,
     write_port: Option<String>,
@@ -27,6 +35,7 @@ pub struct App<'text> {
     diagnostic_messages_scroll_state: ScrollViewState,
     diagnostic_messages_scroll_position: usize,
     diagnostic_messages_scroll_follow: bool,
+    current_tab: SelectedTab,
     known_commands: CommandLibrary,
     user_input: String,
     user_command_history: Vec<String>,
@@ -36,6 +45,7 @@ pub struct App<'text> {
     riot_version: String,
     next_mid: u16,
 }
+
 impl App<'_> {
     pub fn new(event_sender: Sender<Event>) -> Self {
         Self {
@@ -49,6 +59,7 @@ impl App<'_> {
             diagnostic_messages_scroll_state: ScrollViewState::default(),
             diagnostic_messages_scroll_position: 0,
             diagnostic_messages_scroll_follow: true,
+            current_tab: SelectedTab::Combined,
             known_commands: CommandLibrary::default(),
             user_input: String::new(),
             user_command_history: vec![],
