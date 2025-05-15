@@ -115,23 +115,25 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                     }
                     num
                 }
-                Err(err) => match err.kind() {
-                    WouldBlock => {
+                Err(err) => {
+                    if err.kind() == WouldBlock {
                         // This means timeout
                         continue;
                     }
-                    _ => {
-                        sender.send(Event::SerialDisconnect).unwrap();
-                        break;
-                    }
-                },
+                    sender.send(Event::SerialDisconnect).unwrap();
+                    break;
+                }
             }
         };
 
         for slipframe in slipmux_decoder.decode(&buffer[..bytes_read]) {
             if slipframe.is_err() {
                 sender
-                    .send(Event::Diagnostic("Received garbage\n".to_owned()))
+                    .send(Event::Diagnostic(format!(
+                        "Received ({:?}): {:?}\n",
+                        slipframe,
+                        &buffer[..bytes_read]
+                    )))
                     .unwrap();
                 continue;
             }

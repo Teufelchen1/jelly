@@ -98,19 +98,16 @@ impl App<'_> {
                             .unwrap_or_default(),
                     )
                     .title_alignment(Alignment::Left);
-                match &req.response {
-                    Some(resp) => {
-                        let text = fmt_packet(&resp.message);
-                        let linecount = text.lines.len();
-                        sum += linecount + 2;
-                        constrains.push(Constraint::Min((linecount + 2).try_into().unwrap()));
-                        req_blocks.push(Paragraph::new(text).block(block));
-                    }
-                    None => {
-                        req_blocks.push(Paragraph::new("Awaiting response").block(block));
-                        sum += 3;
-                        constrains.push(Constraint::Length(3));
-                    }
+                if let Some(resp) = &req.response {
+                    let text = fmt_packet(&resp.message);
+                    let linecount = text.lines.len();
+                    sum += linecount + 2;
+                    constrains.push(Constraint::Min((linecount + 2).try_into().unwrap()));
+                    req_blocks.push(Paragraph::new(text).block(block));
+                } else {
+                    req_blocks.push(Paragraph::new("Awaiting response").block(block));
+                    sum += 3;
+                    constrains.push(Constraint::Length(3));
                 }
             }
             sum.try_into().unwrap()
@@ -190,17 +187,17 @@ impl App<'_> {
     }
 
     fn render_diagnostic_messages(&mut self, frame: &mut Frame, area: Rect) {
-        //frame.render_widget(Clear, area);
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
             .title_alignment(Alignment::Left);
         let content_width = left_block_up.inner(area).width;
+        let messages_hight = u16::try_from(self.diagnostic_messages.height()).unwrap_or(u16::MAX);
 
         let mut scroll_view = ScrollView::new(Size::new(
             // Make room for the scroll bar
             content_width - 1,
-            self.diagnostic_messages.height() as u16,
+            messages_hight,
         ));
 
         if self.diagnostic_messages_scroll_follow {
@@ -209,12 +206,7 @@ impl App<'_> {
 
         scroll_view.render_widget(
             Paragraph::new(self.diagnostic_messages.clone()),
-            Rect::new(
-                0,
-                0,
-                content_width - 1,
-                self.diagnostic_messages.height() as u16,
-            ),
+            Rect::new(0, 0, content_width - 1, messages_hight),
         );
 
         frame.render_stateful_widget(
@@ -278,7 +270,7 @@ impl App<'_> {
 
                 let left_chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
                     .split(main_chunk_left);
 
                 let left_chunk_upper = left_chunks[0];
@@ -292,7 +284,7 @@ impl App<'_> {
             super::SelectedTab::Configuration => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
                     .split(main_area);
 
                 let chunk_upper = chunks[0];
@@ -304,7 +296,7 @@ impl App<'_> {
             super::SelectedTab::Diagnostic => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Max(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
                     .split(main_area);
 
                 let chunk_upper = chunks[0];
