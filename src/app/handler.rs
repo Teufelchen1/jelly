@@ -128,11 +128,9 @@ impl App<'_> {
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
-                self.diagnostic_messages_scroll_position =
-                    self.diagnostic_messages_scroll_position.saturating_sub(1);
-                self.diagnostic_messages_scroll_follow =
-                    self.diagnostic_messages_scroll_position == 0;
                 self.diagnostic_messages_scroll_state.scroll_down();
+                self.diagnostic_messages_scroll_follow =
+                    self.diagnostic_messages_scroll_state.is_at_bottom();
 
                 // For now, just have one global scrolling behavior
                 self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
@@ -140,12 +138,7 @@ impl App<'_> {
             }
             MouseEventKind::ScrollUp => {
                 self.diagnostic_messages_scroll_follow = false;
-                if self.diagnostic_messages_scroll_state.offset().y != 0 {
-                    self.diagnostic_messages_scroll_position =
-                        self.diagnostic_messages_scroll_position.saturating_add(1);
-                }
                 self.diagnostic_messages_scroll_state.scroll_up();
-
                 self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
                 self.configuration_scroll_state.scroll_up();
             }
