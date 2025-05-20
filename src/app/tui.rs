@@ -9,6 +9,7 @@ use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
+use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
 use ratatui::style::Color;
@@ -163,6 +164,11 @@ impl App<'_> {
         let text: &str = &self.user_input;
         let mut text = Text::from(text);
 
+        frame.set_cursor_position(Position::new(
+            area.x + self.user_input.len() as u16 + 1,
+            area.y + 1,
+        ));
+
         let (suggestion, cmds) = self
             .known_commands
             .longest_common_prefixed_by_cmd(&self.user_input);
@@ -179,6 +185,7 @@ impl App<'_> {
                 .collect::<Vec<String>>()
                 .join(" "),
         };
+
         text.push_span(
             Span::from(" | ".to_owned() + &command_options).patch_style(Style::new().dark_gray()),
         );

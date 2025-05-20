@@ -202,6 +202,7 @@ impl App<'_> {
             KeyCode::Backspace => {
                 self.user_input.pop();
             }
+            KeyCode::Left => {}
             KeyCode::Up => {
                 if self.user_command_cursor > 0 {
                     self.user_input.clear();
