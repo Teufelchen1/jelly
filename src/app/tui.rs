@@ -111,7 +111,7 @@ impl App<'_> {
                     constrains.push(Constraint::Length(3));
                 }
             }
-            sum.try_into().unwrap()
+            sum.try_into().unwrap_or(u16::MAX)
         };
 
         let width = if right_block_up.inner(area).height < total_length {
@@ -198,6 +198,7 @@ impl App<'_> {
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
             .title_alignment(Alignment::Left);
+
         let content_width = left_block_up.inner(area).width;
         let messages_hight = u16::try_from(self.diagnostic_messages.height()).unwrap_or(u16::MAX);
 
@@ -229,6 +230,7 @@ impl App<'_> {
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration")])
             .title_alignment(Alignment::Left);
+
         let text = format!(
             "Version: {}\nBoard: {}\n",
             self.riot_version, self.riot_board,
