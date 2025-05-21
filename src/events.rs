@@ -119,8 +119,7 @@ pub fn event_one_shot(
                 let response = coap_lite::Packet::from_bytes(&data).unwrap();
                 return Ok(response.payload);
             }
-            Event::SerialConnect(name) => {
-                println!("Serial connect {name}");
+            Event::SerialConnect(_name) => {
                 hardware_event_sender
                     .send(Event::SendConfiguration(payload.to_owned()))
                     .unwrap();

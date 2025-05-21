@@ -55,7 +55,7 @@ fn one_shot_command(
                     match handler_selection {
                         "as_cbor" => {
                             let display = cmd.displayCbor.unwrap();
-                            println!("{:?}", display(data));
+                            let _ = std::io::Write::write(&mut std::io::stdout(), &display(data));
                         }
                         "as_text" | _ => {
                             let display = cmd.display.unwrap();
@@ -68,7 +68,7 @@ fn one_shot_command(
                 }
             }
         } else {
-            println!("Unable to parse command arguments for: {:}", cmd.cmd);
+            println!("Unable to parse command arguments for: {:}, got {:}", cmd.cmd, cmd_str);
         }
     } else {
         println!("No such command: {cmd_str}");
