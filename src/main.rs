@@ -2,10 +2,15 @@
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 use clap::Parser;
+use coap_lite::CoapOption;
+use commands::CommandLibrary;
+use rand::Rng;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use slipmux::encode_configuration;
 
 use crate::events::create_terminal_thread;
 use crate::events::event_loop;
@@ -22,6 +27,8 @@ mod transport;
 struct Cli {
     /// The path to the UART TTY interface
     tty_path: std::path::PathBuf,
+    /// Runs a single jelly command, awaits response and prints the result
+    cmd: Option<String>,
 }
 
 fn reset_terminal() {
@@ -42,10 +49,45 @@ fn main() {
         return;
     }
 
-    let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
+
     let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
         mpsc::channel();
+    let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
+
     create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
+
+    if let Some(cmd_str) = args.cmd {
+        let lib = CommandLibrary::default();
+        if let Some(cmd) = lib.find_by_cmd(&cmd_str.split(' ').next().unwrap()) {
+            let handler = cmd.handler.unwrap();
+            let display = cmd.display.unwrap();
+            if let Ok(coap) = handler(cmd_str, &cmd.location.as_ref().unwrap()) {
+                let mut msg = coap.message;
+                msg.header.message_id = rand::rng().random();
+                msg.set_token(1312u16.to_le_bytes().to_vec());
+                msg.add_option(CoapOption::Block2, vec![0x05]);
+
+                let (data, size) = encode_configuration(msg.to_bytes().unwrap());
+                while let Ok(event) = event_receiver.recv_timeout(Duration::from_secs(5)) {
+                    match event {
+                        Event::Diagnostic(msg) => {println!("{:}", msg)},
+                        Event::Configuration(data) => {
+                            println!("Got conf: {:?}", data);
+                            println!("{:}", display(data));
+                        },
+                        Event::SerialConnect(name) => {
+                            println!("Serial connect :) {:}", name);
+                            let _ = hardware_event_sender.send(Event::SendConfiguration(data[..size].to_vec()));
+                        },
+                        Event::SerialDisconnect =>{println!("Serial disconnect :(")},
+                        _ => {},
+                    }
+                }
+            }
+        }
+        return;
+    }
+
     create_terminal_thread(event_sender.clone());
 
     let original_hook = std::panic::take_hook();
