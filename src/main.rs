@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use coap_lite::CoapOption;
+use coap_lite::Packet;
 use commands::CommandLibrary;
 use rand::Rng;
 use ratatui::backend::CrosstermBackend;
@@ -73,7 +74,8 @@ fn main() {
                         Event::Diagnostic(msg) => {println!("{:}", msg)},
                         Event::Configuration(data) => {
                             println!("Got conf: {:?}", data);
-                            println!("{:}", display(data));
+                            let response = Packet::from_bytes(&data).unwrap();
+                            println!("{:}", display(response.payload));
                         },
                         Event::SerialConnect(name) => {
                             println!("Serial connect :) {:}", name);
