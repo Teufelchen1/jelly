@@ -50,8 +50,7 @@ fn one_shot_command(
 
             match event_one_shot(event_receiver, hardware_event_sender, &data[..size]) {
                 Ok(data) => {
-                    let response = Packet::from_bytes(&data).unwrap();
-                    println!("{:}", display(response.payload));
+                    println!("{:}", display(data));
                 }
                 Err(err) => {
                     println!("{err}");
