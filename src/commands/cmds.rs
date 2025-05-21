@@ -184,6 +184,34 @@ pub fn saul_display(payload: Vec<u8>) -> String {
     out
 }
 
+pub fn saul_display_cbor(payload: Vec<u8>) -> Vec<u8> {
+    let mut decoder = Decoder::new(&payload);
+    decoder.array().unwrap();
+    match decoder.u8().unwrap() {
+        // List
+        0 => {
+            return payload[1..].to_vec();
+        }
+        // read
+        1 => {
+            let data = decoder.map();
+            match data {
+                Ok(_data) => {
+                    return payload[2..].to_vec();
+                }
+                Err(_) => {
+                }
+            }
+        }
+        // write
+        2 => {}
+        _ => {
+            todo!();
+        }
+    }
+    vec![]
+}
+
 pub fn saul_handler(args: String, path: &str) -> Result<CoapRequest<String>, String> {
     let cmd = Saul::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
 

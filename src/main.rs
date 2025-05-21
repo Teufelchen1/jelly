@@ -34,13 +34,15 @@ struct Cli {
 fn one_shot_command(
     event_receiver: &Receiver<Event>,
     hardware_event_sender: &Sender<Event>,
-    cmd_str: String,
+    input_str: String,
 ) {
     let lib = CommandLibrary::default();
+    let mut cmd_iter = input_str.split('|');
+    let cmd_str = cmd_iter.next().unwrap();
+    let handler_selection = cmd_iter.next().unwrap_or("as_text").trim();
     if let Some(cmd) = lib.find_by_cmd(cmd_str.split(' ').next().unwrap()) {
         let handler = cmd.handler.unwrap();
-        let display = cmd.display.unwrap();
-        if let Ok(coap) = handler(cmd_str, cmd.location.as_ref().unwrap()) {
+        if let Ok(coap) = handler(cmd_str.to_string(), cmd.location.as_ref().unwrap()) {
             let mut msg = coap.message;
             msg.header.message_id = rand::rng().random();
             msg.set_token(1312u16.to_le_bytes().to_vec());
@@ -50,7 +52,16 @@ fn one_shot_command(
 
             match event_one_shot(event_receiver, hardware_event_sender, &data[..size]) {
                 Ok(data) => {
-                    println!("{:}", display(data));
+                    match handler_selection {
+                        "as_cbor" => {
+                            let display = cmd.displayCbor.unwrap();
+                            println!("{:?}", display(data));
+                        }
+                        "as_text" | _ => {
+                            let display = cmd.display.unwrap();
+                            println!("{:}", display(data));
+                        },
+                    };
                 }
                 Err(err) => {
                     println!("{err}");

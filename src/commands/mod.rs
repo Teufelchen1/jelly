@@ -23,6 +23,8 @@ impl CommandLibrary {
                     location: Some("/SampleCommand".to_owned()),
                     handler: Some(sample_command_handler),
                     display: Some(sample_command_display),
+                    displayCbor: None,
+                    displayBin: None,
                 },
                 Command {
                     cmd: "Saul".to_owned(),
@@ -30,6 +32,8 @@ impl CommandLibrary {
                     location: Some("/Saul".to_owned()),
                     handler: Some(saul_handler),
                     display: Some(saul_display),
+                    displayCbor: Some(saul_display_cbor),
+                    displayBin: None,
                 },
                 Command {
                     cmd: "wkc".to_owned(),
@@ -37,6 +41,8 @@ impl CommandLibrary {
                     location: Some("/.well-known/core".to_owned()),
                     handler: Some(wkc_handler),
                     display: Some(wkc_display),
+                    displayCbor: None,
+                    displayBin: None,
                 },
             ],
         }
@@ -130,7 +136,9 @@ impl CommandLibrary {
 }
 
 type Handler = fn(String, &str) -> Result<CoapRequest<String>, String>;
-type Displayer = fn(Vec<u8>) -> String;
+type DisplayerText = fn(Vec<u8>) -> String;
+type DisplayerCbor = fn(Vec<u8>) -> Vec<u8>;
+type DisplayerBin = fn(Vec<u8>) -> Vec<u8>;
 
 /// Represents a command that the user can type into jelly
 pub struct Command {
@@ -143,7 +151,9 @@ pub struct Command {
 
     pub handler: Option<Handler>,
 
-    pub display: Option<Displayer>,
+    pub display: Option<DisplayerText>,
+    pub displayCbor: Option<DisplayerCbor>,
+    pub displayBin: Option<DisplayerBin>,
 }
 
 impl Command {
@@ -155,19 +165,17 @@ impl Command {
             location: None,
             handler: None,
             display: None,
+            displayCbor: None,
+            displayBin: None,
         }
     }
 
     /// Creates a new command from an CoAP end-point / location.
     /// The location will become the commands name (what the user has to type in)
     pub fn from_coap_resource(resource: &str, description: &str) -> Self {
-        Self {
-            cmd: resource.to_owned(),
-            description: description.to_owned(),
-            location: Some(resource.to_owned()),
-            handler: None,
-            display: None,
-        }
+        let mut new = Self::new(resource, description);
+        new.location = Some(resource.to_owned());
+        new
     }
 
     /// Creates a new command from a special, RIOT specific CoAP end-point.
@@ -176,13 +184,7 @@ impl Command {
         let cmd = location
             .strip_prefix("/shell/")
             .expect("Failed to parse shell command location!");
-        Self {
-            cmd: cmd.to_owned(),
-            description: description.to_owned(),
-            location: None,
-            handler: None,
-            display: None,
-        }
+        Self::new(cmd, description)
     }
 
     /// Replaces the decription of a command
