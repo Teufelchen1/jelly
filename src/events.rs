@@ -97,3 +97,38 @@ pub fn event_loop(
         terminal.draw(|frame| app.draw(frame)).unwrap();
     }
 }
+
+pub fn event_one_shot(
+    event_channel: &Receiver<Event>,
+    hardware_event_sender: &Sender<Event>,
+    payload: &[u8],
+) -> Result<Vec<u8>, String> {
+    loop {
+        let event = match event_channel.recv_timeout(Duration::from_millis(5000)) {
+            Ok(event) => event,
+            Err(RecvTimeoutError::Timeout) => {
+                return Err("Timed out!".to_owned());
+            }
+            Err(RecvTimeoutError::Disconnected) => panic!(),
+        };
+        match event {
+            Event::Diagnostic(msg) => {
+                println!("{msg}");
+            }
+            Event::Configuration(data) => {
+                let response = coap_lite::Packet::from_bytes(&data).unwrap();
+                return Ok(response.payload);
+            }
+            Event::SerialConnect(name) => {
+                println!("Serial connect {name}");
+                hardware_event_sender
+                    .send(Event::SendConfiguration(payload.to_owned()))
+                    .unwrap();
+            }
+            Event::SerialDisconnect => {
+                return Err("Serial disconnect :(".to_owned());
+            }
+            _ => {}
+        }
+    }
+}

@@ -1,13 +1,12 @@
-//#![feature(trait_upcasting)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::time::Duration;
 
 use clap::Parser;
 use coap_lite::CoapOption;
 use coap_lite::Packet;
 use commands::CommandLibrary;
+use events::event_one_shot;
 use rand::Rng;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -32,6 +31,40 @@ struct Cli {
     cmd: Option<String>,
 }
 
+fn one_shot_command(
+    event_receiver: &Receiver<Event>,
+    hardware_event_sender: &Sender<Event>,
+    cmd_str: String,
+) {
+    let lib = CommandLibrary::default();
+    if let Some(cmd) = lib.find_by_cmd(cmd_str.split(' ').next().unwrap()) {
+        let handler = cmd.handler.unwrap();
+        let display = cmd.display.unwrap();
+        if let Ok(coap) = handler(cmd_str, cmd.location.as_ref().unwrap()) {
+            let mut msg = coap.message;
+            msg.header.message_id = rand::rng().random();
+            msg.set_token(1312u16.to_le_bytes().to_vec());
+            msg.add_option(CoapOption::Block2, vec![0x05]);
+
+            let (data, size) = encode_configuration(msg.to_bytes().unwrap());
+
+            match event_one_shot(event_receiver, hardware_event_sender, &data[..size]) {
+                Ok(data) => {
+                    let response = Packet::from_bytes(&data).unwrap();
+                    println!("{:}", display(response.payload));
+                }
+                Err(err) => {
+                    println!("{err}");
+                }
+            }
+        } else {
+            println!("Unable to parse command arguments for: {:}", cmd.cmd);
+        }
+    } else {
+        println!("No such command: {cmd_str}");
+    }
+}
+
 fn reset_terminal() {
     crossterm::terminal::disable_raw_mode().unwrap();
     crossterm::execute!(
@@ -50,7 +83,6 @@ fn main() {
         return;
     }
 
-
     let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
         mpsc::channel();
     let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
@@ -58,35 +90,7 @@ fn main() {
     create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
 
     if let Some(cmd_str) = args.cmd {
-        let lib = CommandLibrary::default();
-        if let Some(cmd) = lib.find_by_cmd(&cmd_str.split(' ').next().unwrap()) {
-            let handler = cmd.handler.unwrap();
-            let display = cmd.display.unwrap();
-            if let Ok(coap) = handler(cmd_str, &cmd.location.as_ref().unwrap()) {
-                let mut msg = coap.message;
-                msg.header.message_id = rand::rng().random();
-                msg.set_token(1312u16.to_le_bytes().to_vec());
-                msg.add_option(CoapOption::Block2, vec![0x05]);
-
-                let (data, size) = encode_configuration(msg.to_bytes().unwrap());
-                while let Ok(event) = event_receiver.recv_timeout(Duration::from_secs(5)) {
-                    match event {
-                        Event::Diagnostic(msg) => {println!("{:}", msg)},
-                        Event::Configuration(data) => {
-                            println!("Got conf: {:?}", data);
-                            let response = Packet::from_bytes(&data).unwrap();
-                            println!("{:}", display(response.payload));
-                        },
-                        Event::SerialConnect(name) => {
-                            println!("Serial connect :) {:}", name);
-                            let _ = hardware_event_sender.send(Event::SendConfiguration(data[..size].to_vec()));
-                        },
-                        Event::SerialDisconnect =>{println!("Serial disconnect :(")},
-                        _ => {},
-                    }
-                }
-            }
-        }
+        one_shot_command(&event_receiver, &hardware_event_sender, cmd_str);
         return;
     }
 
