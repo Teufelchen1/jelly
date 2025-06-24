@@ -12,7 +12,8 @@ use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use slipmux::encode_configuration;
+use slipmux::encode_buffered;
+use slipmux::Slipmux;
 
 use super::SelectedTab;
 use crate::app::commands::Command;
@@ -172,10 +173,11 @@ impl App<'_> {
                         }
                         request.message.set_token(self.get_new_token());
                         request.message.add_option(CoapOption::Block2, vec![0x05]);
-                        let (data, size) =
-                            encode_configuration(request.message.to_bytes().unwrap());
+                        let data = encode_buffered(Slipmux::Configuration(
+                            request.message.to_bytes().unwrap(),
+                        ));
                         self.event_sender
-                            .send(Event::SendConfiguration(data[..size].to_vec()))
+                            .send(Event::SendConfiguration(data))
                             .unwrap();
                         self.configuration_requests.push(request);
                     } else {

@@ -6,7 +6,8 @@ use coap_lite::Packet;
 use coap_lite::RequestType as Method;
 use rand::Rng;
 use ratatui::text::Text;
-use slipmux::encode_configuration;
+use slipmux::encode_buffered;
+use slipmux::Slipmux;
 use tui_widgets::scrollview::ScrollViewState;
 
 use crate::app::commands::CommandLibrary;
@@ -93,9 +94,9 @@ impl App<'_> {
     }
 
     fn send_configuration_request(&self, msg: &Packet) {
-        let (data, size) = encode_configuration(msg.to_bytes().unwrap());
+        let data = encode_buffered(Slipmux::Configuration(msg.to_bytes().unwrap()));
         self.event_sender
-            .send(Event::SendConfiguration(data[..size].to_vec()))
+            .send(Event::SendConfiguration(data))
             .unwrap();
     }
 }
