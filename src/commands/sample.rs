@@ -54,7 +54,7 @@ impl CommandRegistry for SampleCommand {
 }
 
 impl CommandHandler for SampleCommand {
-    fn init(&mut self) -> Option<CoapRequest<String>> {
+    fn init(&mut self) -> CoapRequest<String> {
         let mut buffer: [u8; 4] = [0; 4];
         let mut encoder = Encoder::new(&mut buffer[..]);
 
@@ -75,7 +75,7 @@ impl CommandHandler for SampleCommand {
             .message
             .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
         request.message.set_payload(&buffer).unwrap();
-        Some(request)
+        request
     }
 
     fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {

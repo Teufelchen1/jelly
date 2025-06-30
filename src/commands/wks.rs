@@ -35,11 +35,11 @@ impl CommandRegistry for Wkc {
 }
 
 impl CommandHandler for Wkc {
-    fn init(&mut self) -> Option<CoapRequest<String>> {
+    fn init(&mut self) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         request.set_path(&self.location);
-        Some(request)
+        request
     }
 
     fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {

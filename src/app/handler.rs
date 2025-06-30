@@ -278,7 +278,7 @@ impl App<'_> {
                         let res = (cmd.parse)(cmd, self.user_input.clone());
                         match res {
                             Ok(mut handler) => {
-                                let mut request = handler.init().unwrap();
+                                let mut request = handler.init();
                                 self.send_configuration_request(&mut request.message);
                                 let mut hash_index: u64 = 0;
                                 let _ = request

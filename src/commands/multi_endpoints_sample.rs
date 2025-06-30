@@ -39,11 +39,11 @@ impl CommandRegistry for MultiEndpointSample {
 }
 
 impl CommandHandler for MultiEndpointSample {
-    fn init(&mut self) -> Option<CoapRequest<String>> {
+    fn init(&mut self) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         request.set_path("/riot/board");
-        Some(request)
+        request
     }
 
     fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {

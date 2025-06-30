@@ -16,7 +16,7 @@ mod wks;
 
 pub trait CommandHandler {
     // todo: Replace with Job Enum or Slipmux enum
-    fn init(&mut self) -> Option<CoapRequest<String>>;
+    fn init(&mut self) -> CoapRequest<String>;
 
     fn handle(&mut self, _payload: &[u8]) -> Option<CoapRequest<String>> {
         None
