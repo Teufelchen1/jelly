@@ -1,4 +1,3 @@
-//#![feature(trait_upcasting)]
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
@@ -13,6 +12,7 @@ use crate::events::Event;
 use crate::hardware::create_slipmux_thread;
 
 mod app;
+mod commands;
 mod events;
 mod hardware;
 mod transport;
@@ -41,9 +41,10 @@ fn main() {
         return;
     }
 
-    let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
     let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
         mpsc::channel();
+    let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
+
     create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
     create_terminal_thread(event_sender.clone());
 

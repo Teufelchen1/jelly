@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 
 use coap_lite::CoapOption;
@@ -10,10 +11,10 @@ use slipmux::encode_buffered;
 use slipmux::Slipmux;
 use tui_widgets::scrollview::ScrollViewState;
 
-use crate::app::commands::CommandLibrary;
+use crate::commands::CommandHandler;
+use crate::commands::CommandLibrary;
 use crate::events::Event;
 
-mod commands;
 mod handler;
 mod tui;
 
@@ -45,6 +46,7 @@ pub struct App<'text> {
     riot_board: String,
     riot_version: String,
     next_mid: u16,
+    jobs: HashMap<u64, Box<dyn CommandHandler>>,
 }
 
 impl App<'_> {
@@ -70,6 +72,8 @@ impl App<'_> {
             riot_version: "Unkown".to_owned(),
 
             next_mid: rand::rng().random(),
+
+            jobs: HashMap::new(),
         }
     }
 
@@ -83,17 +87,18 @@ impl App<'_> {
         self.next_mid
     }
 
-    fn build_request(&mut self, path: &str) -> CoapRequest<String> {
+    fn build_get_request(path: &str) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         request.set_path(path);
-        request.message.header.message_id = self.get_new_message_id();
-        request.message.set_token(self.get_new_token());
-        request.message.add_option(CoapOption::Block2, vec![0x05]);
         request
     }
 
-    fn send_configuration_request(&self, msg: &Packet) {
+    fn send_configuration_request(&mut self, msg: &mut Packet) {
+        msg.header.message_id = self.get_new_message_id();
+        msg.set_token(self.get_new_token());
+        msg.add_option(CoapOption::Block2, vec![0x05]);
+
         let data = encode_buffered(Slipmux::Configuration(msg.to_bytes().unwrap()));
         self.event_sender
             .send(Event::SendConfiguration(data))

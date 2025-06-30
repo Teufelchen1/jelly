@@ -24,11 +24,13 @@ lto = true
 
 [dependencies]
 cbor-edn = { version = "0.0.9", default-features = false }
-clap = { version = "4", default-features = false, features = ["std", "derive"] }
+clap = { version = "4", features = ["derive"] }
 coap-lite = { version = "0.13", default-features = false }
+coap-message = "0.3.6"
 crossterm = { version = "0.28", default-features = false }
 rand = { version = "0.9.0", default-features = false, features = ["thread_rng"] }
 ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+minicbor = "0.26.5"
 # This disables the libudev-sys dependencies, making auto enumeration unavailable
 serialport = { version = "4", default-features = false }
 slipmux = { version = "0.3.1" }
