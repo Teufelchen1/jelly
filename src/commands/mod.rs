@@ -14,41 +14,60 @@ mod sample;
 mod saul;
 mod wks;
 
+/// Callback API for handling a command.
 pub trait CommandHandler {
-    // todo: Replace with Job Enum or Slipmux enum
+    /// This function is called exactly once. It is always the first call for any handler.
+    /// Returns a coap request that is send to the attached device.
     fn init(&mut self) -> CoapRequest<String>;
 
+    /// Called everytime a response is found to the last request this handler has sent.
     fn handle(&mut self, _payload: &[u8]) -> Option<CoapRequest<String>> {
         None
     }
 
+    /// Asks the handler if it wants to display anything. Usually called after a response was
+    /// processed.
     fn want_display(&self) -> bool {
         false
     }
 
+    /// Asks if the handler has completed its task and might get removed from the tracking.
     fn is_finished(&self) -> bool {
         true
     }
 
+    /// Provides a buffer into which the handler can write the result.
     fn display(&self, _buffer: &mut String) {}
 }
 
 type BoxedCommandHandler = Box<dyn CommandHandler>;
-
+/// Helper trait, used as glue between the library, command and handler, unifying the parsing.
 pub trait CommandRegistry {
+    /// Returns a new Command instance for this Handler
     fn cmd() -> Command;
+
+    /// Parses a cli string, typically via clap
+    ///
+    /// On success, returns an implementation of the `CommandHandler` trait
+    /// On error, returns a human readable usage error
     fn parse(cmd: &Command, args: String) -> Result<BoxedCommandHandler, String>;
 }
 
 /// Represents a command that the user can type into jelly
 pub struct Command {
-    /// The name of the command, this is what the user types into jelly
+    /// The name of the command, this is what the user types into jelly.
     pub cmd: String,
-    /// A description of what this command will do
+
+    /// A description of what this command will do.
     pub description: String,
-    /// The CoAP end-point(s) this command requires, if any
+
+    /// The CoAP end-point(s) this command requires, if any.
     pub required_endpoints: Vec<String>,
 
+    /// Parses a cli string, this typically a wrapper around the `CommandRegistry::parse()` function.
+    ///
+    /// On success, returns an implementation of the `CommandHandler` trait.
+    /// On error, returns a human readable usage error.
     pub parse: fn(&Self, args: String) -> Result<BoxedCommandHandler, String>,
 }
 
@@ -112,12 +131,16 @@ impl Ord for Command {
         let scmd = &self.cmd;
         let ocmd = &other.cmd;
 
+        // Ensure that the help command is always the first one
         if scmd == "help" {
             return Ordering::Less;
         } else if ocmd == "help" {
             return Ordering::Greater;
         }
 
+        // Sort direct coap requests (not really commands) to the back
+        // Regular commands that requiere endpoints are sorted to the front
+        // This ensures that jelly sided commands are sorted before riots commands
         match (scmd.starts_with('/'), ocmd.starts_with('/')) {
             (true, false) => Ordering::Greater,
             (false, true) => Ordering::Less,
@@ -156,6 +179,10 @@ impl CommandLibrary {
         }
     }
 
+    /// Takes a list of endpoints that are available, this is typically the list received
+    /// from /.well-known/core, goes through all `.stored_cmds` and sees if of any of them
+    /// the requirements are met. If so, they are added to the available `.cmds`
+    /// Finally, the available `.cmds` are re-sorted.
     pub fn update_available_cmds_based_on_endpoints(&mut self, eps: &[String]) {
         let mut i = 0;
         while i < self.stored_cmds.len() {

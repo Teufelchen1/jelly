@@ -7,6 +7,8 @@ use crate::commands::Command;
 use crate::commands::CommandHandler;
 use crate::commands::CommandRegistry;
 
+/// This is an example for writing a command that needs to issue multiple CoAP requests and
+/// keep track of the state while doing so.
 pub struct MultiEndpointSample {
     buffer: String,
     finished: bool,

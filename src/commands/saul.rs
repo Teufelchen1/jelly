@@ -12,6 +12,7 @@ use crate::commands::Command;
 use crate::commands::CommandHandler;
 use crate::commands::CommandRegistry;
 
+/// This is an example on how to use cbor as payload for the coap request.
 #[derive(Parser, Debug)]
 #[command(name = "Saul")]
 #[command(version = "1.0")]

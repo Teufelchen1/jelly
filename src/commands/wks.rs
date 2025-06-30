@@ -7,6 +7,8 @@ use crate::commands::Command;
 use crate::commands::CommandHandler;
 use crate::commands::CommandRegistry;
 
+/// Explicit example for a command that queries the well-known/core. Could have been done
+/// using the template command, but explicit for demonstration.
 pub struct Wkc {
     location: String,
     buffer: String,

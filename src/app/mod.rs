@@ -87,7 +87,7 @@ impl App<'_> {
         self.next_mid
     }
 
-    fn build_get_request(&self, path: &str) -> CoapRequest<String> {
+    fn build_get_request(path: &str) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         request.set_path(path);
