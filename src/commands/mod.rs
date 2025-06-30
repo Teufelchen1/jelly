@@ -2,14 +2,17 @@ use std::cmp::Ordering;
 
 use coap_lite::CoapRequest;
 
-use crate::commands::cmds::CoapGet;
-use crate::commands::cmds::MultiEndpointSample;
-use crate::commands::cmds::SampleCommand;
-use crate::commands::cmds::Wkc;
+use crate::commands::coap_get_template::CoapGet;
+use crate::commands::multi_endpoints_sample::MultiEndpointSample;
+use crate::commands::sample::SampleCommand;
 use crate::commands::saul::Saul;
+use crate::commands::wks::Wkc;
 
-mod cmds;
+mod coap_get_template;
+mod multi_endpoints_sample;
+mod sample;
 mod saul;
+mod wks;
 
 pub trait CommandHandler {
     // todo: Replace with Job Enum or Slipmux enum
@@ -149,7 +152,6 @@ impl CommandLibrary {
                 SampleCommand::cmd(),
                 Saul::cmd(),
                 MultiEndpointSample::cmd(),
-                /* Command::from_coap_resource("/.well-known/core", "Query the wkc"), */
             ],
         }
     }
