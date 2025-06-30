@@ -13,7 +13,9 @@ use std::time::Duration;
 
 use slipmux::encode_diagnostic;
 use slipmux::BufferedFrameHandler;
+use slipmux::DecodeStatus;
 use slipmux::Decoder;
+use slipmux::Error;
 use slipmux::Slipmux;
 
 use crate::events::Event;
@@ -131,7 +133,7 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
         };
 
         for byte in &buffer[..bytes_read] {
-            let _ = slipmux_decoder.decode(*byte, &mut handler);
+            let _: Result<DecodeStatus, Error> = slipmux_decoder.decode(*byte, &mut handler);
         }
 
         for slipframe in &handler.results {
@@ -150,10 +152,10 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                     sender.send(Event::Diagnostic(s.clone())).unwrap();
                 }
                 Slipmux::Configuration(conf) => {
-                    sender.send(Event::Configuration(conf.to_vec())).unwrap();
+                    sender.send(Event::Configuration(conf.clone())).unwrap();
                 }
                 Slipmux::Packet(packet) => {
-                    sender.send(Event::Packet(packet.to_vec())).unwrap();
+                    sender.send(Event::Packet(packet.clone())).unwrap();
                 }
             }
         }
