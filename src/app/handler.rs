@@ -423,6 +423,9 @@ impl App<'_> {
             KeyCode::F(3) => {
                 self.current_tab = SelectedTab::Configuration;
             }
+            KeyCode::F(5) => {
+                self.current_tab = SelectedTab::Help;
+            }
             KeyCode::Esc => {
                 return false;
             }

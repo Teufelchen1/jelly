@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt::Write;
 use std::iter::zip;
 
@@ -30,15 +31,20 @@ use crate::app::App;
 
 impl App<'_> {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
-        let tab_titles = ["Overview (F1)", "Diagnostic (F2)", "Configuration (F3)"];
-        let title = if frame.area().width < 90 {
+        let tab_titles = [
+            "Overview (F1)",
+            "Diagnostic (F2)",
+            "Configuration (F3)",
+            "Help (F5)",
+        ];
+        let title = if frame.area().width < 100 {
             "Jelly 🪼"
         } else {
             "Jelly 🪼: The friendly SLIPMUX for RIOT OS"
         };
 
         let title_area =
-            Layout::horizontal([Constraint::Length(49), Constraint::Fill(1)]).split(header_area);
+            Layout::horizontal([Constraint::Length(59), Constraint::Fill(1)]).split(header_area);
 
         frame.render_widget(
             Tabs::new(tab_titles)
@@ -73,6 +79,97 @@ impl App<'_> {
                 .title_alignment(Alignment::Right),
             footer_area,
         );
+    }
+
+    fn render_help(&mut self, frame: &mut Frame, area: Rect) {
+        let border_block = Block::bordered()
+            .border_style(Style::new().gray())
+            .title(vec![Span::from("Help")])
+            .title_alignment(Alignment::Left);
+
+        let text = r"Jelly 🪼: The friendly SLIPMUX for RIOT OS
+
+Jelly is a tool that allows you to send commands to an attached device. The commands
+are send via slipmux and can be either plain text or CoAP based. A device is typically
+connected via a serial (e.g. /dev/ttyUSB0) but Jelly also supports connecting via a unix
+socket, as long as the device speaks slipmux.
+
+Hotkeys:
+    Mousewheel: Scroll up and down.
+    F1: Presents an overview, showing diagnostic messages next to the configuration messages.
+    F2: Shows only the diagnostic messages.
+    F3: Shows only the configuration messages.
+    F5: This help :)
+    ESC: Quit Jelly.
+    RET: Send a command.
+    TAB: Autocomplete.
+    RIGHT: Autocomplete.
+
+You can always type in a command into the `User Input` field. You do not need to select it.
+When autocomplete is available, indicated by a light gray text in front of your cursor, 
+press TAB or RIGHT to complete your input.
+
+There are multiple classes of commands: 
+- Raw diagnostic commands, these are written in all lowercase and are send as is to the device.
+- CoAP endpoints, indicated by the leading `/`, send a CoAP GET request via a configuration
+    message to its path. The response, if any, will be logged in the configuration view.
+    Most endpoints are auto-discovered by Jelly but you can always send a GET request to any
+    endpoint as long as it starts with `/`.
+- Jelly commands, distinguishable by the leading uppercase letter, are commands that are 
+    run mainly on your host and only communicate with the device via configuration messages.
+    Every Jelly command offers usage information and help via the `--help` flag.
+    These commands can issue multiple CoAP requests and may take time to complete. They render
+    their own output into the diagnostic view and should look & feel close to the raw commands.
+- If you type in something that is not recognized by Jelly, it will be send as a raw string
+    via a diagnostic message to the device.
+
+Saving output:
+If you run a Jelly command, you can redirect the output into a file on your local filesystem.
+`Saul > /tmp/saul.txt`
+Some commands may allow exporting binary data. To export that use the `%>` redirect.
+`Saul %> /tmp/saul.cbor`
+If a command doesn't offer binary export, the `%>` will automatically downgrade to text export.
+";
+        let mut text = Text::from(text);
+        let path = env::current_dir();
+        match path {
+            Ok(path) => {
+                text.push_line(Line::from(format!(
+                    "Your current working directory is: {:}",
+                    path.display()
+                )));
+            }
+            Err(_) => {
+                text.push_line(Line::from("Your current working directory is unkown\n"));
+            }
+        }
+
+        let content_width = border_block.inner(area).width;
+        let messages_hight = u16::try_from(text.height()).unwrap_or(u16::MAX);
+
+        let mut scroll_view = ScrollView::new(Size::new(
+            // Make room for the scroll bar
+            content_width - 1,
+            messages_hight,
+        ));
+
+        if self.diagnostic_messages_scroll_follow {
+            self.diagnostic_messages_scroll_state.scroll_to_bottom();
+        }
+
+        let paragraph = Paragraph::new(text);
+        scroll_view.render_widget(
+            paragraph,
+            Rect::new(0, 0, content_width - 1, messages_hight),
+        );
+
+        frame.render_stateful_widget(
+            scroll_view,
+            border_block.inner(area),
+            &mut self.diagnostic_messages_scroll_state,
+        );
+
+        frame.render_widget(border_block, area);
     }
 
     fn render_configuration_messages(&mut self, frame: &mut Frame, area: Rect) {
@@ -228,7 +325,7 @@ impl App<'_> {
     fn render_configuration_overview(&self, frame: &mut Frame, area: Rect) {
         let left_block_down = Block::bordered()
             .border_style(Style::new().gray())
-            .title(vec![Span::from("Configuration")])
+            .title(vec![Span::from("Board Info")])
             .title_alignment(Alignment::Left);
 
         let text = format!(
@@ -290,6 +387,18 @@ impl App<'_> {
                 self.render_configuration_overview(frame, right_chunk_lower);
                 self.render_user_input(frame, left_chunk_lower);
             }
+            super::SelectedTab::Diagnostic => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+                    .split(main_area);
+
+                let chunk_upper = chunks[0];
+                let chunk_lower = chunks[1];
+
+                self.render_diagnostic_messages(frame, chunk_upper);
+                self.render_user_input(frame, chunk_lower);
+            }
             super::SelectedTab::Configuration => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
@@ -302,7 +411,7 @@ impl App<'_> {
                 self.render_configuration_messages(frame, chunk_upper);
                 self.render_user_input(frame, chunk_lower);
             }
-            super::SelectedTab::Diagnostic => {
+            super::SelectedTab::Help => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
@@ -311,7 +420,7 @@ impl App<'_> {
                 let chunk_upper = chunks[0];
                 let chunk_lower = chunks[1];
 
-                self.render_diagnostic_messages(frame, chunk_upper);
+                self.render_help(frame, chunk_upper);
                 self.render_user_input(frame, chunk_lower);
             }
         }
