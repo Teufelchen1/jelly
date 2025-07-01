@@ -38,6 +38,12 @@ pub trait CommandHandler {
 
     /// Provides a buffer into which the handler can write the result.
     fn display(&self, _buffer: &mut String) {}
+
+    fn export(&self) -> Vec<u8> {
+        let mut buffer = String::new();
+        self.display(&mut buffer);
+        buffer.as_bytes().to_vec()
+    }
 }
 
 type BoxedCommandHandler = Box<dyn CommandHandler>;

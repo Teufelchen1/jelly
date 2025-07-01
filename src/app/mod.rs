@@ -18,6 +18,17 @@ use crate::events::Event;
 mod handler;
 mod tui;
 
+enum SaveToFile {
+    No,
+    AsBin(String),
+    AsText(String),
+}
+
+struct Job {
+    handler: Box<dyn CommandHandler>,
+    file: SaveToFile,
+}
+
 #[derive(Default, Clone, Copy)]
 enum SelectedTab {
     #[default]
@@ -46,7 +57,7 @@ pub struct App<'text> {
     riot_board: String,
     riot_version: String,
     next_mid: u16,
-    jobs: HashMap<u64, Box<dyn CommandHandler>>,
+    jobs: HashMap<u64, Job>,
 }
 
 impl App<'_> {
