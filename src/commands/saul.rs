@@ -32,6 +32,7 @@ enum SaulOperation {
 pub struct Saul {
     location: String,
     buffer: String,
+    payload: Vec<u8>,
     finished: bool,
     displayable: bool,
     cli: SaulCli,
@@ -52,6 +53,7 @@ impl CommandRegistry for Saul {
         Ok(Box::new(Self {
             location: cmd.required_endpoints[0].clone(),
             buffer: String::new(),
+            payload: vec![],
             finished: false,
             displayable: false,
             cli,
@@ -152,6 +154,8 @@ impl CommandHandler for Saul {
             "SAUL_ACT_NUMOF",
         ];
 
+        self.payload = payload.to_vec();
+
         let mut out = String::new();
 
         let mut decoder = Decoder::new(payload);
@@ -211,5 +215,9 @@ impl CommandHandler for Saul {
 
     fn display(&self, buffer: &mut String) {
         let _ = writeln!(buffer, "{}", self.buffer);
+    }
+
+    fn export(&self) -> Vec<u8> {
+        self.payload.clone()
     }
 }
