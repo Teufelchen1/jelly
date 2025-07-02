@@ -35,6 +35,7 @@ enum SelectedTab {
     Combined,
     Diagnostic,
     Configuration,
+    Help,
 }
 
 pub struct App<'text> {

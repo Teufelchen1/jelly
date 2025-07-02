@@ -19,7 +19,7 @@ pub struct Wkc {
 impl CommandRegistry for Wkc {
     fn cmd() -> Command {
         Command {
-            cmd: "wkc".to_owned(),
+            cmd: "Wkc".to_owned(),
             description: "Query the wkc".to_owned(),
             parse: |s, a| Self::parse(s, a),
             required_endpoints: vec!["/.well-known/core".to_owned()],
