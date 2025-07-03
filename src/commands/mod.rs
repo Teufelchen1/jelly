@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use coap_lite::CoapRequest;
+use mem::MemRead;
 
 use crate::commands::coap_get_template::CoapGet;
 use crate::commands::multi_endpoints_sample::MultiEndpointSample;
@@ -9,6 +10,7 @@ use crate::commands::saul::Saul;
 use crate::commands::wks::Wkc;
 
 mod coap_get_template;
+mod mem;
 mod multi_endpoints_sample;
 mod sample;
 mod saul;
@@ -181,6 +183,7 @@ impl CommandLibrary {
                 SampleCommand::cmd(),
                 Saul::cmd(),
                 MultiEndpointSample::cmd(),
+                MemRead::cmd(),
             ],
         }
     }
