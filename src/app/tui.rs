@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::env;
 use std::fmt::Write;
 use std::iter::zip;
@@ -182,7 +183,13 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let mut constrains = vec![];
         let total_length: u16 = {
             let mut sum = 0;
-            for req in &self.configuration_requests {
+            // temporay limitation to work around ratatui bug #1855
+            let start = usize::try_from(max(
+                i64::try_from(self.configuration_requests.len()).unwrap() - 10,
+                0,
+            ))
+            .unwrap();
+            for req in &self.configuration_requests[start..] {
                 let block = Block::new()
                     .borders(Borders::TOP | Borders::BOTTOM)
                     .style(Style::new().gray())
@@ -262,7 +269,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let mut text = Text::from(text);
 
         frame.set_cursor_position(Position::new(
-            area.x + self.user_input.len() as u16 + 1,
+            area.x + u16::try_from(self.user_input.len()).unwrap() + 1,
             area.y + 1,
         ));
 

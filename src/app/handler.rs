@@ -100,21 +100,12 @@ impl App<'_> {
         self.write_port = None;
     }
 
-    pub fn on_configuration_msg(&mut self, data: &[u8]) {
-        let response = Packet::from_bytes(data).unwrap();
-
-        // Get the key for the hashmap
-        let token = response.get_token();
-        let mut hash_index: u64 = 0;
-        for byte in token {
-            hash_index += u64::from(*byte);
-        }
-
+    fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
         // Do we have a job / handler for this request?
-        // Removes it from the job list
+        // Removes it from the job list here
         if let Some(mut job) = self.jobs.remove(&hash_index) {
             let mut buffer = String::new();
-            let maybe_request = job.handler.handle(&response.payload);
+            let maybe_request = job.handler.handle(payload);
             if job.handler.want_display() {
                 match job.file {
                     SaveToFile::No => {
@@ -164,6 +155,21 @@ impl App<'_> {
                 self.jobs.insert(hash_index, job);
             }
         }
+    }
+
+    pub fn on_configuration_msg(&mut self, data: &[u8]) {
+        let response = Packet::from_bytes(data).unwrap();
+
+        // Get the key for the hashmap
+        let token = response.get_token();
+        let mut hash_index: u64 = 0;
+        for byte in token {
+            hash_index += u64::from(*byte);
+        }
+
+        // Do we have a job / handler for this request?
+        // Removes it from the job list if finished
+        self.handle_pending_job(hash_index, &response.payload);
 
         let found_matching_request = self
             .configuration_requests
