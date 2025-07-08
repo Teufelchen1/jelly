@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use button_led::ButtonLed;
 use coap_lite::CoapRequest;
 use mem::MemRead;
 
@@ -9,6 +10,7 @@ use crate::commands::sample::SampleCommand;
 use crate::commands::saul::Saul;
 use crate::commands::wks::Wkc;
 
+mod button_led;
 mod coap_get_template;
 mod mem;
 mod multi_endpoints_sample;
@@ -180,6 +182,7 @@ impl CommandLibrary {
                 Wkc::cmd(),
             ],
             stored_cmds: vec![
+                ButtonLed::cmd(),
                 SampleCommand::cmd(),
                 Saul::cmd(),
                 MultiEndpointSample::cmd(),

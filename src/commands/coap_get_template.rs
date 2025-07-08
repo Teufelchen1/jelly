@@ -6,11 +6,13 @@ use crate::commands::CommandHandler;
 use crate::commands::CommandRegistry;
 
 /// This is a template command. It shows the minimum setup for making a
-/// CoAP GET request to a single endpoint. The result is not displayed to the user.
-/// Allthought the default overview of received CoAP responses will show a summary.
+/// CoAP GET request to a single endpoint.
 /// This is used make all endpoints in the /.well-known/core available for a
-/// quick get request via autocomplete.
-pub struct CoapGet(String);
+/// quick GET request via autocomplete.
+pub struct CoapGet {
+    path: String,
+    buffer: Vec<u8>,
+}
 
 /// Interface with the library and handler
 impl CommandRegistry for CoapGet {
@@ -25,7 +27,10 @@ impl CommandRegistry for CoapGet {
 
     // Saves the first path of this command...so this won't work with commands that need multiple.
     fn parse(cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self(cmd.required_endpoints[0].clone())))
+        Ok(Box::new(Self {
+            path: cmd.required_endpoints[0].clone(),
+            buffer: vec![],
+        }))
     }
 }
 
@@ -34,7 +39,23 @@ impl CommandHandler for CoapGet {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
         // The saved path is needed here to generate the coap request
-        request.set_path(&self.0);
+        request.set_path(&self.path);
         request
+    }
+
+    fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
+        self.buffer.extend_from_slice(payload);
+        None
+    }
+
+    /// Asks the handler if it wants to display anything. Usually called after a response was
+    /// processed.
+    fn want_display(&self) -> bool {
+        true
+    }
+
+    /// Provides a buffer into which the handler can write the result.
+    fn display(&self, buffer: &mut String) {
+        buffer.push_str(&String::from_utf8_lossy(&self.buffer));
     }
 }

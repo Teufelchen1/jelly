@@ -363,7 +363,6 @@ impl Response {
                 }
             }
         };
-
         payload_formatted
     }
 }
