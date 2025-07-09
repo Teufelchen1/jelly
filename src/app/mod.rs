@@ -5,29 +5,21 @@ use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
+use datatypes::DiagnosticLog;
+use datatypes::JobLog;
 use rand::Rng;
-use ratatui::text::Text;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 use tui_widgets::scrollview::ScrollViewState;
 
-use crate::commands::CommandHandler;
+use crate::app::datatypes::Job;
+use crate::app::datatypes::Request;
 use crate::commands::CommandLibrary;
 use crate::events::Event;
 
+mod datatypes;
 mod handler;
 mod tui;
-
-enum SaveToFile {
-    No,
-    AsBin(String),
-    AsText(String),
-}
-
-struct Job {
-    handler: Box<dyn CommandHandler>,
-    file: SaveToFile,
-}
 
 #[derive(Default, Clone, Copy)]
 enum SelectedTab {
@@ -35,17 +27,18 @@ enum SelectedTab {
     Combined,
     Diagnostic,
     Configuration,
+    Commands,
     Help,
 }
 
-pub struct App<'text> {
+pub struct App {
     event_sender: Sender<Event>,
     write_port: Option<String>,
-    configuration_requests: Vec<CoapRequest<String>>,
+    configuration_log: Vec<Request>,
     configuration_packets: Vec<Packet>,
     configuration_scroll_state: ScrollViewState,
     configuration_scroll_follow: bool,
-    diagnostic_messages: Text<'text>,
+    diagnostic_log: DiagnosticLog,
     diagnostic_messages_scroll_state: ScrollViewState,
     diagnostic_messages_scroll_position: usize,
     diagnostic_messages_scroll_follow: bool,
@@ -58,19 +51,21 @@ pub struct App<'text> {
     riot_board: String,
     riot_version: String,
     next_mid: u16,
-    jobs: HashMap<u64, Job>,
+    overall_log: DiagnosticLog,
+    ongoing_jobs: HashMap<u64, usize>,
+    job_log: JobLog,
 }
 
-impl App<'_> {
+impl App {
     pub fn new(event_sender: Sender<Event>) -> Self {
         Self {
             event_sender,
             write_port: None,
-            configuration_requests: vec![],
+            configuration_log: vec![],
             configuration_packets: vec![],
             configuration_scroll_state: ScrollViewState::default(),
             configuration_scroll_follow: true,
-            diagnostic_messages: Text::default(),
+            diagnostic_log: DiagnosticLog::new(),
             diagnostic_messages_scroll_state: ScrollViewState::default(),
             diagnostic_messages_scroll_position: 0,
             diagnostic_messages_scroll_follow: true,
@@ -84,8 +79,9 @@ impl App<'_> {
             riot_version: "Unkown".to_owned(),
 
             next_mid: rand::rng().random(),
-
-            jobs: HashMap::new(),
+            overall_log: DiagnosticLog::new(),
+            ongoing_jobs: HashMap::new(),
+            job_log: JobLog::new(),
         }
     }
 

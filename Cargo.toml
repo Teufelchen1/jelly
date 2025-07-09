@@ -24,6 +24,7 @@ lto = true
 
 [dependencies]
 cbor-edn = { version = "0.0.9", default-features = false }
+chrono = { version = "0.4", default-features = false }
 clap = { version = "4", features = ["derive"] }
 coap-lite = { version = "0.13", default-features = false }
 coap-message = "0.3.6"

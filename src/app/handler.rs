@@ -1,6 +1,4 @@
 use std::fmt::Write;
-use std::fs::File;
-use std::io::Write as FileWrite;
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
@@ -12,35 +10,20 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
-use ratatui::text::Line;
-use ratatui::text::Span;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
+use super::datatypes::token_to_u64;
+use super::datatypes::Response;
+use super::datatypes::SaveToFile;
 use super::SelectedTab;
 use crate::app::App;
 use crate::app::Job;
-use crate::app::SaveToFile;
+use crate::app::Request;
 use crate::commands::Command;
 use crate::events::Event;
 
-fn hexdump(bin_data: &[u8]) -> String {
-    let mut buffer = String::new();
-    writeln!(buffer, "\n   |0 1 2 3  4 5 6 7  8 9 A B  C D E F").unwrap();
-    for (index, chunk) in bin_data.chunks(16).enumerate() {
-        write!(buffer, "{:03X}|", index * 16).unwrap();
-        for minichunk in chunk.chunks(4) {
-            for byte in minichunk {
-                write!(buffer, "{byte:02X}").unwrap();
-            }
-            write!(buffer, " ").unwrap();
-        }
-        writeln!(buffer).unwrap();
-    }
-    buffer
-}
-
-impl App<'_> {
+impl App {
     fn on_well_known_core(&mut self, response: &Packet) {
         let mut eps: Vec<String> = vec![];
         // Poor mans clif parser
@@ -67,9 +50,9 @@ impl App<'_> {
                     self.known_commands.add(new_endpoint);
 
                     // Fetch description
-                    let mut request: CoapRequest<String> = App::<'_>::build_get_request(s);
+                    let mut request: CoapRequest<String> = Self::build_get_request(s);
                     self.send_configuration_request(&mut request.message);
-                    self.configuration_requests.push(request);
+                    self.configuration_log.push(Request::new(request));
                 } else {
                     let new_command = Command::from_coap_resource(s, "A CoAP resource");
                     self.known_commands.add(new_command);
@@ -83,17 +66,17 @@ impl App<'_> {
     pub fn on_connect(&mut self, name: String) {
         self.write_port = Some(name);
 
-        let mut request: CoapRequest<String> = App::<'_>::build_get_request("/riot/board");
+        let mut request: CoapRequest<String> = Self::build_get_request("/riot/board");
         self.send_configuration_request(&mut request.message);
-        self.configuration_requests.push(request);
+        self.configuration_log.push(Request::new(request));
 
-        let mut request: CoapRequest<String> = App::<'_>::build_get_request("/riot/ver");
+        let mut request: CoapRequest<String> = Self::build_get_request("/riot/ver");
         self.send_configuration_request(&mut request.message);
-        self.configuration_requests.push(request);
+        self.configuration_log.push(Request::new(request));
 
-        let mut request: CoapRequest<String> = App::<'_>::build_get_request("/.well-known/core");
+        let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
         self.send_configuration_request(&mut request.message);
-        self.configuration_requests.push(request);
+        self.configuration_log.push(Request::new(request));
     }
 
     pub fn on_disconnect(&mut self) {
@@ -103,41 +86,11 @@ impl App<'_> {
     fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
         // Do we have a job / handler for this request?
         // Removes it from the job list here
-        if let Some(mut job) = self.jobs.remove(&hash_index) {
-            let mut buffer = String::new();
-            let maybe_request = job.handler.handle(payload);
-            if job.handler.want_display() {
-                match job.file {
-                    SaveToFile::No => {
-                        job.handler.display(&mut buffer);
-                    }
-                    SaveToFile::AsBin(ref file) => {
-                        let bin_data: Vec<u8> = job.handler.export();
-                        self.on_diagnostic_msg(&hexdump(&bin_data));
-                        match File::create(file) {
-                            Ok(mut f) => {
-                                f.write_all(&bin_data).unwrap();
-                                self.on_diagnostic_msg(&format!("(binary saved to: {file})\n"));
-                            }
-                            Err(e) => {
-                                self.on_diagnostic_msg(&format!("(unable to write to {file}: {e}"));
-                            }
-                        }
-                    }
-                    SaveToFile::AsText(ref file) => {
-                        job.handler.display(&mut buffer);
-                        match File::create(file) {
-                            Ok(mut f) => {
-                                f.write_all(buffer.as_bytes()).unwrap();
-                                self.on_diagnostic_msg(&format!("(saved to: {file})\n"));
-                            }
-                            Err(e) => {
-                                self.on_diagnostic_msg(&format!("(unable to write to {file}: {e}"));
-                            }
-                        }
-                    }
-                }
-                self.on_diagnostic_msg(&buffer);
+        if let Some(job_id) = self.ongoing_jobs.remove(&hash_index) {
+            let maybe_request = self.job_log.job_handle_payload(job_id, payload);
+            if self.job_log.job_wants_display(job_id) {
+                let buffer = self.job_log.job_display(job_id);
+                self.overall_log.add(&buffer);
             }
             // If we issue a new request, the token will change.
             // The token is our key for the hashmap, so we need to recalculate
@@ -147,12 +100,14 @@ impl App<'_> {
                 for byte in next_request.message.get_token() {
                     hash_index += u64::from(*byte);
                 }
-                self.configuration_requests.push(next_request);
+                self.configuration_log.push(Request::new(next_request));
             }
             // Not finished? Re-add it to the job list
-            if !job.handler.is_finished() {
+            if self.job_log.job_is_finished(job_id) {
+                self.job_log.job_finish(job_id);
+            } else {
                 // This might be the new or the old key, depending if we send a new request.
-                self.jobs.insert(hash_index, job);
+                self.ongoing_jobs.insert(hash_index, job_id);
             }
         }
     }
@@ -162,23 +117,24 @@ impl App<'_> {
 
         // Get the key for the hashmap
         let token = response.get_token();
-        let mut hash_index: u64 = 0;
-        for byte in token {
-            hash_index += u64::from(*byte);
-        }
+        let hash_index = token_to_u64(token);
 
         // Do we have a job / handler for this request?
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response.payload);
 
         let found_matching_request = self
-            .configuration_requests
-            .iter_mut()
-            .find(|req| req.message.get_token() == token);
-        if let Some(request) = found_matching_request {
-            request.response = Some(CoapResponse {
-                message: response.clone(),
-            });
+            .configuration_log
+            .iter()
+            .position(|req| req.token == hash_index);
+        if let Some(request_pos) = found_matching_request {
+            self.configuration_log[request_pos]
+                .res
+                .push(Response::new(CoapResponse {
+                    message: response.clone(),
+                }));
+
+            let request = &self.configuration_log[request_pos].req;
             let option_list_ = request.message.get_option(CoapOption::UriPath);
             if let Some(option_list) = option_list_ {
                 let mut uri_path = String::new();
@@ -222,15 +178,8 @@ impl App<'_> {
     }
 
     pub fn on_diagnostic_msg(&mut self, msg: &str) {
-        for chr in msg.chars() {
-            match chr {
-                '\n' => self.diagnostic_messages.push_line(Line::default()),
-                '\t' | '\r' => (),
-                _ => self
-                    .diagnostic_messages
-                    .push_span(Span::from(chr.to_string())),
-            }
-        }
+        self.diagnostic_log.add(msg);
+        self.overall_log.add(msg);
     }
 
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
@@ -324,7 +273,7 @@ impl App<'_> {
                 self.event_sender
                     .send(Event::SendConfiguration(data))
                     .unwrap();
-                self.configuration_requests.push(request);
+                self.configuration_log.push(Request::new(request));
             }
             InputType::RawCommand => {
                 if !self.user_input.ends_with('\n') {
@@ -342,20 +291,21 @@ impl App<'_> {
                     Ok(mut handler) => {
                         let mut request = handler.init();
                         self.send_configuration_request(&mut request.message);
-                        let mut hash_index: u64 = 0;
-                        for byte in request.message.get_token() {
-                            hash_index += u64::from(*byte);
-                        }
-                        self.configuration_requests.push(request.clone());
-                        self.jobs.insert(hash_index, Job { handler, file });
+                        let hash_index: u64 = token_to_u64(request.message.get_token());
+                        self.configuration_log.push(Request::new(request));
+                        let job_id =
+                            self.job_log
+                                .start(Job::new(handler, file, cmd_string.clone()));
+                        self.ongoing_jobs.insert(hash_index, job_id);
 
                         // Mimiking RIOTs shell behavior for UX
-                        self.on_diagnostic_msg(&cmd_string);
-                        self.on_diagnostic_msg("\n> ");
+                        self.overall_log.add(&cmd_string);
+                        self.overall_log.add("\n> ");
                     }
                     // Display usage info to the user
                     Err(e) => {
-                        self.on_diagnostic_msg(&e);
+                        self.job_log.start(Job::new_failed(cmd_string.clone(), &e));
+                        self.overall_log.add(&e);
                     }
                 }
             }
@@ -428,6 +378,9 @@ impl App<'_> {
             }
             KeyCode::F(3) => {
                 self.current_tab = SelectedTab::Configuration;
+            }
+            KeyCode::F(4) => {
+                self.current_tab = SelectedTab::Commands;
             }
             KeyCode::F(5) => {
                 self.current_tab = SelectedTab::Help;
