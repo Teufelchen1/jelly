@@ -168,6 +168,10 @@ impl JobLog {
         self.jobs[job_id].handler.as_mut().unwrap().handle(payload)
     }
 
+    pub fn job_tick(&mut self, job_id: usize) -> Option<CoapRequest<String>> {
+        self.jobs[job_id].handler.as_mut().unwrap().tick()
+    }
+
     pub fn job_wants_display(&self, job_id: usize) -> bool {
         if self.jobs[job_id].handler.is_some() {
             self.jobs[job_id].handler.as_ref().unwrap().want_display()

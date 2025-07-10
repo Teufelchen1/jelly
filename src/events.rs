@@ -66,6 +66,7 @@ pub fn event_loop(
         let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
             Ok(event) => event,
             Err(RecvTimeoutError::Timeout) => {
+                app.on_tick();
                 continue;
             }
             Err(RecvTimeoutError::Disconnected) => panic!(),

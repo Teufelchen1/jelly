@@ -83,6 +83,35 @@ impl App {
         self.write_port = None;
     }
 
+    pub fn on_tick(&mut self) {
+        let keys: Vec<u64> = self.ongoing_jobs.keys().map(|x| *x).collect();
+        for mut hash_index in keys {
+            // Removes it from the job list here
+            if let Some(job_id) = self.ongoing_jobs.remove(&hash_index) {
+                let maybe_request = self.job_log.job_tick(job_id);
+                if self.job_log.job_wants_display(job_id) {
+                    let buffer = self.job_log.job_display(job_id);
+                    self.overall_log.add(&buffer);
+                }
+                // If we issue a new request, the token will change.
+                // The token is our key for the hashmap, so we need to recalculate
+                if let Some(mut next_request) = maybe_request {
+                    self.send_configuration_request(&mut next_request.message);
+                    hash_index = token_to_u64(next_request.message.get_token());
+
+                    self.configuration_log.push(Request::new(next_request));
+                }
+                // Not finished? Re-add it to the job list
+                if self.job_log.job_is_finished(job_id) {
+                    self.job_log.job_finish(job_id);
+                } else {
+                    // This might be the new or the old key, depending if we send a new request.
+                    self.ongoing_jobs.insert(hash_index, job_id);
+                }
+            }
+        }
+    }
+
     fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
         // Do we have a job / handler for this request?
         // Removes it from the job list here
@@ -96,10 +125,7 @@ impl App {
             // The token is our key for the hashmap, so we need to recalculate
             if let Some(mut next_request) = maybe_request {
                 self.send_configuration_request(&mut next_request.message);
-                hash_index = 0;
-                for byte in next_request.message.get_token() {
-                    hash_index += u64::from(*byte);
-                }
+                hash_index = token_to_u64(next_request.message.get_token());
                 self.configuration_log.push(Request::new(next_request));
             }
             // Not finished? Re-add it to the job list

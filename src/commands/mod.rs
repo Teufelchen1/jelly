@@ -29,6 +29,10 @@ pub trait CommandHandler {
         None
     }
 
+    fn tick(&mut self) -> Option<CoapRequest<String>> {
+        None
+    }
+
     /// Asks the handler if it wants to display anything. Usually called after a response was
     /// processed.
     fn want_display(&self) -> bool {

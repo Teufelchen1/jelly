@@ -104,6 +104,17 @@ impl CommandHandler for ButtonLed {
         self.coap_request(&cbor)
     }
 
+    // fn tick(&mut self) -> Option<CoapRequest<String>> {
+    //     if self.state > 8 {
+    //         self.displayable = false;
+    //         let cbor = Self::read_button(0);
+    //         self.state = 1;
+    //         Some(self.coap_request(&cbor))
+    //     } else {
+    //         None
+    //     }
+    // }
+
     fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
         let mut decoder = Decoder::new(payload);
         let query = match self.state {
@@ -137,6 +148,8 @@ impl CommandHandler for ButtonLed {
         if query.is_none() {
             self.displayable = true;
             self.finished = true;
+        } else {
+            self.displayable = false;
         }
         query
     }
