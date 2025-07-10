@@ -46,7 +46,7 @@ impl App {
         frame.render_widget(
             Tabs::new(tab_titles)
                 .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
-                .select(self.current_tab as usize)
+                .select(self.ui_state.current_tab as usize)
                 .padding("", "")
                 .divider(" "),
             title_area[0],
@@ -59,16 +59,7 @@ impl App {
             title_area[1],
         );
 
-        let footer_title = match &self.write_port {
-            Some(port) => {
-                let device_path = port;
-                format!(
-                    "✅ connected via {} with RIOT {}",
-                    device_path, self.riot_version
-                )
-            }
-            None => "❌ not connected, trying..".to_owned(),
-        };
+        let footer_title = self.ui_state.get_connection();
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
@@ -150,10 +141,6 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             messages_hight,
         ));
 
-        if self.diagnostic_messages_scroll_follow {
-            self.diagnostic_messages_scroll_state.scroll_to_bottom();
-        }
-
         let paragraph = Paragraph::new(text);
         scroll_view.render_widget(
             paragraph,
@@ -163,7 +150,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             border_block.inner(area),
-            &mut self.diagnostic_messages_scroll_state,
+            &mut self.ui_state.diagnostic_messages_scroll_state,
         );
 
         frame.render_widget(border_block, area);
@@ -199,10 +186,6 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             right_block_up.inner(area).width
         };
 
-        if self.configuration_scroll_follow {
-            self.configuration_scroll_state.scroll_to_bottom();
-        }
-
         let mut scroll_view = ScrollView::new(Size::new(width, total_length));
         let buf = scroll_view.buf_mut();
         let scroll_view_area = buf.area;
@@ -216,7 +199,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            &mut self.configuration_scroll_state,
+            &mut self.ui_state.configuration_scroll_state,
         );
         frame.render_widget(right_block_up, area);
     }
@@ -238,12 +221,12 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             ))
             .unwrap();
             for req in &mut self.configuration_log[start..] {
-                let (size, para) = if matches!(self.current_tab, super::SelectedTab::Configuration)
-                {
-                    req.paragraph()
-                } else {
-                    req.paragraph_short()
-                };
+                let (size, para) =
+                    if matches!(self.ui_state.current_tab, super::SelectedTab::Configuration) {
+                        req.paragraph()
+                    } else {
+                        req.paragraph_short()
+                    };
                 req_blocks.push(para);
                 sum += size;
                 constrains.push(Constraint::Length(size.try_into().unwrap()));
@@ -258,10 +241,6 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             right_block_up.inner(area).width
         };
 
-        if self.configuration_scroll_follow {
-            self.configuration_scroll_state.scroll_to_bottom();
-        }
-
         let mut scroll_view = ScrollView::new(Size::new(width, total_length));
         let buf = scroll_view.buf_mut();
         let scroll_view_area = buf.area;
@@ -275,7 +254,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            &mut self.configuration_scroll_state,
+            &mut self.ui_state.configuration_scroll_state,
         );
         frame.render_widget(right_block_up, area);
     }
@@ -339,7 +318,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let content_width = left_block_up.inner(area).width;
 
         let (messages_height, paragraph) =
-            if matches!(self.current_tab, super::SelectedTab::Diagnostic) {
+            if matches!(self.ui_state.current_tab, super::SelectedTab::Diagnostic) {
                 self.diagnostic_log.paragraph()
             } else {
                 self.diagnostic_log.paragraph_short()
@@ -352,10 +331,6 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             messages_height,
         ));
 
-        if self.diagnostic_messages_scroll_follow {
-            self.diagnostic_messages_scroll_state.scroll_to_bottom();
-        }
-
         scroll_view.render_widget(
             paragraph,
             Rect::new(0, 0, content_width - 1, messages_height),
@@ -364,7 +339,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            &mut self.diagnostic_messages_scroll_state,
+            &mut self.ui_state.diagnostic_messages_scroll_state,
         );
         frame.render_widget(left_block_up, area);
     }
@@ -378,7 +353,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let content_width = left_block_up.inner(area).width;
 
         let (messages_height, paragraph) =
-            if matches!(self.current_tab, super::SelectedTab::Diagnostic) {
+            if matches!(self.ui_state.current_tab, super::SelectedTab::Diagnostic) {
                 self.overall_log.paragraph()
             } else {
                 self.overall_log.paragraph_short()
@@ -391,10 +366,6 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             messages_height,
         ));
 
-        if self.diagnostic_messages_scroll_follow {
-            self.diagnostic_messages_scroll_state.scroll_to_bottom();
-        }
-
         scroll_view.render_widget(
             paragraph,
             Rect::new(0, 0, content_width - 1, messages_height),
@@ -403,7 +374,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            &mut self.diagnostic_messages_scroll_state,
+            &mut self.ui_state.diagnostic_messages_scroll_state,
         );
         frame.render_widget(left_block_up, area);
     }
@@ -414,10 +385,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             .title(vec![Span::from("Board Info")])
             .title_alignment(Alignment::Left);
 
-        let text = format!(
-            "Version: {}\nBoard: {}\n",
-            self.riot_version, self.riot_board,
-        );
+        let text = self.ui_state.get_config();
         let text = Text::from(text);
         let paragraph = Paragraph::new(text);
         let paragraph_block = paragraph.block(left_block_down);
@@ -441,7 +409,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         self.render_header_footer(frame, header_area, footer_area);
 
-        match self.current_tab {
+        match self.ui_state.current_tab {
             super::SelectedTab::Combined => {
                 let main_chunks = Layout::default()
                     .direction(Direction::Horizontal)
