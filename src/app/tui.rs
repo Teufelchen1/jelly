@@ -265,32 +265,35 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             .title(vec![Span::from("User Input")])
             .title_alignment(Alignment::Left);
 
-        if self.user_input.is_empty() {
+        if self.user_input_manager.input_empty() {
             let mut text = Text::from(
                 Span::from("Type a command, for example: ").patch_style(Style::new().dark_gray()),
             );
             text.push_span(
-                Span::from(self.known_commands.list_by_cmd().join(", "))
+                Span::from(self.user_input_manager.command_name_list())
                     .patch_style(Style::new().dark_gray()),
             );
             let paragraph = Paragraph::new(text).block(right_block_down);
             frame.render_widget(paragraph, area);
             return;
         }
-        let text: &str = &self.user_input;
+        let text: &str = &self.user_input_manager.user_input;
         let mut text = Text::from(text);
 
         frame.set_cursor_position(Position::new(
-            area.x + u16::try_from(self.user_input.len()).unwrap() + 1,
+            area.x + u16::try_from(self.user_input_manager.user_input.len()).unwrap() + 1,
             area.y + 1,
         ));
 
-        let (suggestion, cmds) = self
-            .known_commands
-            .longest_common_prefixed_by_cmd(&self.user_input);
+        let (suggestion, cmds) = self.user_input_manager.suggestion();
+
         text.push_span(
-            Span::from(suggestion.get(self.user_input.len()..).unwrap_or(""))
-                .patch_style(Style::new().dark_gray()),
+            Span::from(
+                suggestion
+                    .get(self.user_input_manager.user_input.len()..)
+                    .unwrap_or(""),
+            )
+            .patch_style(Style::new().dark_gray()),
         );
         let command_options: String = match cmds.len() {
             0 => String::new(),
