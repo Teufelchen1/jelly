@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use button_led::ButtonLed;
 use coap_lite::CoapRequest;
 use mem::MemRead;
 
@@ -9,6 +10,7 @@ use crate::commands::sample::SampleCommand;
 use crate::commands::saul::Saul;
 use crate::commands::wks::Wkc;
 
+mod button_led;
 mod coap_get_template;
 mod mem;
 mod multi_endpoints_sample;
@@ -24,6 +26,10 @@ pub trait CommandHandler {
 
     /// Called everytime a response is found to the last request this handler has sent.
     fn handle(&mut self, _payload: &[u8]) -> Option<CoapRequest<String>> {
+        None
+    }
+
+    fn tick(&mut self) -> Option<CoapRequest<String>> {
         None
     }
 
@@ -180,6 +186,7 @@ impl CommandLibrary {
                 Wkc::cmd(),
             ],
             stored_cmds: vec![
+                ButtonLed::cmd(),
                 SampleCommand::cmd(),
                 Saul::cmd(),
                 MultiEndpointSample::cmd(),

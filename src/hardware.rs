@@ -63,7 +63,7 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
                     continue;
                 }
                 // Pseudo rate limit the outgoing data as to not overwhelm embedded devices
-                thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(10));
             }
             _ => todo!(),
         }
