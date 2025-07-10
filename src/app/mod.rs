@@ -14,6 +14,8 @@ use tui_widgets::scrollview::ScrollViewState;
 
 use crate::app::datatypes::Job;
 use crate::app::datatypes::Request;
+use crate::app::datatypes::SaveToFile;
+use crate::commands::Command;
 use crate::commands::CommandLibrary;
 use crate::events::Event;
 
@@ -122,21 +124,149 @@ impl UiState {
     }
 }
 
+struct UserInputManager {
+    known_commands: CommandLibrary,
+    user_input: String,
+    user_command_history: Vec<String>,
+    user_command_cursor: usize,
+}
+
+enum InputType<'a> {
+    /// The user input something that is not known to Jelly but it
+    /// starts with a `/` so it likely is a coap endpoint
+    /// Treated as configuration message
+    RawCoap,
+    /// The user input something that is not known to Jelly
+    /// Treated as diagnostic message
+    RawCommand,
+    /// This input is a known command with a coap endpoint and a handler
+    /// Treated as configuration message
+    JellyCoapCommand(&'a Command, String, SaveToFile),
+    /// This input is a known command without a coap endpoint
+    /// Treated as diagnostic message
+    JellyCommand(&'a Command),
+}
+
+impl UserInputManager {
+    fn new() -> Self {
+        Self {
+            known_commands: CommandLibrary::default(),
+            user_input: String::new(),
+            user_command_history: vec![],
+            user_command_cursor: 0,
+        }
+    }
+
+    fn suggestion(&self) -> (String, Vec<&Command>) {
+        self.known_commands
+            .longest_common_prefixed_by_cmd(&self.user_input)
+    }
+
+    fn set_suggest_completion(&mut self) {
+        let (suggestion, _) = self
+            .known_commands
+            .longest_common_prefixed_by_cmd(&self.user_input);
+
+        self.user_input.clear();
+        self.user_input.push_str(&suggestion);
+    }
+
+    fn set_to_previous_input(&mut self) {
+        if self.user_command_cursor > 0 {
+            self.user_input.clear();
+            self.user_command_cursor -= 1;
+            self.user_input = self.user_command_history[self.user_command_cursor].clone();
+        }
+    }
+
+    fn set_to_next_input(&mut self) {
+        if self.user_command_cursor < self.user_command_history.len() {
+            self.user_input.clear();
+            self.user_command_cursor += 1;
+            if self.user_command_cursor == self.user_command_history.len() {
+                self.user_input.clear();
+            } else {
+                self.user_input = self.user_command_history[self.user_command_cursor].clone();
+            }
+        }
+    }
+
+    const fn input_empty(&self) -> bool {
+        self.user_input.is_empty()
+    }
+
+    fn classify_input(&self) -> InputType {
+        let (cmd_string, file) = if let Some((cmd_string, path)) = self.user_input.split_once("%>")
+        {
+            (cmd_string, SaveToFile::AsBin(path.trim().to_owned()))
+        } else if let Some((cmd_string, path)) = self.user_input.split_once('>') {
+            (cmd_string, SaveToFile::AsText(path.trim().to_owned()))
+        } else {
+            (self.user_input.as_str(), SaveToFile::No)
+        };
+        let maybe_cmd = self
+            .known_commands
+            .find_by_cmd(cmd_string.split(' ').next().unwrap());
+        match maybe_cmd {
+            Some(cmd) => {
+                if cmd.required_endpoints.is_empty() {
+                    InputType::JellyCommand(cmd)
+                } else {
+                    InputType::JellyCoapCommand(cmd, cmd_string.to_owned(), file)
+                }
+            }
+            None => {
+                if self.user_input.starts_with('/') {
+                    InputType::RawCoap
+                } else {
+                    InputType::RawCommand
+                }
+            }
+        }
+    }
+
+    fn command_name_list(&self) -> String {
+        self.known_commands.list_by_cmd().join(", ")
+    }
+
+    fn command_exists_by_location(&self, location: &str) -> bool {
+        self.known_commands
+            .find_by_first_location(location)
+            .is_some()
+    }
+
+    fn check_for_new_available_commands(&mut self, eps: &[String]) {
+        self.known_commands
+            .update_available_cmds_based_on_endpoints(eps);
+    }
+
+    fn update_command_description_by_location(&mut self, location: &str, description: &str) {
+        // If we already know this command, update it's description
+        if let Some(cmd) = self.known_commands.find_by_first_location_mut(location) {
+            cmd.update_description(description);
+        }
+    }
+
+    fn update_command_description_by_name(&mut self, name: &str, description: &str) {
+        // If we already know this command, update it's description
+        if let Some(cmd) = self.known_commands.find_by_cmd_mut(name) {
+            cmd.update_description(description);
+        }
+    }
+}
+
 pub struct App {
     connected: bool,
     event_sender: Sender<Event>,
     configuration_log: Vec<Request>,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
-    known_commands: CommandLibrary,
-    user_input: String,
-    user_command_history: Vec<String>,
-    user_command_cursor: usize,
+    user_input_manager: UserInputManager,
+    ui_state: UiState,
     token_count: u16,
     next_mid: u16,
     overall_log: DiagnosticLog,
     ongoing_jobs: HashMap<u64, usize>,
-    ui_state: UiState,
     job_log: JobLog,
 }
 
@@ -149,13 +279,10 @@ impl App {
             configuration_log: vec![],
             configuration_packets: vec![],
             diagnostic_log: DiagnosticLog::new(),
-            known_commands: CommandLibrary::default(),
+
+            user_input_manager: UserInputManager::new(),
 
             ui_state: UiState::new(),
-
-            user_input: String::new(),
-            user_command_history: vec![],
-            user_command_cursor: 0,
 
             token_count: 0,
             next_mid: rand::rng().random(),
