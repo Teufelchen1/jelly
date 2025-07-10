@@ -64,7 +64,8 @@ impl App {
     }
 
     pub fn on_connect(&mut self, name: String) {
-        self.write_port = Some(name);
+        self.connected = true;
+        self.ui_state.device_path = Some(name);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/riot/board");
         self.send_configuration_request(&mut request.message);
@@ -80,7 +81,8 @@ impl App {
     }
 
     pub fn on_disconnect(&mut self) {
-        self.write_port = None;
+        self.connected = false;
+        self.ui_state.device_path = None;
     }
 
     fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
@@ -142,12 +144,13 @@ impl App {
                     _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
                 }
                 match uri_path.as_str() {
-                    "/riot/board" => {
-                        self.riot_board = String::from_utf8_lossy(&response.payload).to_string();
-                    }
-                    "/riot/ver" => {
-                        self.riot_version = String::from_utf8_lossy(&response.payload).to_string();
-                    }
+                    "/riot/board" => self
+                        .ui_state
+                        .set_board_name(String::from_utf8_lossy(&response.payload).to_string()),
+                    "/riot/ver" => self
+                        .ui_state
+                        .set_board_version(String::from_utf8_lossy(&response.payload).to_string()),
+
                     "/.well-known/core" => self.on_well_known_core(&response),
                     _ => {
                         // RIOT specific hook
@@ -185,26 +188,10 @@ impl App {
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
-                self.diagnostic_messages_scroll_position =
-                    self.diagnostic_messages_scroll_position.saturating_sub(1);
-                self.diagnostic_messages_scroll_follow =
-                    self.diagnostic_messages_scroll_position == 0;
-                self.diagnostic_messages_scroll_state.scroll_down();
-
-                // For now, just have one global scrolling behavior
-                self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
-                self.configuration_scroll_state.scroll_down();
+                self.ui_state.scroll_down();
             }
             MouseEventKind::ScrollUp => {
-                self.diagnostic_messages_scroll_follow = false;
-                if self.diagnostic_messages_scroll_state.offset().y != 0 {
-                    self.diagnostic_messages_scroll_position =
-                        self.diagnostic_messages_scroll_position.saturating_add(1);
-                }
-                self.diagnostic_messages_scroll_state.scroll_up();
-
-                self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
-                self.configuration_scroll_state.scroll_up();
+                self.ui_state.scroll_up();
             }
             _ => {}
         }
@@ -332,10 +319,10 @@ impl App {
 
         match key.code {
             KeyCode::Enter => {
-                if self.write_port.is_none() {
-                    return true;
+                // Can't send anything if we don't have an active connection
+                if self.connected {
+                    self.handle_command_commit();
                 }
-                self.handle_command_commit();
             }
             KeyCode::Tab | KeyCode::Right => {
                 let (suggestion, _) = self
@@ -371,19 +358,19 @@ impl App {
                 self.user_input.push(to_insert);
             }
             KeyCode::F(1) => {
-                self.current_tab = SelectedTab::Combined;
+                self.ui_state.current_tab = SelectedTab::Combined;
             }
             KeyCode::F(2) => {
-                self.current_tab = SelectedTab::Diagnostic;
+                self.ui_state.current_tab = SelectedTab::Diagnostic;
             }
             KeyCode::F(3) => {
-                self.current_tab = SelectedTab::Configuration;
+                self.ui_state.current_tab = SelectedTab::Configuration;
             }
             KeyCode::F(4) => {
-                self.current_tab = SelectedTab::Commands;
+                self.ui_state.current_tab = SelectedTab::Commands;
             }
             KeyCode::F(5) => {
-                self.current_tab = SelectedTab::Help;
+                self.ui_state.current_tab = SelectedTab::Help;
             }
             KeyCode::Esc => {
                 return false;

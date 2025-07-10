@@ -31,54 +31,135 @@ enum SelectedTab {
     Help,
 }
 
-pub struct App {
-    event_sender: Sender<Event>,
-    write_port: Option<String>,
-    configuration_log: Vec<Request>,
-    configuration_packets: Vec<Packet>,
-    configuration_scroll_state: ScrollViewState,
-    configuration_scroll_follow: bool,
-    diagnostic_log: DiagnosticLog,
+struct UiState {
+    device_path: Option<String>,
     diagnostic_messages_scroll_state: ScrollViewState,
     diagnostic_messages_scroll_position: usize,
     diagnostic_messages_scroll_follow: bool,
+    configuration_scroll_state: ScrollViewState,
+    configuration_scroll_follow: bool,
     current_tab: SelectedTab,
+    riot_board: String,
+    riot_version: String,
+}
+
+impl UiState {
+    fn new() -> Self {
+        Self {
+            device_path: None,
+
+            current_tab: SelectedTab::Combined,
+
+            configuration_scroll_state: ScrollViewState::default(),
+            configuration_scroll_follow: true,
+            diagnostic_messages_scroll_state: ScrollViewState::default(),
+            diagnostic_messages_scroll_position: 0,
+            diagnostic_messages_scroll_follow: true,
+
+            riot_board: "Unkown".to_owned(),
+            riot_version: "Unkown".to_owned(),
+        }
+    }
+
+    fn set_board_name(&mut self, name: String) {
+        self.riot_board = name;
+    }
+
+    fn set_board_version(&mut self, version: String) {
+        self.riot_version = version;
+    }
+
+    fn get_config(&self) -> String {
+        format!(
+            "Version: {}\nBoard: {}\n",
+            self.riot_version, self.riot_board,
+        )
+    }
+
+    fn get_connection(&self) -> String {
+        match &self.device_path {
+            Some(device_path) => {
+                format!(
+                    "✅ connected via {device_path} with RIOT {}",
+                    self.riot_version
+                )
+            }
+            None => "❌ not connected, retrying..".to_owned(),
+        }
+    }
+
+    fn scroll_down(&mut self) {
+        self.diagnostic_messages_scroll_position =
+            self.diagnostic_messages_scroll_position.saturating_sub(1);
+        self.diagnostic_messages_scroll_follow = self.diagnostic_messages_scroll_position == 0;
+        self.diagnostic_messages_scroll_state.scroll_down();
+
+        // For the "sticky" behavior, where the view remains at the bottom, even if more
+        // content is added
+        if self.diagnostic_messages_scroll_follow {
+            self.diagnostic_messages_scroll_state.scroll_to_bottom();
+        }
+
+        // For now, just have one global scrolling behavior
+        self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
+        self.configuration_scroll_state.scroll_down();
+
+        if self.configuration_scroll_follow {
+            self.configuration_scroll_state.scroll_to_bottom();
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        self.diagnostic_messages_scroll_follow = false;
+        if self.diagnostic_messages_scroll_state.offset().y != 0 {
+            self.diagnostic_messages_scroll_position =
+                self.diagnostic_messages_scroll_position.saturating_add(1);
+        }
+        self.diagnostic_messages_scroll_state.scroll_up();
+
+        self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
+        self.configuration_scroll_state.scroll_up();
+    }
+}
+
+pub struct App {
+    connected: bool,
+    event_sender: Sender<Event>,
+    configuration_log: Vec<Request>,
+    configuration_packets: Vec<Packet>,
+    diagnostic_log: DiagnosticLog,
     known_commands: CommandLibrary,
     user_input: String,
     user_command_history: Vec<String>,
     user_command_cursor: usize,
     token_count: u16,
-    riot_board: String,
-    riot_version: String,
     next_mid: u16,
     overall_log: DiagnosticLog,
     ongoing_jobs: HashMap<u64, usize>,
+    ui_state: UiState,
     job_log: JobLog,
 }
 
 impl App {
     pub fn new(event_sender: Sender<Event>) -> Self {
         Self {
+            connected: false,
             event_sender,
-            write_port: None,
+
             configuration_log: vec![],
             configuration_packets: vec![],
-            configuration_scroll_state: ScrollViewState::default(),
-            configuration_scroll_follow: true,
             diagnostic_log: DiagnosticLog::new(),
-            diagnostic_messages_scroll_state: ScrollViewState::default(),
-            diagnostic_messages_scroll_position: 0,
-            diagnostic_messages_scroll_follow: true,
-            current_tab: SelectedTab::Combined,
             known_commands: CommandLibrary::default(),
+
+            ui_state: UiState::new(),
+
             user_input: String::new(),
             user_command_history: vec![],
             user_command_cursor: 0,
-            token_count: 0,
-            riot_board: "Unkown".to_owned(),
-            riot_version: "Unkown".to_owned(),
 
+            token_count: 0,
             next_mid: rand::rng().random(),
+
             overall_log: DiagnosticLog::new(),
             ongoing_jobs: HashMap::new(),
             job_log: JobLog::new(),
