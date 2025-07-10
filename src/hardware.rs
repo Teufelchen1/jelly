@@ -1,3 +1,4 @@
+use std::io::ErrorKind::TimedOut;
 use std::io::ErrorKind::WouldBlock;
 use std::io::Read;
 use std::io::Write;
@@ -77,7 +78,12 @@ fn read_thread(
 ) {
     loop {
         let Ok((mut read_port, write_port)) = new_port(device_path) else {
-            thread::sleep(Duration::from_millis(2500));
+            sender
+                .send(Event::Diagnostic(
+                    "Unable to open the device, trying again in 3s\n".to_owned(),
+                ))
+                .unwrap();
+            thread::sleep(Duration::from_millis(3000));
             continue;
         };
 
@@ -85,6 +91,7 @@ fn read_thread(
             let mut write_port_lock = port_guard.lock().unwrap();
             *write_port_lock = Some(write_port);
         }
+
         sender
             .send(Event::SerialConnect(
                 device_path.to_string_lossy().to_string(),
@@ -97,7 +104,9 @@ fn read_thread(
             *write_port_lock = None;
         }
         sender
-            .send(Event::Diagnostic("Port died, waiting 3s\n".to_owned()))
+            .send(Event::Diagnostic(
+                "Port died, trying again in 3s\n".to_owned(),
+            ))
             .unwrap();
         thread::sleep(Duration::from_millis(3000));
     }
@@ -122,10 +131,13 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                     num
                 }
                 Err(err) => {
-                    if err.kind() == WouldBlock {
-                        // This means timeout
+                    // WouldBlock is timeout on unix sockets
+                    if err.kind() == WouldBlock || err.kind() == TimedOut {
                         continue;
                     }
+                    sender
+                        .send(Event::Diagnostic(format!("Port error {err:?}\n")))
+                        .unwrap();
                     sender.send(Event::SerialDisconnect).unwrap();
                     break;
                 }
