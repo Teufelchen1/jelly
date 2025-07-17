@@ -12,7 +12,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use slipmux::encode_diagnostic;
+use slipmux::encode_buffered;
 use slipmux::BufferedFrameHandler;
 use slipmux::DecodeStatus;
 use slipmux::Decoder;
@@ -44,13 +44,15 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
     while let Ok(event) = receiver.recv() {
         match event {
             Event::SendDiagnostic(msg) => {
-                let mut data: [u8; 2048] = [0; 2048];
-                let size = encode_diagnostic(&msg, &mut data);
+                let data = encode_buffered(Slipmux::Diagnostic(msg));
                 let mut write_port = port_guard.lock().unwrap();
 
                 if let Some(port) = (*write_port).as_mut() {
-                    port.write_all(&data[..size]).unwrap();
-                    port.flush().unwrap();
+                    // There is odd behavior in certain usbttys, chunking reduces those.
+                    for chunk in data.chunks(64) {
+                        port.write_all(chunk).unwrap();
+                        port.flush().unwrap();
+                    }
                 } else {
                     // Nothing to do, drop the message silently
                 }
