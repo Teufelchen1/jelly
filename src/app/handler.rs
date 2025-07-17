@@ -292,7 +292,7 @@ impl App {
                 self.user_input_manager.user_input.push(to_insert);
             }
             KeyCode::F(1) => {
-                self.ui_state.current_tab = SelectedTab::Combined;
+                self.ui_state.current_tab = SelectedTab::Overview;
             }
             KeyCode::F(2) => {
                 self.ui_state.current_tab = SelectedTab::Diagnostic;

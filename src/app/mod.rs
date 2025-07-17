@@ -26,20 +26,63 @@ mod tui;
 #[derive(Default, Clone, Copy)]
 enum SelectedTab {
     #[default]
-    Combined,
+    Overview,
     Diagnostic,
     Configuration,
     Commands,
     Help,
 }
 
+struct ScrollState {
+    state: ScrollViewState,
+    position: usize,
+    follow: bool,
+}
+
+impl ScrollState {
+    fn new() -> Self {
+        Self {
+            state: ScrollViewState::default(),
+            position: 0,
+            follow: true,
+        }
+    }
+
+    fn scroll_down(&mut self) {
+        self.position = self.position.saturating_sub(1);
+        // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
+        self.follow = self.position == 0;
+        self.state.scroll_down();
+    }
+
+    fn scroll_up(&mut self) {
+        self.follow = false;
+        // Can't scroll up when already on top
+        if self.state.offset().y != 0 {
+            self.position = self.position.saturating_add(1);
+        }
+        self.state.scroll_up();
+    }
+
+    fn get_state_for_rendering(&mut self) -> &mut ScrollViewState {
+        // For the "sticky" behavior, where the view remains at the bottom
+        // Needs to be done during rendering as more content could have been added, making
+        // a jump to the bottom necessary
+        if self.follow {
+            self.state.scroll_to_bottom();
+        }
+
+        &mut self.state
+    }
+}
+
 struct UiState {
     device_path: Option<String>,
-    diagnostic_messages_scroll_state: ScrollViewState,
-    diagnostic_messages_scroll_position: usize,
-    diagnostic_messages_scroll_follow: bool,
-    configuration_scroll_state: ScrollViewState,
-    configuration_scroll_follow: bool,
+    overview_scroll: ScrollState,
+    diagnostic_scroll: ScrollState,
+    configuration_scroll: ScrollState,
+    command_scroll: ScrollState,
+    help_scroll: ScrollState,
     current_tab: SelectedTab,
     riot_board: String,
     riot_version: String,
@@ -50,13 +93,13 @@ impl UiState {
         Self {
             device_path: None,
 
-            current_tab: SelectedTab::Combined,
+            current_tab: SelectedTab::Overview,
 
-            configuration_scroll_state: ScrollViewState::default(),
-            configuration_scroll_follow: true,
-            diagnostic_messages_scroll_state: ScrollViewState::default(),
-            diagnostic_messages_scroll_position: 0,
-            diagnostic_messages_scroll_follow: true,
+            overview_scroll: ScrollState::new(),
+            diagnostic_scroll: ScrollState::new(),
+            configuration_scroll: ScrollState::new(),
+            command_scroll: ScrollState::new(),
+            help_scroll: ScrollState::new(),
 
             riot_board: "Unkown".to_owned(),
             riot_version: "Unkown".to_owned(),
@@ -90,53 +133,30 @@ impl UiState {
         }
     }
 
-    fn configuration_scroll_position(&mut self) -> &mut ScrollViewState {
-        // For the "sticky" behavior, where the view remains at the bottom, even if more
-        // content is added
-        if self.diagnostic_messages_scroll_follow {
-            self.diagnostic_messages_scroll_state.scroll_to_bottom();
-        }
-        if self.configuration_scroll_follow {
-            self.configuration_scroll_state.scroll_to_bottom();
-        }
-
-        &mut self.configuration_scroll_state
-    }
-
-    fn diagnostic_scroll_position(&mut self) -> &mut ScrollViewState {
-        // For the "sticky" behavior, where the view remains at the bottom, even if more
-        // content is added
-        if self.diagnostic_messages_scroll_follow {
-            self.diagnostic_messages_scroll_state.scroll_to_bottom();
-        }
-        if self.configuration_scroll_follow {
-            self.configuration_scroll_state.scroll_to_bottom();
-        }
-
-        &mut self.diagnostic_messages_scroll_state
-    }
-
     fn scroll_down(&mut self) {
-        self.diagnostic_messages_scroll_position =
-            self.diagnostic_messages_scroll_position.saturating_sub(1);
-        self.diagnostic_messages_scroll_follow = self.diagnostic_messages_scroll_position == 0;
-        self.diagnostic_messages_scroll_state.scroll_down();
-
-        // For now, just have one global scrolling behavior
-        self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
-        self.configuration_scroll_state.scroll_down();
+        match self.current_tab {
+            SelectedTab::Overview => {
+                self.overview_scroll.scroll_down();
+                self.configuration_scroll.scroll_down();
+            }
+            SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_down(),
+            SelectedTab::Configuration => self.configuration_scroll.scroll_down(),
+            SelectedTab::Commands => self.command_scroll.scroll_down(),
+            SelectedTab::Help => self.help_scroll.scroll_down(),
+        }
     }
 
     fn scroll_up(&mut self) {
-        self.diagnostic_messages_scroll_follow = false;
-        if self.diagnostic_messages_scroll_state.offset().y != 0 {
-            self.diagnostic_messages_scroll_position =
-                self.diagnostic_messages_scroll_position.saturating_add(1);
+        match self.current_tab {
+            SelectedTab::Overview => {
+                self.overview_scroll.scroll_up();
+                self.configuration_scroll.scroll_up();
+            }
+            SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_up(),
+            SelectedTab::Configuration => self.configuration_scroll.scroll_up(),
+            SelectedTab::Commands => self.command_scroll.scroll_up(),
+            SelectedTab::Help => self.help_scroll.scroll_up(),
         }
-        self.diagnostic_messages_scroll_state.scroll_up();
-
-        self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
-        self.configuration_scroll_state.scroll_up();
     }
 }
 

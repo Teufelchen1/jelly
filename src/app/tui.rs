@@ -151,7 +151,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             border_block.inner(area),
-            &mut self.ui_state.diagnostic_messages_scroll_state,
+            self.ui_state.help_scroll.get_state_for_rendering(),
         );
 
         frame.render_widget(border_block, area);
@@ -200,12 +200,12 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            &mut self.ui_state.configuration_scroll_state,
+            self.ui_state.command_scroll.get_state_for_rendering(),
         );
         frame.render_widget(right_block_up, area);
     }
 
-    fn render_configuration_messages(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_configuration_messages(&mut self, frame: &mut Frame, area: Rect, short: bool) {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
@@ -222,12 +222,11 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             ))
             .unwrap();
             for req in &mut self.configuration_log[start..] {
-                let (size, para) =
-                    if matches!(self.ui_state.current_tab, super::SelectedTab::Configuration) {
-                        req.paragraph()
-                    } else {
-                        req.paragraph_short()
-                    };
+                let (size, para) = if short {
+                    req.paragraph_short()
+                } else {
+                    req.paragraph()
+                };
                 req_blocks.push(para);
                 sum += size;
                 constrains.push(Constraint::Length(size.try_into().unwrap()));
@@ -255,7 +254,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            self.ui_state.configuration_scroll_position(),
+            self.ui_state.configuration_scroll.get_state_for_rendering(),
         );
         frame.render_widget(right_block_up, area);
     }
@@ -324,12 +323,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         let content_width = left_block_up.inner(area).width;
 
-        let (messages_height, paragraph) =
-            if matches!(self.ui_state.current_tab, super::SelectedTab::Diagnostic) {
-                self.diagnostic_log.paragraph()
-            } else {
-                self.diagnostic_log.paragraph_short()
-            };
+        let (messages_height, paragraph) = self.diagnostic_log.paragraph();
+
         let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
 
         let mut scroll_view = ScrollView::new(Size::new(
@@ -346,7 +341,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            self.ui_state.diagnostic_scroll_position(),
+            self.ui_state.diagnostic_scroll.get_state_for_rendering(),
         );
         frame.render_widget(left_block_up, area);
     }
@@ -354,17 +349,13 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
     fn render_overall_messages(&mut self, frame: &mut Frame, area: Rect) {
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
-            .title(vec![Span::from("Diagnostic Messages")])
+            .title(vec![Span::from("Diagnostic & Commands")])
             .title_alignment(Alignment::Left);
 
         let content_width = left_block_up.inner(area).width;
 
-        let (messages_height, paragraph) =
-            if matches!(self.ui_state.current_tab, super::SelectedTab::Diagnostic) {
-                self.overall_log.paragraph()
-            } else {
-                self.overall_log.paragraph_short()
-            };
+        let (messages_height, paragraph) = self.overall_log.paragraph_short();
+
         let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
 
         let mut scroll_view = ScrollView::new(Size::new(
@@ -381,7 +372,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            self.ui_state.diagnostic_scroll_position(),
+            self.ui_state.overview_scroll.get_state_for_rendering(),
         );
         frame.render_widget(left_block_up, area);
     }
@@ -398,6 +389,38 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let paragraph_block = paragraph.block(left_block_down);
 
         frame.render_widget(paragraph_block, area);
+    }
+
+    fn render_overview(&mut self, main_area: Rect, frame: &mut Frame) {
+        let main_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(0)
+            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)].as_ref())
+            .split(main_area);
+
+        let main_chunk_left = main_chunks[0];
+        let main_chunk_right = main_chunks[1];
+
+        let right_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1), Constraint::Max(5)].as_ref())
+            .split(main_chunk_right);
+
+        let configuration_log_area = right_chunks[0];
+        let device_config_overview_area = right_chunks[1];
+
+        let left_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+            .split(main_chunk_left);
+
+        let overall_messages_log_area = left_chunks[0];
+        let userinput_area = left_chunks[1];
+
+        self.render_configuration_messages(frame, configuration_log_area, true);
+        self.render_configuration_overview(frame, device_config_overview_area);
+        self.render_overall_messages(frame, overall_messages_log_area);
+        self.render_user_input(frame, userinput_area);
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {
@@ -417,36 +440,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         self.render_header_footer(frame, header_area, footer_area);
 
         match self.ui_state.current_tab {
-            super::SelectedTab::Combined => {
-                let main_chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .margin(0)
-                    .constraints([Constraint::Percentage(65), Constraint::Percentage(35)].as_ref())
-                    .split(main_area);
-
-                let main_chunk_left = main_chunks[0];
-                let main_chunk_right = main_chunks[1];
-
-                let right_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Max(5)].as_ref())
-                    .split(main_chunk_right);
-
-                let right_chunk_upper = right_chunks[0];
-                let right_chunk_lower = right_chunks[1];
-
-                let left_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
-                    .split(main_chunk_left);
-
-                let left_chunk_upper = left_chunks[0];
-                let left_chunk_lower = left_chunks[1];
-
-                self.render_configuration_messages(frame, right_chunk_upper);
-                self.render_overall_messages(frame, left_chunk_upper);
-                self.render_configuration_overview(frame, right_chunk_lower);
-                self.render_user_input(frame, left_chunk_lower);
+            super::SelectedTab::Overview => {
+                self.render_overview(main_area, frame);
             }
             super::SelectedTab::Diagnostic => {
                 let chunks = Layout::default()
@@ -469,7 +464,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
                 let chunk_upper = chunks[0];
                 let chunk_lower = chunks[1];
 
-                self.render_configuration_messages(frame, chunk_upper);
+                self.render_configuration_messages(frame, chunk_upper, false);
                 self.render_user_input(frame, chunk_lower);
             }
             super::SelectedTab::Commands => {
