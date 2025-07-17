@@ -90,25 +90,41 @@ impl UiState {
         }
     }
 
+    fn configuration_scroll_position(&mut self) -> &mut ScrollViewState {
+        // For the "sticky" behavior, where the view remains at the bottom, even if more
+        // content is added
+        if self.diagnostic_messages_scroll_follow {
+            self.diagnostic_messages_scroll_state.scroll_to_bottom();
+        }
+        if self.configuration_scroll_follow {
+            self.configuration_scroll_state.scroll_to_bottom();
+        }
+
+        &mut self.configuration_scroll_state
+    }
+
+    fn diagnostic_scroll_position(&mut self) -> &mut ScrollViewState {
+        // For the "sticky" behavior, where the view remains at the bottom, even if more
+        // content is added
+        if self.diagnostic_messages_scroll_follow {
+            self.diagnostic_messages_scroll_state.scroll_to_bottom();
+        }
+        if self.configuration_scroll_follow {
+            self.configuration_scroll_state.scroll_to_bottom();
+        }
+
+        &mut self.diagnostic_messages_scroll_state
+    }
+
     fn scroll_down(&mut self) {
         self.diagnostic_messages_scroll_position =
             self.diagnostic_messages_scroll_position.saturating_sub(1);
         self.diagnostic_messages_scroll_follow = self.diagnostic_messages_scroll_position == 0;
         self.diagnostic_messages_scroll_state.scroll_down();
 
-        // For the "sticky" behavior, where the view remains at the bottom, even if more
-        // content is added
-        if self.diagnostic_messages_scroll_follow {
-            self.diagnostic_messages_scroll_state.scroll_to_bottom();
-        }
-
         // For now, just have one global scrolling behavior
         self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
         self.configuration_scroll_state.scroll_down();
-
-        if self.configuration_scroll_follow {
-            self.configuration_scroll_state.scroll_to_bottom();
-        }
     }
 
     fn scroll_up(&mut self) {
@@ -135,10 +151,10 @@ enum InputType<'a> {
     /// The user input something that is not known to Jelly but it
     /// starts with a `/` so it likely is a coap endpoint
     /// Treated as configuration message
-    RawCoap,
+    RawCoap(String),
     /// The user input something that is not known to Jelly
     /// Treated as diagnostic message
-    RawCommand,
+    RawCommand(String),
     /// This input is a known command with a coap endpoint and a handler
     /// Treated as configuration message
     JellyCoapCommand(&'a Command, String, SaveToFile),
@@ -217,9 +233,13 @@ impl UserInputManager {
             }
             None => {
                 if self.user_input.starts_with('/') {
-                    InputType::RawCoap
+                    InputType::RawCoap(self.user_input.clone())
                 } else {
-                    InputType::RawCommand
+                    let mut cmd = self.user_input.clone();
+                    if !cmd.ends_with('\n') {
+                        cmd.push('\n');
+                    }
+                    InputType::RawCommand(cmd)
                 }
             }
         }

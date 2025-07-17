@@ -1,4 +1,5 @@
 use std::cmp::max;
+use std::cmp::min;
 use std::env;
 use std::iter::zip;
 
@@ -254,7 +255,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            &mut self.ui_state.configuration_scroll_state,
+            self.ui_state.configuration_scroll_position(),
         );
         frame.render_widget(right_block_up, area);
     }
@@ -280,10 +281,13 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let text: &str = &self.user_input_manager.user_input;
         let mut text = Text::from(text);
 
-        frame.set_cursor_position(Position::new(
-            area.x + u16::try_from(self.user_input_manager.user_input.len()).unwrap() + 1,
-            area.y + 1,
-        ));
+        let x_pos = area.x
+            + min(
+                u16::try_from(self.user_input_manager.user_input.len()).unwrap(),
+                area.width,
+            );
+
+        frame.set_cursor_position(Position::new(x_pos + 1, area.y + 1));
 
         let (suggestion, cmds) = self.user_input_manager.suggestion();
 
@@ -342,7 +346,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            &mut self.ui_state.diagnostic_messages_scroll_state,
+            self.ui_state.diagnostic_scroll_position(),
         );
         frame.render_widget(left_block_up, area);
     }
@@ -377,7 +381,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            &mut self.ui_state.diagnostic_messages_scroll_state,
+            self.ui_state.diagnostic_scroll_position(),
         );
         frame.render_widget(left_block_up, area);
     }

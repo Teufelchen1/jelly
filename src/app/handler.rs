@@ -195,13 +195,13 @@ impl App {
 
     fn handle_command_commit(&mut self) {
         match self.user_input_manager.classify_input() {
-            InputType::RawCoap => {
+            InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
                 request.set_method(Method::Get);
-                if self.user_input_manager.user_input != "/" {
+                if endpoint != "/" {
                     // Might also be a bug in coap-lite that "/" should be turned into an
                     // empty option set; documentation isn't quite conclusive.
-                    request.set_path(&self.user_input_manager.user_input);
+                    request.set_path(&endpoint);
                 }
                 request.message.set_token(self.get_new_token());
                 request.message.add_option(CoapOption::Block2, vec![0x05]);
@@ -212,15 +212,8 @@ impl App {
                     .unwrap();
                 self.configuration_log.push(Request::new(request));
             }
-            InputType::RawCommand => {
-                if !self.user_input_manager.user_input.ends_with('\n') {
-                    self.user_input_manager.user_input.push('\n');
-                }
-                self.event_sender
-                    .send(Event::SendDiagnostic(
-                        self.user_input_manager.user_input.clone(),
-                    ))
-                    .unwrap();
+            InputType::RawCommand(cmd) => {
+                self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
             }
             InputType::JellyCoapCommand(cmd, cmd_string, file) => {
                 // Process the user input string into arguments, yielding a handler
@@ -248,14 +241,13 @@ impl App {
                     }
                 }
             }
-            InputType::JellyCommand(_cmd) => {
-                if !self.user_input_manager.user_input.ends_with('\n') {
-                    self.user_input_manager.user_input.push('\n');
+            InputType::JellyCommand(cmd) => {
+                let mut cmd_str = cmd.cmd.clone();
+                if !cmd_str.ends_with('\n') {
+                    cmd_str.push('\n');
                 }
                 self.event_sender
-                    .send(Event::SendDiagnostic(
-                        self.user_input_manager.user_input.clone(),
-                    ))
+                    .send(Event::SendDiagnostic(cmd_str))
                     .unwrap();
             }
         }
