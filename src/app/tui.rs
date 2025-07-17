@@ -274,43 +274,67 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
                     .patch_style(Style::new().dark_gray()),
             );
             let paragraph = Paragraph::new(text).block(right_block_down);
+            frame.set_cursor_position(Position::new(area.x + 1, area.y + 1));
             frame.render_widget(paragraph, area);
             return;
         }
-        let text: &str = &self.user_input_manager.user_input;
-        let mut text = Text::from(text);
 
-        let x_pos = area.x
-            + min(
-                u16::try_from(self.user_input_manager.user_input.len()).unwrap(),
-                area.width,
-            );
+        let box_size: usize = usize::from(area.width.checked_sub(2).unwrap_or(1));
+        let input_len = self.user_input_manager.user_input.len();
+        let input = &self.user_input_manager.user_input;
+        let mut text = Text::default();
 
-        frame.set_cursor_position(Position::new(x_pos + 1, area.y + 1));
+        let mut start = 0;
+        while start < input_len {
+            let end = min(input_len, start + box_size);
+            text.push_line(input.get(start..end).unwrap());
+            start += box_size;
+        }
+
+        let y_pos =
+            area.y + 1 + u16::try_from(self.user_input_manager.cursor_position / box_size).unwrap();
+        let x_pos =
+            area.x + 1 + u16::try_from(self.user_input_manager.cursor_position % box_size).unwrap();
+
+        frame.set_cursor_position(Position::new(x_pos, y_pos));
 
         let (suggestion, cmds) = self.user_input_manager.suggestion();
 
-        text.push_span(
-            Span::from(
-                suggestion
-                    .get(self.user_input_manager.user_input.len()..)
-                    .unwrap_or(""),
-            )
-            .patch_style(Style::new().dark_gray()),
+        let mut completion_text = String::from(
+            suggestion
+                .get(self.user_input_manager.user_input.len()..)
+                .unwrap_or(""),
         );
-        let command_options: String = match cmds.len() {
-            0 => String::new(),
-            1 => cmds[0].description.clone(),
-            _ => cmds
-                .iter()
-                .map(|x| x.cmd.clone())
-                .collect::<Vec<String>>()
-                .join(" "),
-        };
+        if !cmds.is_empty() {
+            completion_text.push_str(" | ");
+            if cmds.len() == 1 {
+                completion_text.push_str(&cmds[0].description);
+            } else {
+                let possible_commands = cmds
+                    .iter()
+                    .map(|x| x.cmd.clone())
+                    .collect::<Vec<String>>()
+                    .join(" ");
+                completion_text.push_str(&possible_commands);
+            }
+        }
 
-        text.push_span(
-            Span::from(" | ".to_owned() + &command_options).patch_style(Style::new().dark_gray()),
-        );
+        // same as -input_len % box_size, but that would need cast to i64
+        let remaining_space = (box_size - input_len % box_size) % box_size;
+
+        if remaining_space < completion_text.len() {
+            text.push_span(
+                Span::from(&completion_text[..remaining_space])
+                    .patch_style(Style::new().dark_gray()),
+            );
+            text.push_line(
+                Span::from(&completion_text[remaining_space..])
+                    .patch_style(Style::new().dark_gray()),
+            );
+        } else {
+            text.push_span(Span::from(&completion_text).patch_style(Style::new().dark_gray()));
+        }
+
         let paragraph = Paragraph::new(text).block(right_block_down);
         frame.render_widget(paragraph, area);
     }
@@ -409,9 +433,14 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let configuration_log_area = right_chunks[0];
         let device_config_overview_area = right_chunks[1];
 
+        let input_min_size = 3
+            + (self.user_input_manager.user_input.len() + 10)
+                .try_into()
+                .unwrap_or(u16::MAX)
+                / (main_chunk_left.width - 2);
         let left_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+            .constraints([Constraint::Fill(1), Constraint::Length(input_min_size)].as_ref())
             .split(main_chunk_left);
 
         let overall_messages_log_area = left_chunks[0];
@@ -439,6 +468,12 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         self.render_header_footer(frame, header_area, footer_area);
 
+        let input_min_size = 3
+            + (self.user_input_manager.user_input.len() + 10)
+                .try_into()
+                .unwrap_or(u16::MAX)
+                / (main_area.width - 2);
+
         match self.ui_state.current_tab {
             super::SelectedTab::Overview => {
                 self.render_overview(main_area, frame);
@@ -446,7 +481,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             super::SelectedTab::Diagnostic => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(input_min_size)].as_ref())
                     .split(main_area);
 
                 let chunk_upper = chunks[0];
@@ -458,7 +493,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             super::SelectedTab::Configuration => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(input_min_size)].as_ref())
                     .split(main_area);
 
                 let chunk_upper = chunks[0];
@@ -470,7 +505,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             super::SelectedTab::Commands => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(input_min_size)].as_ref())
                     .split(main_area);
 
                 let chunk_upper = chunks[0];
@@ -482,7 +517,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             super::SelectedTab::Help => {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Fill(1), Constraint::Length(3)].as_ref())
+                    .constraints([Constraint::Fill(1), Constraint::Length(input_min_size)].as_ref())
                     .split(main_area);
 
                 let chunk_upper = chunks[0];

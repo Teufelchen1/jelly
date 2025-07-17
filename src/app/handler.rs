@@ -252,20 +252,11 @@ impl App {
             }
         }
 
-        self.user_input_manager.user_command_history.push(
-            self.user_input_manager
-                .user_input
-                .clone()
-                .trim_end()
-                .to_owned(),
-        );
-        self.user_input_manager.user_command_cursor =
-            self.user_input_manager.user_command_history.len();
-        self.user_input_manager.user_input.clear();
+        self.user_input_manager.finish_current_input();
     }
 
     pub fn on_key(&mut self, key: KeyEvent) -> bool {
-        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             return false;
         }
 
@@ -276,11 +267,17 @@ impl App {
                     self.handle_command_commit();
                 }
             }
-            KeyCode::Tab | KeyCode::Right => {
+            KeyCode::Tab => {
                 self.user_input_manager.set_suggest_completion();
             }
             KeyCode::Backspace => {
-                self.user_input_manager.user_input.pop();
+                self.user_input_manager.remove_char();
+            }
+            KeyCode::Left => {
+                self.user_input_manager.move_cursor_left();
+            }
+            KeyCode::Right => {
+                self.user_input_manager.move_cursor_right();
             }
             KeyCode::Up => {
                 self.user_input_manager.set_to_previous_input();
@@ -289,7 +286,7 @@ impl App {
                 self.user_input_manager.set_to_next_input();
             }
             KeyCode::Char(to_insert) => {
-                self.user_input_manager.user_input.push(to_insert);
+                self.user_input_manager.insert_char(to_insert);
             }
             KeyCode::F(1) => {
                 self.ui_state.current_tab = SelectedTab::Overview;

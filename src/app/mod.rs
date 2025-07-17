@@ -164,7 +164,8 @@ struct UserInputManager {
     known_commands: CommandLibrary,
     user_input: String,
     user_command_history: Vec<String>,
-    user_command_cursor: usize,
+    user_command_history_index: usize,
+    cursor_position: usize,
 }
 
 enum InputType<'a> {
@@ -189,7 +190,30 @@ impl UserInputManager {
             known_commands: CommandLibrary::default(),
             user_input: String::new(),
             user_command_history: vec![],
-            user_command_cursor: 0,
+            user_command_history_index: 0,
+            cursor_position: 0,
+        }
+    }
+
+    fn insert_char(&mut self, chr: char) {
+        self.user_input.insert(self.cursor_position, chr);
+        self.cursor_position += 1;
+    }
+
+    fn remove_char(&mut self) {
+        if self.cursor_position > 0 && self.cursor_position <= self.user_input.len() {
+            self.cursor_position = self.cursor_position.saturating_sub(1);
+            self.user_input.remove(self.cursor_position);
+        }
+    }
+
+    const fn move_cursor_left(&mut self) {
+        self.cursor_position = self.cursor_position.saturating_sub(1);
+    }
+
+    const fn move_cursor_right(&mut self) {
+        if self.cursor_position < self.user_input.len() {
+            self.cursor_position += 1;
         }
     }
 
@@ -205,26 +229,49 @@ impl UserInputManager {
 
         self.user_input.clear();
         self.user_input.push_str(&suggestion);
+        self.cursor_position = self.user_input.len();
     }
 
     fn set_to_previous_input(&mut self) {
-        if self.user_command_cursor > 0 {
-            self.user_input.clear();
-            self.user_command_cursor -= 1;
-            self.user_input = self.user_command_history[self.user_command_cursor].clone();
+        if self.user_command_history_index > 0 {
+            self.user_command_history_index -= 1;
+            self.user_input = self.user_command_history[self.user_command_history_index].clone();
+            self.cursor_position = self.user_input.len();
         }
     }
 
     fn set_to_next_input(&mut self) {
-        if self.user_command_cursor < self.user_command_history.len() {
-            self.user_input.clear();
-            self.user_command_cursor += 1;
-            if self.user_command_cursor == self.user_command_history.len() {
+        if self.user_command_history_index < self.user_command_history.len() {
+            self.user_command_history_index += 1;
+            if self.user_command_history_index == self.user_command_history.len() {
                 self.user_input.clear();
+                self.cursor_position = 0;
             } else {
-                self.user_input = self.user_command_history[self.user_command_cursor].clone();
+                self.user_input =
+                    self.user_command_history[self.user_command_history_index].clone();
+                self.cursor_position = self.user_input.len();
             }
         }
+    }
+
+    fn finish_current_input(&mut self) {
+        // We don't want to store empty inputs
+        if !self.user_input.is_empty() {
+            // nor the same command multiple times
+            let last_command_equals_current = self
+                .user_command_history
+                .last()
+                .is_some_and(|cmd| *cmd == self.user_input);
+            if !last_command_equals_current {
+                self.user_command_history
+                    .push(self.user_input.clone().trim_end().to_owned());
+            }
+            self.user_input.clear();
+            self.cursor_position = 0;
+        }
+        // This has to be done even if the input is empty, as the user might have scrolled back
+        // and deleted all input.
+        self.user_command_history_index = self.user_command_history.len();
     }
 
     const fn input_empty(&self) -> bool {

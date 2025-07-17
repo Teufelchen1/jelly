@@ -19,6 +19,7 @@ use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
 
 use crate::app::CoapOption;
 use crate::commands::CommandHandler;
@@ -145,6 +146,7 @@ impl Job {
         (
             size,
             Paragraph::new(self.log.clone())
+                .wrap(Wrap { trim: false })
                 .block(block)
                 .set_style(Style::reset()),
         )
@@ -282,7 +284,10 @@ impl DiagnosticLog {
                 diag.message.as_str()
             )));
         }
-        (lines.len(), Paragraph::new(lines))
+        (
+            lines.len(),
+            Paragraph::new(lines).wrap(Wrap { trim: false }),
+        )
     }
 
     pub fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
@@ -290,7 +295,10 @@ impl DiagnosticLog {
         for diag in &self.diagnostics {
             lines.push(Line::from(diag.message.as_str()));
         }
-        (lines.len(), Paragraph::new(lines))
+        (
+            lines.len(),
+            Paragraph::new(lines).wrap(Wrap { trim: false }),
+        )
     }
 }
 
