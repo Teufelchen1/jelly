@@ -15,9 +15,9 @@ use slipmux::Slipmux;
 
 use super::datatypes::token_to_u64;
 use super::datatypes::Response;
-use super::datatypes::SaveToFile;
 use super::SelectedTab;
 use crate::app::App;
+use crate::app::InputType;
 use crate::app::Job;
 use crate::app::Request;
 use crate::commands::Command;
@@ -36,18 +36,18 @@ impl App {
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
-                if self.known_commands.find_by_first_location(s).is_some() {
+                if self.user_input_manager.command_exists_by_location(s) {
                     continue;
                 }
                 if s.starts_with("/shell/") {
                     let new_command = Command::from_location(s, "A RIOT shell command");
-                    self.known_commands.add(new_command);
+                    self.user_input_manager.known_commands.add(new_command);
 
                     let new_endpoint = Command::from_coap_resource(
                         s,
                         "A CoAP resource describing a RIOT shell command",
                     );
-                    self.known_commands.add(new_endpoint);
+                    self.user_input_manager.known_commands.add(new_endpoint);
 
                     // Fetch description
                     let mut request: CoapRequest<String> = Self::build_get_request(s);
@@ -55,16 +55,22 @@ impl App {
                     self.configuration_log.push(Request::new(request));
                 } else {
                     let new_command = Command::from_coap_resource(s, "A CoAP resource");
-                    self.known_commands.add(new_command);
+                    self.user_input_manager.known_commands.add(new_command);
                 }
             }
         }
-        self.known_commands
-            .update_available_cmds_based_on_endpoints(&eps);
+
+        self.user_input_manager
+            .check_for_new_available_commands(&eps);
     }
 
     pub fn on_connect(&mut self, name: String) {
-        self.write_port = Some(name);
+        self.connected = true;
+        self.ui_state.device_path = Some(name);
+
+        let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
+        self.send_configuration_request(&mut request.message);
+        self.configuration_log.push(Request::new(request));
 
         let mut request: CoapRequest<String> = Self::build_get_request("/riot/board");
         self.send_configuration_request(&mut request.message);
@@ -73,14 +79,11 @@ impl App {
         let mut request: CoapRequest<String> = Self::build_get_request("/riot/ver");
         self.send_configuration_request(&mut request.message);
         self.configuration_log.push(Request::new(request));
-
-        let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
-        self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(Request::new(request));
     }
 
     pub fn on_disconnect(&mut self) {
-        self.write_port = None;
+        self.connected = false;
+        self.ui_state.device_path = None;
     }
 
     fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
@@ -142,30 +145,25 @@ impl App {
                     _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
                 }
                 match uri_path.as_str() {
-                    "/riot/board" => {
-                        self.riot_board = String::from_utf8_lossy(&response.payload).to_string();
-                    }
-                    "/riot/ver" => {
-                        self.riot_version = String::from_utf8_lossy(&response.payload).to_string();
-                    }
+                    "/riot/board" => self
+                        .ui_state
+                        .set_board_name(String::from_utf8_lossy(&response.payload).to_string()),
+                    "/riot/ver" => self
+                        .ui_state
+                        .set_board_version(String::from_utf8_lossy(&response.payload).to_string()),
+
                     "/.well-known/core" => self.on_well_known_core(&response),
                     _ => {
                         // RIOT specific hook
                         if uri_path.starts_with("/shell/") {
-                            // If we already know this command, update it's description
-                            if let Some(cmd) =
-                                self.known_commands.find_by_first_location_mut(&uri_path)
-                            {
-                                let dscr = String::from_utf8_lossy(&response.payload);
-                                cmd.update_description(&dscr);
-                            }
-                            if let Some(cmd) = self
-                                .known_commands
-                                .find_by_cmd_mut(uri_path.strip_prefix("/shell/").unwrap())
-                            {
-                                let dscr = String::from_utf8_lossy(&response.payload);
-                                cmd.update_description(&dscr);
-                            }
+                            let dscr = String::from_utf8_lossy(&response.payload);
+                            self.user_input_manager
+                                .update_command_description_by_location(&uri_path, &dscr);
+
+                            self.user_input_manager.update_command_description_by_name(
+                                uri_path.strip_prefix("/shell/").unwrap(),
+                                &dscr,
+                            );
                         }
                     }
                 }
@@ -185,26 +183,10 @@ impl App {
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
-                self.diagnostic_messages_scroll_position =
-                    self.diagnostic_messages_scroll_position.saturating_sub(1);
-                self.diagnostic_messages_scroll_follow =
-                    self.diagnostic_messages_scroll_position == 0;
-                self.diagnostic_messages_scroll_state.scroll_down();
-
-                // For now, just have one global scrolling behavior
-                self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
-                self.configuration_scroll_state.scroll_down();
+                self.ui_state.scroll_down();
             }
             MouseEventKind::ScrollUp => {
-                self.diagnostic_messages_scroll_follow = false;
-                if self.diagnostic_messages_scroll_state.offset().y != 0 {
-                    self.diagnostic_messages_scroll_position =
-                        self.diagnostic_messages_scroll_position.saturating_add(1);
-                }
-                self.diagnostic_messages_scroll_state.scroll_up();
-
-                self.configuration_scroll_follow = self.diagnostic_messages_scroll_follow;
-                self.configuration_scroll_state.scroll_up();
+                self.ui_state.scroll_up();
             }
             _ => {}
         }
@@ -212,59 +194,14 @@ impl App {
     }
 
     fn handle_command_commit(&mut self) {
-        enum InputType<'a> {
-            /// The user input something that is not known to Jelly but it
-            /// starts with a `/` so it likely is a coap endpoint
-            /// Treated as configuration message
-            RawCoap,
-            /// The user input something that is not known to Jelly
-            /// Treated as diagnostic message
-            RawCommand,
-            /// This input is a known command with a coap endpoint and a handler
-            /// Treated as configuration message
-            JellyCoapCommand(&'a Command, String, SaveToFile),
-            /// This input is a known command without a coap endpoint
-            /// Treated as diagnostic message
-            JellyCommand(&'a Command),
-        }
-
-        let classify_input = |input: &str| {
-            let (cmd_string, file) = if let Some((cmd_string, path)) = input.split_once("%>") {
-                (cmd_string, SaveToFile::AsBin(path.trim().to_owned()))
-            } else if let Some((cmd_string, path)) = input.split_once('>') {
-                (cmd_string, SaveToFile::AsText(path.trim().to_owned()))
-            } else {
-                (input, SaveToFile::No)
-            };
-            let maybe_cmd = self
-                .known_commands
-                .find_by_cmd(cmd_string.split(' ').next().unwrap());
-            match maybe_cmd {
-                Some(cmd) => {
-                    if cmd.required_endpoints.is_empty() {
-                        InputType::JellyCommand(cmd)
-                    } else {
-                        InputType::JellyCoapCommand(cmd, cmd_string.to_owned(), file)
-                    }
-                }
-                None => {
-                    if input.starts_with('/') {
-                        InputType::RawCoap
-                    } else {
-                        InputType::RawCommand
-                    }
-                }
-            }
-        };
-
-        match classify_input(&self.user_input) {
-            InputType::RawCoap => {
+        match self.user_input_manager.classify_input() {
+            InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
                 request.set_method(Method::Get);
-                if self.user_input != "/" {
+                if endpoint != "/" {
                     // Might also be a bug in coap-lite that "/" should be turned into an
                     // empty option set; documentation isn't quite conclusive.
-                    request.set_path(&self.user_input);
+                    request.set_path(&endpoint);
                 }
                 request.message.set_token(self.get_new_token());
                 request.message.add_option(CoapOption::Block2, vec![0x05]);
@@ -275,13 +212,8 @@ impl App {
                     .unwrap();
                 self.configuration_log.push(Request::new(request));
             }
-            InputType::RawCommand => {
-                if !self.user_input.ends_with('\n') {
-                    self.user_input.push('\n');
-                }
-                self.event_sender
-                    .send(Event::SendDiagnostic(self.user_input.clone()))
-                    .unwrap();
+            InputType::RawCommand(cmd) => {
+                self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
             }
             InputType::JellyCoapCommand(cmd, cmd_string, file) => {
                 // Process the user input string into arguments, yielding a handler
@@ -309,20 +241,27 @@ impl App {
                     }
                 }
             }
-            InputType::JellyCommand(_cmd) => {
-                if !self.user_input.ends_with('\n') {
-                    self.user_input.push('\n');
+            InputType::JellyCommand(cmd) => {
+                let mut cmd_str = cmd.cmd.clone();
+                if !cmd_str.ends_with('\n') {
+                    cmd_str.push('\n');
                 }
                 self.event_sender
-                    .send(Event::SendDiagnostic(self.user_input.clone()))
+                    .send(Event::SendDiagnostic(cmd_str))
                     .unwrap();
             }
         }
 
-        self.user_command_history
-            .push(self.user_input.clone().trim_end().to_owned());
-        self.user_command_cursor = self.user_command_history.len();
-        self.user_input.clear();
+        self.user_input_manager.user_command_history.push(
+            self.user_input_manager
+                .user_input
+                .clone()
+                .trim_end()
+                .to_owned(),
+        );
+        self.user_input_manager.user_command_cursor =
+            self.user_input_manager.user_command_history.len();
+        self.user_input_manager.user_input.clear();
     }
 
     pub fn on_key(&mut self, key: KeyEvent) -> bool {
@@ -332,58 +271,40 @@ impl App {
 
         match key.code {
             KeyCode::Enter => {
-                if self.write_port.is_none() {
-                    return true;
+                // Can't send anything if we don't have an active connection
+                if self.connected {
+                    self.handle_command_commit();
                 }
-                self.handle_command_commit();
             }
             KeyCode::Tab | KeyCode::Right => {
-                let (suggestion, _) = self
-                    .known_commands
-                    .longest_common_prefixed_by_cmd(&self.user_input);
-
-                self.user_input.clear();
-                self.user_input.push_str(&suggestion);
+                self.user_input_manager.set_suggest_completion();
             }
             KeyCode::Backspace => {
-                self.user_input.pop();
+                self.user_input_manager.user_input.pop();
             }
             KeyCode::Up => {
-                if self.user_command_cursor > 0 {
-                    self.user_input.clear();
-                    self.user_command_cursor -= 1;
-                    self.user_input = self.user_command_history[self.user_command_cursor].clone();
-                }
+                self.user_input_manager.set_to_previous_input();
             }
             KeyCode::Down => {
-                if self.user_command_cursor < self.user_command_history.len() {
-                    self.user_input.clear();
-                    self.user_command_cursor += 1;
-                    if self.user_command_cursor == self.user_command_history.len() {
-                        self.user_input.clear();
-                    } else {
-                        self.user_input =
-                            self.user_command_history[self.user_command_cursor].clone();
-                    }
-                }
+                self.user_input_manager.set_to_next_input();
             }
             KeyCode::Char(to_insert) => {
-                self.user_input.push(to_insert);
+                self.user_input_manager.user_input.push(to_insert);
             }
             KeyCode::F(1) => {
-                self.current_tab = SelectedTab::Combined;
+                self.ui_state.current_tab = SelectedTab::Overview;
             }
             KeyCode::F(2) => {
-                self.current_tab = SelectedTab::Diagnostic;
+                self.ui_state.current_tab = SelectedTab::Diagnostic;
             }
             KeyCode::F(3) => {
-                self.current_tab = SelectedTab::Configuration;
+                self.ui_state.current_tab = SelectedTab::Configuration;
             }
             KeyCode::F(4) => {
-                self.current_tab = SelectedTab::Commands;
+                self.ui_state.current_tab = SelectedTab::Commands;
             }
             KeyCode::F(5) => {
-                self.current_tab = SelectedTab::Help;
+                self.ui_state.current_tab = SelectedTab::Help;
             }
             KeyCode::Esc => {
                 return false;

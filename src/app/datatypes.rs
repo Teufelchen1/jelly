@@ -243,6 +243,10 @@ impl DiagnosticLog {
     pub fn add(&mut self, message: &str) {
         let time = SystemTime::now();
 
+        if message == "\n" {
+            self.add_new_empty(time);
+            return;
+        }
         // Split new lines, as each line should get it's own Diagnostic object
         let messages = message.split('\n');
         let mut iter = messages.peekable();
@@ -430,11 +434,12 @@ impl Request {
                 _ = write!(out, " ← Req({rtype:?} ");
                 if let Some(option_list) = self.req.message.get_option(CoapOption::UriPath) {
                     for option in option_list {
-                        _ = write!(out, "/{})", String::from_utf8_lossy(option));
+                        _ = write!(out, "/{}", String::from_utf8_lossy(option));
                     }
                 } else {
-                    _ = write!(out, "/)");
+                    _ = write!(out, "/");
                 }
+                _ = write!(out, ")");
             }
             MessageClass::Response(_) => _ = write!(out, "Response"),
             MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
