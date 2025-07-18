@@ -1136,9 +1136,9 @@ checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
 
 [[package]]
 name = "slipmux"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c23f926e59d782cec6cac67fd719a555b1d5ce1a00d296595b92394a36f067da"
+checksum = "0e6364d478d90e0553f96e5314ae6ac0ed5514163fd999a60772ae073839791b"
 dependencies = [
  "serial-line-ip",
 ]
