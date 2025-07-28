@@ -3,6 +3,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 
 use clap::Parser;
+use events::event_loop_headless;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
@@ -21,6 +22,10 @@ mod transport;
 struct Cli {
     /// The path to the UART TTY interface
     tty_path: std::path::PathBuf,
+
+    /// If true, disables the TUI and passes diagnostic messages via stdio
+    #[arg(long, default_value_t = false)]
+    headless: bool,
 }
 
 fn reset_terminal() {
@@ -41,39 +46,49 @@ fn main() {
         return;
     }
 
-    let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
-        mpsc::channel();
-    let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
+    if args.headless {
+        let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
+            mpsc::channel();
+        let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
 
-    create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
-    create_terminal_thread(event_sender.clone());
+        create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
 
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic| {
+        event_loop_headless(&event_receiver, event_sender, &hardware_event_sender);
+    } else {
+        let (hardware_event_sender, hardware_event_receiver): (Sender<Event>, Receiver<Event>) =
+            mpsc::channel();
+        let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
+
+        create_slipmux_thread(event_sender.clone(), hardware_event_receiver, args.tty_path);
+        create_terminal_thread(event_sender.clone());
+
+        let original_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic| {
+            reset_terminal();
+            original_hook(panic);
+        }));
+
+        crossterm::terminal::enable_raw_mode().unwrap();
+        let mut stdout = std::io::stdout();
+        crossterm::execute!(
+            stdout,
+            crossterm::terminal::EnterAlternateScreen,
+            crossterm::event::EnableMouseCapture,
+            crossterm::cursor::Hide
+        )
+        .unwrap();
+        let mut terminal = Terminal::new(CrosstermBackend::new(stdout)).unwrap();
+
+        terminal.clear().unwrap();
+
+        event_loop(
+            &event_receiver,
+            event_sender,
+            &hardware_event_sender,
+            terminal,
+        );
+
         reset_terminal();
-        original_hook(panic);
-    }));
-
-    crossterm::terminal::enable_raw_mode().unwrap();
-    let mut stdout = std::io::stdout();
-    crossterm::execute!(
-        stdout,
-        crossterm::terminal::EnterAlternateScreen,
-        crossterm::event::EnableMouseCapture,
-        crossterm::cursor::Hide
-    )
-    .unwrap();
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout)).unwrap();
-
-    terminal.clear().unwrap();
-
-    event_loop(
-        &event_receiver,
-        event_sender,
-        &hardware_event_sender,
-        terminal,
-    );
-
-    reset_terminal();
+    }
     println!("Thank you for using Jelly 🪼");
 }
