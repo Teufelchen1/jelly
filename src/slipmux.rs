@@ -4,12 +4,12 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use slipmux::encode_buffered;
@@ -23,21 +23,19 @@ use crate::events::Event;
 use crate::transport::new_port;
 use crate::transport::ReaderWriter;
 
-pub fn create_slipmux_thread(
-    sender: Sender<Event>,
-    receiver: Receiver<Event>,
-    device_path: PathBuf,
-) -> JoinHandle<()> {
+pub fn create_slipmux_thread(event_sender: Sender<Event>, device_path: PathBuf) -> Sender<Event> {
+    let (slipmux_sender, slipmux_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
     let port_guard = Arc::new(Mutex::new(None));
     let cloned_port_guard = Arc::clone(&port_guard);
     thread::Builder::new()
         .name("HardwareWriter".to_owned())
-        .spawn(move || write_thread(&receiver, &cloned_port_guard))
+        .spawn(move || write_thread(&slipmux_receiver, &cloned_port_guard))
         .unwrap();
     thread::Builder::new()
         .name("HardwareReader".to_owned())
-        .spawn(move || read_thread(&sender, &device_path, &port_guard))
-        .unwrap()
+        .spawn(move || read_thread(&event_sender, &device_path, &port_guard))
+        .unwrap();
+    slipmux_sender
 }
 
 fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl Write>>>) {
