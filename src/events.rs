@@ -1,4 +1,7 @@
+use std::io;
+use std::io::stdin;
 use std::io::Stdout;
+use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
@@ -49,7 +52,7 @@ fn terminal_thread(sender: &Sender<Event>) {
     }
 }
 
-pub fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
+fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
     thread::spawn(move || terminal_thread(&sender))
 }
 
@@ -59,6 +62,8 @@ pub fn event_loop(
     hardware_event_sender: &Sender<Event>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
+    create_terminal_thread(event_sender.clone());
+
     let mut app = App::new(event_sender);
     terminal.draw(|frame| app.draw(frame)).unwrap();
 
@@ -95,5 +100,51 @@ pub fn event_loop(
             Event::TerminalResize => (),
         }
         terminal.draw(|frame| app.draw(frame)).unwrap();
+    }
+}
+
+fn raw_terminal_thread(sender: &Sender<Event>) {
+    let mut buffer = String::new();
+    loop {
+        if stdin().read_line(&mut buffer).is_ok() {
+            sender.send(Event::SendDiagnostic(buffer.clone())).unwrap();
+        }
+        buffer.clear();
+    }
+}
+
+fn create_raw_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
+    thread::spawn(move || raw_terminal_thread(&sender))
+}
+
+pub fn event_loop_headless(
+    event_channel: &Receiver<Event>,
+    event_sender: Sender<Event>,
+    hardware_event_sender: &Sender<Event>,
+) {
+    create_raw_terminal_thread(event_sender);
+    loop {
+        let event = match event_channel.recv_timeout(Duration::from_millis(5000)) {
+            Ok(event) => event,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => panic!(),
+        };
+        match event {
+            Event::Diagnostic(msg) => {
+                print!("{msg}");
+                io::stdout().flush().unwrap();
+            }
+            Event::SendDiagnostic(d) => hardware_event_sender
+                .send(Event::SendDiagnostic(d))
+                .unwrap(),
+            Event::SerialConnect(name) => {
+                println!("Serial connect with {name}");
+            }
+            Event::SerialDisconnect => {
+                println!("\nSerial disconnect :(");
+                return;
+            }
+            _ => {}
+        }
     }
 }
