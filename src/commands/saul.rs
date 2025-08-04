@@ -101,94 +101,46 @@ impl CommandHandler for Saul {
     }
 
     fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
-        /**< Bitmask to obtain the category ID */
-        const SAUL_CAT_MASK: u8 = 0xc0u8;
-        /**< Bitmask to obtain the intra-category ID */
-        const SAUL_ID_MASK: u8 = 0x3fu8;
-        /**< device class undefined */
-        const SAUL_CAT_UNDEF: u8 = 0x00;
-        /**< Actuator device class */
-        const SAUL_CAT_ACT: u8 = 0x40;
-        /**< Sensor device class */
-        const SAUL_CAT_SENSE: u8 = 0x80;
-
-        const SENSE_NAME: [&str; 29] = [
-            "SAUL_SENSE_ID_ANY",
-            "SAUL_SENSE_ID_BTN",
-            "SAUL_SENSE_ID_TEMP",
-            "SAUL_SENSE_ID_HUM",
-            "SAUL_SENSE_ID_LIGHT",
-            "SAUL_SENSE_ID_ACCEL",
-            "SAUL_SENSE_ID_MAG",
-            "SAUL_SENSE_ID_GYRO",
-            "SAUL_SENSE_ID_COLOR",
-            "SAUL_SENSE_ID_PRESS",
-            "SAUL_SENSE_ID_ANALOG",
-            "SAUL_SENSE_ID_UV",
-            "SAUL_SENSE_ID_OBJTEMP",
-            "SAUL_SENSE_ID_COUNT",
-            "SAUL_SENSE_ID_DISTANCE",
-            "SAUL_SENSE_ID_CO2",
-            "SAUL_SENSE_ID_TVOC",
-            "SAUL_SENSE_ID_GAS",
-            "SAUL_SENSE_ID_OCCUP",
-            "SAUL_SENSE_ID_PROXIMITY",
-            "SAUL_SENSE_ID_RSSI",
-            "SAUL_SENSE_ID_CHARGE",
-            "SAUL_SENSE_ID_CURRENT",
-            "SAUL_SENSE_ID_PM",
-            "SAUL_SENSE_ID_CAPACITANCE",
-            "SAUL_SENSE_ID_VOLTAGE",
-            "SAUL_SENSE_ID_PH",
-            "SAUL_SENSE_ID_POWER",
-            "SAUL_SENSE_ID_SIZE",
-        ];
-
-        const ACT_NAME: [&str; 7] = [
-            "SAUL_ACT_ID_ANY",
-            "SAUL_ACT_ID_LED_RGB",
-            "SAUL_ACT_ID_SERVO",
-            "SAUL_ACT_ID_MOTOR",
-            "SAUL_ACT_ID_SWITCH",
-            "SAUL_ACT_ID_DIMMER",
-            "SAUL_ACT_NUMOF",
-        ];
-
         self.payload = payload.to_vec();
-
         let mut out = String::new();
-
         let mut decoder = Decoder::new(payload);
 
         match self.cli.operation {
             None => {
-                decoder.array().unwrap();
-                while decoder.probe().array().is_ok() {
-                    decoder.array().unwrap();
-                    let id = decoder.u8().unwrap();
-                    let class = decoder.u8().unwrap();
-                    let name = decoder.str().unwrap();
-
-                    let class_name = match class & SAUL_CAT_MASK {
-                        SAUL_CAT_UNDEF => "UNDEFINED",
-                        SAUL_CAT_ACT => ACT_NAME[(class & SAUL_ID_MASK) as usize],
-                        SAUL_CAT_SENSE => SENSE_NAME[(class & SAUL_ID_MASK) as usize],
-                        _ => todo!(),
-                    };
-                    let _ = writeln!(out, "{id}, {class_name}, {name}");
-                }
+                out = decode_sensor_list_into_string(payload);
             }
             Some(SaulOperation::Read { id }) => {
                 let data = decoder.map();
                 match data {
-                    Ok(_data) => {
+                    // Dirty: assuming name, unit, value
+                    Ok(Some(3)) => {
+                        let _name_id = decoder.u8(); // Should be 0, see rfc8428#section-6
+                        let name = decoder.str().unwrap();
+                        let _unit_id = decoder.u8(); // 1
+                        let unit = decoder.str().unwrap();
+                        let _value_id = decoder.u8(); // 2
+                        let _value_tag = decoder.tag().unwrap(); // decimal fractions (CBOR Tag 4)
+                        let _value_array = decoder.array();
+                        let e = decoder.i32().unwrap();
+                        let m = f32::from(decoder.i16().unwrap());
+                        let value: f32 = m * 10f32.powi(e);
+                        let _ = writeln!(out, "{name}: {value:?} °{unit}");
+                    }
+                    // Dirty: assuming name, value
+                    Ok(Some(2)) => {
+                        let _name_id = decoder.u8(); // Should be 0, see rfc8428#section-6
+                        let name = decoder.str().unwrap();
+                        let _value_id = decoder.u8(); // 4, bool
+                        let value = decoder.bool().unwrap();
+                        let _ = writeln!(out, "{name}: {value}");
+                    }
+                    Ok(Some(_)) => {
+                        let _ = writeln!(out, "SenML response type not implemented.");
+                    }
+                    Ok(None) => {
                         let _ = writeln!(
                             out,
-                            "{}",
-                            cbor_edn::StandaloneItem::from_cbor(payload).map_or_else(
-                                |e| format!("Parsing error {e}, content {payload:02x?}"),
-                                |c| c.serialize(),
-                            )
+                            "Malformed CBOR response, expected Map with exactly three elements."
                         );
                     }
                     Err(_) => {
@@ -199,7 +151,6 @@ impl CommandHandler for Saul {
             Some(SaulOperation::Write { id: _, data: _ }) => {}
         }
         self.buffer = out;
-
         self.finished = true;
         self.displayable = true;
         None
@@ -220,4 +171,78 @@ impl CommandHandler for Saul {
     fn export(&self) -> Vec<u8> {
         self.payload.clone()
     }
+}
+
+fn decode_sensor_list_into_string(payload: &[u8]) -> String {
+    /**< Bitmask to obtain the category ID */
+    const SAUL_CAT_MASK: u8 = 0xc0u8;
+    /**< Bitmask to obtain the intra-category ID */
+    const SAUL_ID_MASK: u8 = 0x3fu8;
+    /**< device class undefined */
+    const SAUL_CAT_UNDEF: u8 = 0x00;
+    /**< Actuator device class */
+    const SAUL_CAT_ACT: u8 = 0x40;
+    /**< Sensor device class */
+    const SAUL_CAT_SENSE: u8 = 0x80;
+
+    const SENSE_NAME: [&str; 29] = [
+        "SAUL_SENSE_ID_ANY",
+        "SAUL_SENSE_ID_BTN",
+        "SAUL_SENSE_ID_TEMP",
+        "SAUL_SENSE_ID_HUM",
+        "SAUL_SENSE_ID_LIGHT",
+        "SAUL_SENSE_ID_ACCEL",
+        "SAUL_SENSE_ID_MAG",
+        "SAUL_SENSE_ID_GYRO",
+        "SAUL_SENSE_ID_COLOR",
+        "SAUL_SENSE_ID_PRESS",
+        "SAUL_SENSE_ID_ANALOG",
+        "SAUL_SENSE_ID_UV",
+        "SAUL_SENSE_ID_OBJTEMP",
+        "SAUL_SENSE_ID_COUNT",
+        "SAUL_SENSE_ID_DISTANCE",
+        "SAUL_SENSE_ID_CO2",
+        "SAUL_SENSE_ID_TVOC",
+        "SAUL_SENSE_ID_GAS",
+        "SAUL_SENSE_ID_OCCUP",
+        "SAUL_SENSE_ID_PROXIMITY",
+        "SAUL_SENSE_ID_RSSI",
+        "SAUL_SENSE_ID_CHARGE",
+        "SAUL_SENSE_ID_CURRENT",
+        "SAUL_SENSE_ID_PM",
+        "SAUL_SENSE_ID_CAPACITANCE",
+        "SAUL_SENSE_ID_VOLTAGE",
+        "SAUL_SENSE_ID_PH",
+        "SAUL_SENSE_ID_POWER",
+        "SAUL_SENSE_ID_SIZE",
+    ];
+
+    const ACT_NAME: [&str; 7] = [
+        "SAUL_ACT_ID_ANY",
+        "SAUL_ACT_ID_LED_RGB",
+        "SAUL_ACT_ID_SERVO",
+        "SAUL_ACT_ID_MOTOR",
+        "SAUL_ACT_ID_SWITCH",
+        "SAUL_ACT_ID_DIMMER",
+        "SAUL_ACT_NUMOF",
+    ];
+
+    let mut out = String::new();
+    let mut decoder = Decoder::new(payload);
+    decoder.array().unwrap();
+    while decoder.probe().array().is_ok() {
+        decoder.array().unwrap();
+        let id = decoder.u8().unwrap();
+        let class = decoder.u8().unwrap();
+        let name = decoder.str().unwrap();
+
+        let class_name = match class & SAUL_CAT_MASK {
+            SAUL_CAT_UNDEF => "UNDEFINED",
+            SAUL_CAT_ACT => ACT_NAME[(class & SAUL_ID_MASK) as usize],
+            SAUL_CAT_SENSE => SENSE_NAME[(class & SAUL_ID_MASK) as usize],
+            _ => todo!(),
+        };
+        let _ = writeln!(out, "{id}, {class_name}, {name}");
+    }
+    out
 }
