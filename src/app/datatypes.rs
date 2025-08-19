@@ -28,6 +28,7 @@ pub enum SaveToFile {
     No,
     AsBin(String),
     AsText(String),
+    ToStdout,
 }
 
 pub struct Job {
@@ -128,6 +129,10 @@ impl Job {
                         let _ = write!(buffer, "{}", &format!("(unable to write to {file}: {e}"));
                     }
                 }
+            }
+            SaveToFile::ToStdout => {
+                let bin_data: Vec<u8> = self.handler.as_mut().unwrap().export();
+                std::io::stdout().write_all(&bin_data).unwrap();
             }
         }
         self.log.push_str(&buffer);

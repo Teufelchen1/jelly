@@ -27,11 +27,11 @@ struct Cli {
     tty_path: std::path::PathBuf,
 
     /// If true, disables the TUI and passes diagnostic messages via stdio
-    #[arg(long, default_value_t = false)]
+    #[arg(short = 'd', long, default_value_t = false)]
     headless_diagnostic: bool,
 
-    /// If true, disables the TUI and passes diagnostic messages via stdio
-    #[arg(long, default_value_t = false)]
+    /// If true, disables the TUI and passes configuration messages via stdio
+    #[arg(short = 'c', long, default_value_t = false)]
     headless_configuration: bool,
 }
 

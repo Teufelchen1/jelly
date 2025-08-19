@@ -153,7 +153,13 @@ impl UserInputManager {
     fn classify_input(&self) -> InputType<'_> {
         let (cmd_string, file) = if let Some((cmd_string, path)) = self.user_input.split_once("%>")
         {
-            (cmd_string, SaveToFile::AsBin(path.trim().to_owned()))
+            let path = path.trim();
+            // To Stdout
+            if path == "-" {
+                (cmd_string, SaveToFile::ToStdout)
+            } else {
+                (cmd_string, SaveToFile::AsBin(path.to_owned()))
+            }
         } else if let Some((cmd_string, path)) = self.user_input.split_once('>') {
             (cmd_string, SaveToFile::AsText(path.trim().to_owned()))
         } else {
