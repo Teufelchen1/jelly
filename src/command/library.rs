@@ -44,6 +44,14 @@ impl CommandLibrary {
         self.cmds.sort();
     }
 
+    pub fn force_all_cmds_available(&mut self) {
+        while !self.stored_cmds.is_empty() {
+            self.cmds.push(self.stored_cmds.remove(0));
+        }
+
+        self.cmds.sort();
+    }
+
     /// Returns a list of the `Command.cmd` of all known `Command`s
     pub fn list_by_cmd(&self) -> Vec<String> {
         self.cmds.iter().map(|x| x.cmd.clone()).collect()

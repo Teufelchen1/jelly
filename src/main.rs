@@ -3,11 +3,12 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 
 use clap::Parser;
-use events::event_loop_headless;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::events::event_loop;
+use crate::events::event_loop_headless;
+use crate::events::event_loop_headless_jelly;
 use crate::events::Event;
 use crate::slipmux::create_slipmux_thread;
 
@@ -27,13 +28,23 @@ struct Cli {
 
     /// If true, disables the TUI and passes diagnostic messages via stdio
     #[arg(long, default_value_t = false)]
-    headless: bool,
+    headless_diagnostic: bool,
+
+    /// If true, disables the TUI and passes diagnostic messages via stdio
+    #[arg(long, default_value_t = false)]
+    headless_configuration: bool,
 }
 
-fn start_headless(args: Cli, main_channel: EventChannel) {
+fn start_headless_diagnostic(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
     event_loop_headless(&event_receiver, event_sender, &slipmux_event_sender);
+}
+
+fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
+    let (event_sender, event_receiver) = main_channel;
+    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    event_loop_headless_jelly(&event_receiver, event_sender, &slipmux_event_sender);
 }
 
 fn start_tui(args: Cli, main_channel: EventChannel) {
@@ -89,10 +100,12 @@ fn main() {
 
     let main_channel: EventChannel = mpsc::channel();
 
-    if args.headless {
-        start_headless(args, main_channel);
+    if args.headless_diagnostic {
+        start_headless_diagnostic(args, main_channel);
+    } else if args.headless_configuration {
+        start_headless_configuration(args, main_channel);
     } else {
         start_tui(args, main_channel);
+        println!("Thank you for using Jelly 🪼");
     }
-    println!("Thank you for using Jelly 🪼");
 }

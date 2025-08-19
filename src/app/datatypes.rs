@@ -202,6 +202,14 @@ impl JobLog {
         self.jobs.push(job);
         self.jobs.len() - 1
     }
+
+    pub fn dump(&self) -> Vec<String> {
+        let mut dump = vec![];
+        for job in &self.jobs {
+            dump.push(job.log.clone());
+        }
+        dump
+    }
 }
 
 pub struct Diagnostic {
@@ -352,7 +360,7 @@ impl Response {
         }
     }
 
-    fn get_payload(&self) -> String {
+    pub fn get_payload(&self) -> String {
         let payload = &self.coap.message.payload;
         let payload_formatted = if payload.is_empty() {
             "Empty payload".to_owned()

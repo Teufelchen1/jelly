@@ -254,6 +254,15 @@ impl App {
         self.user_input_manager.finish_current_input();
     }
 
+    pub fn on_msg_string(&mut self, msg: &str) {
+        self.user_input_manager.insert_string(msg);
+
+        // should always be the case as msg is read via read_line()
+        if msg.ends_with('\n') {
+            self.handle_command_commit();
+        }
+    }
+
     pub fn on_key(&mut self, key: KeyEvent) -> bool {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             return false;
