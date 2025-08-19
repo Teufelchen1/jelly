@@ -25,8 +25,15 @@ pub struct SaulCli {
 
 #[derive(Subcommand, Debug)]
 enum SaulOperation {
-    Read { id: u8 },
-    Write { id: u8, data: u8 },
+    Read {
+        #[arg(long, default_value_t = false)]
+        json: bool,
+        id: u8,
+    },
+    Write {
+        id: u8,
+        data: u8,
+    },
 }
 
 pub struct Saul {
@@ -69,7 +76,7 @@ impl CommandHandler for Saul {
         let _subcommand = {
             match self.cli.operation {
                 None => encoder.array(1).unwrap().u8(0).unwrap().end(),
-                Some(SaulOperation::Read { id }) => encoder
+                Some(SaulOperation::Read { json: _, id }) => encoder
                     .array(2)
                     .unwrap()
                     .u8(1)
@@ -109,7 +116,7 @@ impl CommandHandler for Saul {
             None => {
                 out = decode_sensor_list_into_string(payload);
             }
-            Some(SaulOperation::Read { id }) => {
+            Some(SaulOperation::Read { json, id }) => {
                 let data = decoder.map();
                 match data {
                     // Dirty: assuming name, unit, value
@@ -124,7 +131,11 @@ impl CommandHandler for Saul {
                         let e = decoder.i32().unwrap();
                         let m = f32::from(decoder.i16().unwrap());
                         let value: f32 = m * 10f32.powi(e);
-                        let _ = writeln!(out, "{name}: {value:?} °{unit}");
+                        if json {
+                            let _ = write!(out, "{{\"name\": \"{name}\", \"value\": {value:?}, \"unit\": \"°{unit}\"}}");
+                        } else {
+                            let _ = writeln!(out, "{name}: {value:?} °{unit}");
+                        }
                     }
                     // Dirty: assuming name, value
                     Ok(Some(2)) => {

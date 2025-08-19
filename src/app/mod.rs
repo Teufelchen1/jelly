@@ -19,7 +19,7 @@ use crate::commands::Command;
 use crate::commands::CommandLibrary;
 use crate::events::Event;
 
-mod datatypes;
+pub mod datatypes;
 mod handler;
 mod tui;
 
@@ -160,7 +160,7 @@ impl UiState {
     }
 }
 
-struct UserInputManager {
+pub struct UserInputManager {
     known_commands: CommandLibrary,
     user_input: String,
     user_command_history: Vec<String>,
@@ -168,7 +168,7 @@ struct UserInputManager {
     cursor_position: usize,
 }
 
-enum InputType<'a> {
+pub enum InputType<'a> {
     /// The user input something that is not known to Jelly but it
     /// starts with a `/` so it likely is a coap endpoint
     /// Treated as configuration message
@@ -185,7 +185,7 @@ enum InputType<'a> {
 }
 
 impl UserInputManager {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             known_commands: CommandLibrary::default(),
             user_input: String::new(),
@@ -193,6 +193,15 @@ impl UserInputManager {
             user_command_history_index: 0,
             cursor_position: 0,
         }
+    }
+
+    pub fn force_all_commands_availabe(&mut self) {
+        self.known_commands.force_all_cmds_available();
+    }
+
+    fn insert_string(&mut self, string: &str) {
+        self.user_input.push_str(string);
+        self.cursor_position += string.len();
     }
 
     fn insert_char(&mut self, chr: char) {
@@ -378,6 +387,18 @@ impl App {
             ongoing_jobs: HashMap::new(),
             job_log: JobLog::new(),
         }
+    }
+
+    pub fn force_all_commands_availabe(&mut self) {
+        self.user_input_manager.force_all_commands_availabe();
+    }
+
+    pub fn unfinished_jobs_count(&self) -> usize {
+        self.ongoing_jobs.len()
+    }
+
+    pub fn dump_job_log(&self) -> Vec<String> {
+        self.job_log.dump()
     }
 
     fn get_new_token(&mut self) -> Vec<u8> {
