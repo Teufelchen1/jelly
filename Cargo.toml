@@ -4,6 +4,7 @@ description = "A tool to interact with a shell via Slipmux"
 version = "0.1.0"
 edition = "2021"
 authors = ["Bennet Hattesen <bennet.hattesen@haw-hamburg.de>"]
+rust-version = "1.89"
 
 [lints.rust]
 unsafe_code = "forbid"
