@@ -1,20 +1,12 @@
 use std::cmp::Ordering;
 
 use coap_lite::CoapRequest;
-use mem::MemRead;
 
-use crate::commands::coap_get_template::CoapGet;
-use crate::commands::multi_endpoints_sample::MultiEndpointSample;
-use crate::commands::sample::SampleCommand;
-use crate::commands::saul::Saul;
-use crate::commands::wks::Wkc;
+use commands::all_commands;
+use commands::CoapGet;
+use commands::Wkc;
 
-mod coap_get_template;
-mod mem;
-mod multi_endpoints_sample;
-mod sample;
-mod saul;
-mod wks;
+mod commands;
 
 /// Callback API for handling a command.
 pub trait CommandHandler {
@@ -179,12 +171,7 @@ impl CommandLibrary {
                 Command::from_coap_resource("/.well-known/core", "Query the wkc"),
                 Wkc::cmd(),
             ],
-            stored_cmds: vec![
-                SampleCommand::cmd(),
-                Saul::cmd(),
-                MultiEndpointSample::cmd(),
-                MemRead::cmd(),
-            ],
+            stored_cmds: all_commands(),
         }
     }
 

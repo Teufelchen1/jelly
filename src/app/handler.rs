@@ -20,7 +20,7 @@ use crate::app::App;
 use crate::app::InputType;
 use crate::app::Job;
 use crate::app::Request;
-use crate::commands::Command;
+use crate::command::Command;
 use crate::events::Event;
 
 impl App {

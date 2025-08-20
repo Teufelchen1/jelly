@@ -7,9 +7,9 @@ use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
 
-use crate::commands::Command;
-use crate::commands::CommandHandler;
-use crate::commands::CommandRegistry;
+use super::Command;
+use super::CommandHandler;
+use super::CommandRegistry;
 
 /// Taken and modified from Alex Martens's clap-num
 /// <https://github.com/newAM/clap-num/blob/c6f1065f87f319098943aae75412a0c38c85f11c/src/lib.rs#L347-L384>

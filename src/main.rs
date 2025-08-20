@@ -12,7 +12,7 @@ use crate::events::Event;
 use crate::slipmux::create_slipmux_thread;
 
 mod app;
-mod commands;
+mod command;
 mod events;
 mod slipmux;
 mod transport;

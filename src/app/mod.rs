@@ -15,8 +15,8 @@ use tui_widgets::scrollview::ScrollViewState;
 use crate::app::datatypes::Job;
 use crate::app::datatypes::Request;
 use crate::app::datatypes::SaveToFile;
-use crate::commands::Command;
-use crate::commands::CommandLibrary;
+use crate::command::Command;
+use crate::command::CommandLibrary;
 use crate::events::Event;
 
 mod datatypes;

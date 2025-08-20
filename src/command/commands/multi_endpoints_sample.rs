@@ -3,9 +3,9 @@ use std::fmt::Write;
 use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
 
-use crate::commands::Command;
-use crate::commands::CommandHandler;
-use crate::commands::CommandRegistry;
+use super::Command;
+use super::CommandHandler;
+use super::CommandRegistry;
 
 /// This is an example for writing a command that needs to issue multiple CoAP requests and
 /// keep track of the state while doing so.
