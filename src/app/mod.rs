@@ -278,7 +278,7 @@ impl UserInputManager {
         self.user_input.is_empty()
     }
 
-    fn classify_input(&self) -> InputType {
+    fn classify_input(&self) -> InputType<'_> {
         let (cmd_string, file) = if let Some((cmd_string, path)) = self.user_input.split_once("%>")
         {
             (cmd_string, SaveToFile::AsBin(path.trim().to_owned()))
