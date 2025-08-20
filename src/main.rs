@@ -16,6 +16,7 @@ mod command;
 mod events;
 mod slipmux;
 mod transport;
+mod tui;
 
 type EventChannel = (Sender<Event>, Receiver<Event>);
 
