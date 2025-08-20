@@ -58,7 +58,7 @@ pub struct MemReadCli {
     #[arg(value_parser=maybe_hex)]
     addr: u32,
     #[arg()]
-    size: u8,
+    size: u32,
 }
 
 pub struct MemRead {
@@ -66,6 +66,41 @@ pub struct MemRead {
     finished: bool,
     displayable: bool,
     cli: MemReadCli,
+}
+
+impl MemRead {
+    fn send_request(&mut self) -> CoapRequest<String> {
+        let mut buffer: [u8; 10] = [0; 10];
+        let mut encoder = Encoder::new(&mut buffer[..]);
+
+        let num_bytes: u8 = if self.cli.size <= 255 {
+            self.cli.size.try_into().unwrap()
+        } else {
+            255
+        };
+
+        encoder
+            .array(2)
+            .unwrap()
+            .u32(self.cli.addr)
+            .unwrap()
+            .u8(num_bytes)
+            .unwrap()
+            .end()
+            .unwrap();
+
+        self.cli.size -= u32::from(num_bytes);
+        self.cli.addr += u32::from(num_bytes);
+
+        let mut request: CoapRequest<String> = CoapRequest::new();
+        request.set_method(Method::Post);
+        request.set_path("/Memory");
+        request
+            .message
+            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+        request.message.set_payload(&buffer).unwrap();
+        request
+    }
 }
 
 impl CommandRegistry for MemRead {
@@ -91,27 +126,7 @@ impl CommandRegistry for MemRead {
 
 impl CommandHandler for MemRead {
     fn init(&mut self) -> CoapRequest<String> {
-        let mut buffer: [u8; 10] = [0; 10];
-        let mut encoder = Encoder::new(&mut buffer[..]);
-
-        encoder
-            .array(2)
-            .unwrap()
-            .u32(self.cli.addr)
-            .unwrap()
-            .u8(self.cli.size)
-            .unwrap()
-            .end()
-            .unwrap();
-
-        let mut request: CoapRequest<String> = CoapRequest::new();
-        request.set_method(Method::Post);
-        request.set_path("/Memory");
-        request
-            .message
-            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-        request.message.set_payload(&buffer).unwrap();
-        request
+        self.send_request()
     }
 
     fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
@@ -120,9 +135,13 @@ impl CommandHandler for MemRead {
             self.buffer.extend_from_slice(bytes);
         }
 
-        self.finished = true;
-        self.displayable = true;
-        None
+        if self.cli.size > 0 {
+            Some(self.send_request())
+        } else {
+            self.finished = true;
+            self.displayable = true;
+            None
+        }
     }
 
     fn want_display(&self) -> bool {
