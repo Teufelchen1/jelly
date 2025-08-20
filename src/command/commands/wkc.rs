@@ -3,9 +3,9 @@ use std::fmt::Write;
 use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
 
-use crate::commands::Command;
-use crate::commands::CommandHandler;
-use crate::commands::CommandRegistry;
+use super::Command;
+use super::CommandHandler;
+use super::CommandRegistry;
 
 /// Explicit example for a command that queries the well-known/core. Could have been done
 /// using the template command, but explicit for demonstration.

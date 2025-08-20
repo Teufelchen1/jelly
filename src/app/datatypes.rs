@@ -22,7 +22,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 
 use crate::app::CoapOption;
-use crate::commands::CommandHandler;
+use crate::command::CommandHandler;
 
 pub enum SaveToFile {
     No,

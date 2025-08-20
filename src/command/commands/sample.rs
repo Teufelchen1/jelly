@@ -6,9 +6,9 @@ use coap_lite::RequestType as Method;
 use coap_message::MinimalWritableMessage;
 use minicbor::Encoder;
 
-use crate::commands::Command;
-use crate::commands::CommandHandler;
-use crate::commands::CommandRegistry;
+use super::Command;
+use super::CommandHandler;
+use super::CommandRegistry;
 
 #[derive(Parser, Debug)]
 #[command(name = "SampleCommand")]

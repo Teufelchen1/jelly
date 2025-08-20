@@ -15,12 +15,12 @@ use slipmux::Slipmux;
 
 use super::datatypes::token_to_u64;
 use super::datatypes::Response;
-use super::SelectedTab;
+
 use crate::app::App;
 use crate::app::InputType;
 use crate::app::Job;
 use crate::app::Request;
-use crate::commands::Command;
+use crate::command::Command;
 use crate::events::Event;
 
 impl App {
@@ -66,7 +66,7 @@ impl App {
 
     pub fn on_connect(&mut self, name: String) {
         self.connected = true;
-        self.ui_state.device_path = Some(name);
+        self.ui_state.set_device_path(name);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
         self.send_configuration_request(&mut request.message);
@@ -83,7 +83,7 @@ impl App {
 
     pub fn on_disconnect(&mut self) {
         self.connected = false;
-        self.ui_state.device_path = None;
+        self.ui_state.clear_device_path();
     }
 
     fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
@@ -289,19 +289,19 @@ impl App {
                 self.user_input_manager.insert_char(to_insert);
             }
             KeyCode::F(1) => {
-                self.ui_state.current_tab = SelectedTab::Overview;
+                self.ui_state.select_overview_view();
             }
             KeyCode::F(2) => {
-                self.ui_state.current_tab = SelectedTab::Diagnostic;
+                self.ui_state.select_diagnostic_view();
             }
             KeyCode::F(3) => {
-                self.ui_state.current_tab = SelectedTab::Configuration;
+                self.ui_state.select_configuration_view();
             }
             KeyCode::F(4) => {
-                self.ui_state.current_tab = SelectedTab::Commands;
+                self.ui_state.select_commands_view();
             }
             KeyCode::F(5) => {
-                self.ui_state.current_tab = SelectedTab::Help;
+                self.ui_state.select_help_view();
             }
             KeyCode::Esc => {
                 return false;

@@ -1,9 +1,9 @@
 use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
 
-use crate::commands::Command;
-use crate::commands::CommandHandler;
-use crate::commands::CommandRegistry;
+use super::Command;
+use super::CommandHandler;
+use super::CommandRegistry;
 
 /// This is a template command. It shows the minimum setup for making a
 /// CoAP GET request to a single endpoint. The result is not displayed to the user.

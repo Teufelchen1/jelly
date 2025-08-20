@@ -24,9 +24,13 @@ use ratatui::widgets::Widget;
 use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
 
-use crate::app::App;
+use super::UiState;
+use crate::app::datatypes::DiagnosticLog;
+use crate::app::datatypes::JobLog;
+use crate::app::datatypes::Request;
+use crate::app::UserInputManager;
 
-impl App {
+impl UiState {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
         let tab_titles = [
             "Overview (F1)",
@@ -47,7 +51,7 @@ impl App {
         frame.render_widget(
             Tabs::new(tab_titles)
                 .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
-                .select(self.ui_state.current_tab as usize)
+                .select(self.current_tab as usize)
                 .padding("", "")
                 .divider(" "),
             title_area[0],
@@ -60,7 +64,7 @@ impl App {
             title_area[1],
         );
 
-        let footer_title = self.ui_state.get_connection();
+        let footer_title = self.get_connection();
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
@@ -76,6 +80,7 @@ impl App {
             .title(vec![Span::from("Help")])
             .title_alignment(Alignment::Left);
 
+        // Putting this here is not ideal, todo: somewhat autogenerate command list
         let text = r"Jelly 🪼: The friendly SLIPMUX for RIOT OS
 
 Jelly is a tool that allows you to send commands to an attached device. The commands
@@ -151,13 +156,13 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             border_block.inner(area),
-            self.ui_state.help_scroll.get_state_for_rendering(),
+            self.help_scroll.get_state_for_rendering(),
         );
 
         frame.render_widget(border_block, area);
     }
 
-    fn render_commands(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_commands(&mut self, frame: &mut Frame, area: Rect, job_log: &JobLog) {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Commands")])
@@ -169,9 +174,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             let mut sum = 0;
             // temporay limitation to work around ratatui bug #1855
             let start =
-                usize::try_from(max(i64::try_from(self.job_log.jobs.len()).unwrap() - 10, 0))
-                    .unwrap();
-            for job in &mut self.job_log.jobs[start..] {
+                usize::try_from(max(i64::try_from(job_log.jobs.len()).unwrap() - 10, 0)).unwrap();
+            for job in &job_log.jobs[start..] {
                 let (size, para) = job.paragraph();
                 req_blocks.push(para);
                 sum += size;
@@ -200,12 +204,18 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            self.ui_state.command_scroll.get_state_for_rendering(),
+            self.command_scroll.get_state_for_rendering(),
         );
         frame.render_widget(right_block_up, area);
     }
 
-    fn render_configuration_messages(&mut self, frame: &mut Frame, area: Rect, short: bool) {
+    fn render_configuration_messages(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        configuration_log: &[Request],
+        short: bool,
+    ) {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Configuration Messages")])
@@ -216,12 +226,10 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let total_length: u16 = {
             let mut sum = 0;
             // temporay limitation to work around ratatui bug #1855
-            let start = usize::try_from(max(
-                i64::try_from(self.configuration_log.len()).unwrap() - 10,
-                0,
-            ))
-            .unwrap();
-            for req in &mut self.configuration_log[start..] {
+            let start =
+                usize::try_from(max(i64::try_from(configuration_log.len()).unwrap() - 10, 0))
+                    .unwrap();
+            for req in &configuration_log[start..] {
                 let (size, para) = if short {
                     req.paragraph_short()
                 } else {
@@ -254,23 +262,23 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             right_block_up.inner(area),
-            self.ui_state.configuration_scroll.get_state_for_rendering(),
+            self.configuration_scroll.get_state_for_rendering(),
         );
         frame.render_widget(right_block_up, area);
     }
 
-    fn render_user_input(&self, frame: &mut Frame, area: Rect) {
+    fn render_user_input(frame: &mut Frame, area: Rect, user_input_manager: &UserInputManager) {
         let right_block_down = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("User Input")])
             .title_alignment(Alignment::Left);
 
-        if self.user_input_manager.input_empty() {
+        if user_input_manager.input_empty() {
             let mut text = Text::from(
                 Span::from("Type a command, for example: ").patch_style(Style::new().dark_gray()),
             );
             text.push_span(
-                Span::from(self.user_input_manager.command_name_list())
+                Span::from(user_input_manager.command_name_list())
                     .patch_style(Style::new().dark_gray()),
             );
             let paragraph = Paragraph::new(text).block(right_block_down);
@@ -280,8 +288,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         }
 
         let box_size: usize = usize::from(area.width.checked_sub(2).unwrap_or(1));
-        let input_len = self.user_input_manager.user_input.len();
-        let input = &self.user_input_manager.user_input;
+        let input_len = user_input_manager.user_input.len();
+        let input = &user_input_manager.user_input;
         let mut text = Text::default();
 
         let mut start = 0;
@@ -292,17 +300,17 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         }
 
         let y_pos =
-            area.y + 1 + u16::try_from(self.user_input_manager.cursor_position / box_size).unwrap();
+            area.y + 1 + u16::try_from(user_input_manager.cursor_position / box_size).unwrap();
         let x_pos =
-            area.x + 1 + u16::try_from(self.user_input_manager.cursor_position % box_size).unwrap();
+            area.x + 1 + u16::try_from(user_input_manager.cursor_position % box_size).unwrap();
 
         frame.set_cursor_position(Position::new(x_pos, y_pos));
 
-        let (suggestion, cmds) = self.user_input_manager.suggestion();
+        let (suggestion, cmds) = user_input_manager.suggestion();
 
         let mut completion_text = String::from(
             suggestion
-                .get(self.user_input_manager.user_input.len()..)
+                .get(user_input_manager.user_input.len()..)
                 .unwrap_or(""),
         );
         if !cmds.is_empty() {
@@ -339,7 +347,12 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_widget(paragraph, area);
     }
 
-    fn render_diagnostic_messages(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_diagnostic_messages(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        diagnostic_log: &DiagnosticLog,
+    ) {
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic Messages")])
@@ -347,7 +360,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         let content_width = left_block_up.inner(area).width;
 
-        let (messages_height, paragraph) = self.diagnostic_log.paragraph();
+        let (messages_height, paragraph) = diagnostic_log.paragraph();
 
         let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
 
@@ -365,12 +378,17 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            self.ui_state.diagnostic_scroll.get_state_for_rendering(),
+            self.diagnostic_scroll.get_state_for_rendering(),
         );
         frame.render_widget(left_block_up, area);
     }
 
-    fn render_overall_messages(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_overall_messages(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        overall_log: &DiagnosticLog,
+    ) {
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
             .title(vec![Span::from("Diagnostic & Commands")])
@@ -378,7 +396,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         let content_width = left_block_up.inner(area).width;
 
-        let (messages_height, paragraph) = self.overall_log.paragraph_short();
+        let (messages_height, paragraph) = overall_log.paragraph_short();
 
         let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
 
@@ -396,7 +414,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_stateful_widget(
             scroll_view,
             left_block_up.inner(area),
-            self.ui_state.overview_scroll.get_state_for_rendering(),
+            self.overview_scroll.get_state_for_rendering(),
         );
         frame.render_widget(left_block_up, area);
     }
@@ -407,7 +425,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             .title(vec![Span::from("Board Info")])
             .title_alignment(Alignment::Left);
 
-        let text = self.ui_state.get_config();
+        let text = self.get_config();
         let text = Text::from(text);
         let paragraph = Paragraph::new(text);
         let paragraph_block = paragraph.block(left_block_down);
@@ -415,7 +433,14 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         frame.render_widget(paragraph_block, area);
     }
 
-    fn render_overview(&mut self, main_area: Rect, frame: &mut Frame) {
+    fn render_overview(
+        &mut self,
+        frame: &mut Frame,
+        main_area: Rect,
+        user_input_manager: &UserInputManager,
+        configuration_log: &[Request],
+        overall_log: &DiagnosticLog,
+    ) {
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .margin(0)
@@ -434,7 +459,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let device_config_overview_area = right_chunks[1];
 
         let input_min_size = 3
-            + (self.user_input_manager.user_input.len() + 10)
+            + (user_input_manager.user_input.len() + 10)
                 .try_into()
                 .unwrap_or(u16::MAX)
                 / (main_chunk_left.width - 2);
@@ -446,13 +471,21 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         let overall_messages_log_area = left_chunks[0];
         let userinput_area = left_chunks[1];
 
-        self.render_configuration_messages(frame, configuration_log_area, true);
+        self.render_configuration_messages(frame, configuration_log_area, configuration_log, true);
         self.render_configuration_overview(frame, device_config_overview_area);
-        self.render_overall_messages(frame, overall_messages_log_area);
-        self.render_user_input(frame, userinput_area);
+        self.render_overall_messages(frame, overall_messages_log_area, overall_log);
+        Self::render_user_input(frame, userinput_area, user_input_manager);
     }
 
-    pub fn draw(&mut self, frame: &mut Frame) {
+    pub fn draw(
+        &mut self,
+        frame: &mut Frame,
+        user_input_manager: &UserInputManager,
+        job_log: &JobLog,
+        configuration_log: &[Request],
+        diagnostic_log: &DiagnosticLog,
+        overall_log: &DiagnosticLog,
+    ) {
         let main_layout = Layout::new(
             Direction::Vertical,
             [
@@ -469,14 +502,20 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
         self.render_header_footer(frame, header_area, footer_area);
 
         let input_min_size = 3
-            + (self.user_input_manager.user_input.len() + 10)
+            + (user_input_manager.user_input.len() + 10)
                 .try_into()
                 .unwrap_or(u16::MAX)
                 / (main_area.width - 2);
 
-        match self.ui_state.current_tab {
+        match self.current_tab {
             super::SelectedTab::Overview => {
-                self.render_overview(main_area, frame);
+                self.render_overview(
+                    frame,
+                    main_area,
+                    user_input_manager,
+                    configuration_log,
+                    overall_log,
+                );
             }
             super::SelectedTab::Diagnostic => {
                 let chunks = Layout::default()
@@ -487,8 +526,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
                 let chunk_upper = chunks[0];
                 let chunk_lower = chunks[1];
 
-                self.render_diagnostic_messages(frame, chunk_upper);
-                self.render_user_input(frame, chunk_lower);
+                self.render_diagnostic_messages(frame, chunk_upper, diagnostic_log);
+                Self::render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Configuration => {
                 let chunks = Layout::default()
@@ -499,8 +538,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
                 let chunk_upper = chunks[0];
                 let chunk_lower = chunks[1];
 
-                self.render_configuration_messages(frame, chunk_upper, false);
-                self.render_user_input(frame, chunk_lower);
+                self.render_configuration_messages(frame, chunk_upper, configuration_log, false);
+                Self::render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Commands => {
                 let chunks = Layout::default()
@@ -511,8 +550,8 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
                 let chunk_upper = chunks[0];
                 let chunk_lower = chunks[1];
 
-                self.render_commands(frame, chunk_upper);
-                self.render_user_input(frame, chunk_lower);
+                self.render_commands(frame, chunk_upper, job_log);
+                Self::render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Help => {
                 let chunks = Layout::default()
@@ -524,7 +563,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
                 let chunk_lower = chunks[1];
 
                 self.render_help(frame, chunk_upper);
-                self.render_user_input(frame, chunk_lower);
+                Self::render_user_input(frame, chunk_lower, user_input_manager);
             }
         }
     }
