@@ -320,7 +320,7 @@ impl Response {
         format!("[{}]", dt.format("%H:%M:%S%.3f"))
     }
 
-    fn get_status(&self) -> Span {
+    fn get_status(&self) -> Span<'_> {
         let status = self.coap.get_status();
         let token = token_to_u64(self.coap.message.get_token());
         let bytes = self.coap.message.payload.len();
@@ -337,7 +337,7 @@ impl Response {
         }
     }
 
-    fn get_status_short(&self) -> Span {
+    fn get_status_short(&self) -> Span<'_> {
         let status = self.coap.get_status();
 
         let response_summary = self.coap.message.get_content_format().map_or_else(
