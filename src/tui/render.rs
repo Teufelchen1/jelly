@@ -396,20 +396,17 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         let content_width = left_block_up.inner(area).width;
 
-        let (messages_height, paragraph) = overall_log.paragraph_short();
+        // Make room for the scroll bar
+        let content_width = content_width - 1;
+
+        let (_messages_height, paragraph) = overall_log.paragraph_short();
+        let messages_height = paragraph.line_count(content_width);
 
         let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
 
-        let mut scroll_view = ScrollView::new(Size::new(
-            // Make room for the scroll bar
-            content_width - 1,
-            messages_height,
-        ));
+        let mut scroll_view = ScrollView::new(Size::new(content_width, messages_height));
 
-        scroll_view.render_widget(
-            paragraph,
-            Rect::new(0, 0, content_width - 1, messages_height),
-        );
+        scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, messages_height));
 
         frame.render_stateful_widget(
             scroll_view,

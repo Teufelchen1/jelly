@@ -44,7 +44,7 @@ enum InputType<'a> {
     JellyCoapCommand(&'a Command, String, SaveToFile),
     /// This input is a known command without a coap endpoint
     /// Treated as diagnostic message
-    JellyCommand(&'a Command),
+    JellyCommand(&'a Command, String),
 }
 
 impl UserInputManager {
@@ -156,7 +156,7 @@ impl UserInputManager {
         match maybe_cmd {
             Some(cmd) => {
                 if cmd.required_endpoints.is_empty() {
-                    InputType::JellyCommand(cmd)
+                    InputType::JellyCommand(cmd, cmd_string.to_owned())
                 } else {
                     InputType::JellyCoapCommand(cmd, cmd_string.to_owned(), file)
                 }

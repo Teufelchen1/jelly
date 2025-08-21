@@ -241,8 +241,7 @@ impl App {
                     }
                 }
             }
-            InputType::JellyCommand(cmd) => {
-                let mut cmd_str = cmd.cmd.clone();
+            InputType::JellyCommand(_cmd, mut cmd_str) => {
                 if !cmd_str.ends_with('\n') {
                     cmd_str.push('\n');
                 }
