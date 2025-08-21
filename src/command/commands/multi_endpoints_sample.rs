@@ -6,6 +6,7 @@ use coap_lite::RequestType as Method;
 use super::Command;
 use super::CommandHandler;
 use super::CommandRegistry;
+use super::HandlerType;
 
 /// This is an example for writing a command that needs to issue multiple CoAP requests and
 /// keep track of the state while doing so.
@@ -30,13 +31,13 @@ impl CommandRegistry for MultiEndpointSample {
         }
     }
 
-    fn parse(_cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self {
+    fn parse(_cmd: &Command, _args: String) -> Result<HandlerType, String> {
+        Ok(HandlerType::Configuration(Box::new(Self {
             buffer: "==== Fetched a lot! ====\n".to_owned(),
             finished: false,
             displayable: false,
             state_machine: 0,
-        }))
+        })))
     }
 }
 

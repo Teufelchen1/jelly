@@ -9,6 +9,7 @@ use minicbor::Encoder;
 use super::Command;
 use super::CommandHandler;
 use super::CommandRegistry;
+use super::HandlerType;
 
 #[derive(Parser, Debug)]
 #[command(name = "SampleCommand")]
@@ -40,16 +41,16 @@ impl CommandRegistry for SampleCommand {
         }
     }
 
-    fn parse(cmd: &Command, args: String) -> Result<Box<dyn CommandHandler>, String> {
+    fn parse(cmd: &Command, args: String) -> Result<HandlerType, String> {
         let cli =
             SampleCommandCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(Box::new(Self {
+        Ok(HandlerType::Configuration(Box::new(Self {
             location: cmd.required_endpoints[0].clone(),
             buffer: String::new(),
             finished: false,
             displayable: false,
             cli,
-        }))
+        })))
     }
 }
 

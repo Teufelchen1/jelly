@@ -4,6 +4,7 @@ use coap_lite::RequestType as Method;
 use super::Command;
 use super::CommandHandler;
 use super::CommandRegistry;
+use super::HandlerType;
 
 /// This is a template command. It shows the minimum setup for making a
 /// CoAP GET request to a single endpoint. The result is not displayed to the user.
@@ -24,8 +25,9 @@ impl CommandRegistry for CoapGet {
     }
 
     // Saves the first path of this command...so this won't work with commands that need multiple.
-    fn parse(cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self(cmd.required_endpoints[0].clone())))
+    fn parse(cmd: &Command, _args: String) -> Result<HandlerType, String> {
+        let new_self = Self(cmd.required_endpoints[0].clone());
+        Ok(HandlerType::Configuration(Box::new(new_self)))
     }
 }
 

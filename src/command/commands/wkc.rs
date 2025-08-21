@@ -6,6 +6,7 @@ use coap_lite::RequestType as Method;
 use super::Command;
 use super::CommandHandler;
 use super::CommandRegistry;
+use super::HandlerType;
 
 /// Explicit example for a command that queries the well-known/core. Could have been done
 /// using the template command, but explicit for demonstration.
@@ -26,13 +27,13 @@ impl CommandRegistry for Wkc {
         }
     }
 
-    fn parse(cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self {
+    fn parse(cmd: &Command, _args: String) -> Result<HandlerType, String> {
+        Ok(HandlerType::Configuration(Box::new(Self {
             location: cmd.required_endpoints[0].clone(),
             buffer: String::new(),
             finished: false,
             displayable: false,
-        }))
+        })))
     }
 }
 

@@ -10,6 +10,7 @@ use minicbor::Encoder;
 use super::Command;
 use super::CommandHandler;
 use super::CommandRegistry;
+use super::HandlerType;
 
 /// Taken and modified from Alex Martens's clap-num
 /// <https://github.com/newAM/clap-num/blob/c6f1065f87f319098943aae75412a0c38c85f11c/src/lib.rs#L347-L384>
@@ -113,14 +114,14 @@ impl CommandRegistry for MemRead {
         }
     }
 
-    fn parse(_cmd: &Command, args: String) -> Result<Box<dyn CommandHandler>, String> {
+    fn parse(_cmd: &Command, args: String) -> Result<HandlerType, String> {
         let cli = MemReadCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(Box::new(Self {
+        Ok(HandlerType::Configuration(Box::new(Self {
             buffer: Vec::new(),
             finished: false,
             displayable: false,
             cli,
-        }))
+        })))
     }
 }
 

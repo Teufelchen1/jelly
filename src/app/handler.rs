@@ -21,6 +21,7 @@ use crate::app::InputType;
 use crate::app::Job;
 use crate::app::Request;
 use crate::command::Command;
+use crate::command::HandlerType;
 use crate::events::Event;
 
 impl App {
@@ -220,8 +221,9 @@ impl App {
                 let res = (cmd.parse)(cmd, cmd_string.clone());
                 match res {
                     // User input matches the cli, done with argument parsing
-                    Ok(mut handler) => {
+                    Ok(HandlerType::Configuration(mut handler)) => {
                         let mut request = handler.init();
+
                         self.send_configuration_request(&mut request.message);
                         let hash_index: u64 = token_to_u64(request.message.get_token());
                         self.configuration_log.push(Request::new(request));
@@ -234,6 +236,12 @@ impl App {
                         self.overall_log.add(&cmd_string);
                         self.overall_log.add("\n> ");
                     }
+                    Ok(HandlerType::DiagnosticMsg(mut msg)) => {
+                        if !msg.ends_with('\n') {
+                            msg.push('\n');
+                        }
+                        self.event_sender.send(Event::SendDiagnostic(msg)).unwrap();
+                    }
                     // Display usage info to the user
                     Err(e) => {
                         self.job_log.start(Job::new_failed(cmd_string.clone(), &e));
@@ -241,8 +249,8 @@ impl App {
                     }
                 }
             }
-            InputType::JellyCommand(cmd) => {
-                let mut cmd_str = cmd.cmd.clone();
+            InputType::JellyCommand(_cmd, mut cmd_str) => {
+                //let mut cmd_str = cmd.cmd.clone();
                 if !cmd_str.ends_with('\n') {
                     cmd_str.push('\n');
                 }

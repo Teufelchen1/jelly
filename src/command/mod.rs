@@ -8,7 +8,12 @@ pub use library::CommandLibrary;
 mod commands;
 mod library;
 
-/// Callback API for handling a command.
+pub enum HandlerType {
+    Configuration(BoxedCommandHandler),
+    DiagnosticMsg(String),
+}
+
+/// Callback API for handling a configuration based command.
 pub trait CommandHandler {
     /// This function is called exactly once. It is always the first call for any handler.
     /// Returns a coap request that is send to the attached device.
@@ -48,9 +53,11 @@ pub trait CommandRegistry {
 
     /// Parses a cli string, typically via clap
     ///
-    /// On success, returns an implementation of the `CommandHandler` trait
+    /// On success returns either:
+    ///  - an implementation of the `CommandHandler` trait for configuration based commands
+    ///  - a diagnostic message
     /// On error, returns a human readable usage error
-    fn parse(cmd: &Command, args: String) -> Result<BoxedCommandHandler, String>;
+    fn parse(cmd: &Command, args: String) -> Result<HandlerType, String>;
 }
 
 /// Represents a command that the user can type into jelly
@@ -68,7 +75,7 @@ pub struct Command {
     ///
     /// On success, returns an implementation of the `CommandHandler` trait.
     /// On error, returns a human readable usage error.
-    pub parse: fn(&Self, args: String) -> Result<BoxedCommandHandler, String>,
+    pub parse: fn(&Self, args: String) -> Result<HandlerType, String>,
 }
 
 impl Command {
