@@ -39,6 +39,7 @@ pub fn create_slipmux_thread(event_sender: Sender<Event>, device_path: PathBuf) 
 }
 
 fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl Write>>>) {
+    thread::sleep(Duration::from_millis(300));
     while let Ok(event) = receiver.recv() {
         match event {
             Event::SendDiagnostic(msg) => {
@@ -64,7 +65,7 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
                     continue;
                 }
                 // Pseudo rate limit the outgoing data as to not overwhelm embedded devices
-                thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(50));
             }
             _ => todo!(),
         }

@@ -36,7 +36,7 @@ impl CommandRegistry for SampleCommand {
             cmd: "SampleCommand".to_owned(),
             description: "An example coap based command".to_owned(),
             parse: |s, a| Self::parse(s, a),
-            required_endpoints: vec!["/SampleCommand".to_owned()],
+            required_endpoints: vec!["/jelly/SampleCommand".to_owned()],
         }
     }
 

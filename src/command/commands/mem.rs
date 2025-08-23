@@ -94,7 +94,7 @@ impl MemRead {
 
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Post);
-        request.set_path("/Memory");
+        request.set_path("/jelly/Memory");
         request
             .message
             .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
@@ -109,7 +109,7 @@ impl CommandRegistry for MemRead {
             cmd: "MemRead".to_owned(),
             description: "Read arbitrary memory".to_owned(),
             parse: |s, a| Self::parse(s, a),
-            required_endpoints: vec!["/Memory".to_owned()],
+            required_endpoints: vec!["/jelly/Memory".to_owned()],
         }
     }
 

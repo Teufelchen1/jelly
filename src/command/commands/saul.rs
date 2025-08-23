@@ -44,7 +44,7 @@ impl CommandRegistry for Saul {
             cmd: "Saul".to_owned(),
             description: "Saul over coap".to_owned(),
             parse: |s, a| Self::parse(s, a),
-            required_endpoints: vec!["/Saul".to_owned()],
+            required_endpoints: vec!["/jelly/Saul".to_owned()],
         }
     }
 

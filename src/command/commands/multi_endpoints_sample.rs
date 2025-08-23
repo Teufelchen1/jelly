@@ -23,7 +23,7 @@ impl CommandRegistry for MultiEndpointSample {
             description: "Query multiple endpoints at once!".to_owned(),
             parse: |s, a| Self::parse(s, a),
             required_endpoints: vec![
-                "/riot/board".to_owned(),
+                "/jelly/board".to_owned(),
                 "/shell/reboot".to_owned(),
                 "/.well-known/core".to_owned(),
             ],
@@ -44,7 +44,7 @@ impl CommandHandler for MultiEndpointSample {
     fn init(&mut self) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
-        request.set_path("/riot/board");
+        request.set_path("/jelly/board");
         request
     }
 

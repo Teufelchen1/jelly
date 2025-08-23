@@ -72,11 +72,11 @@ impl App {
         self.send_configuration_request(&mut request.message);
         self.configuration_log.push(Request::new(request));
 
-        let mut request: CoapRequest<String> = Self::build_get_request("/riot/board");
+        let mut request: CoapRequest<String> = Self::build_get_request("/jelly/board");
         self.send_configuration_request(&mut request.message);
         self.configuration_log.push(Request::new(request));
 
-        let mut request: CoapRequest<String> = Self::build_get_request("/riot/ver");
+        let mut request: CoapRequest<String> = Self::build_get_request("/jelly/ver");
         self.send_configuration_request(&mut request.message);
         self.configuration_log.push(Request::new(request));
     }
@@ -145,10 +145,10 @@ impl App {
                     _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
                 }
                 match uri_path.as_str() {
-                    "/riot/board" => self
+                    "/jelly/board" => self
                         .ui_state
                         .set_board_name(String::from_utf8_lossy(&response.payload).to_string()),
-                    "/riot/ver" => self
+                    "/jelly/ver" => self
                         .ui_state
                         .set_board_version(String::from_utf8_lossy(&response.payload).to_string()),
 
