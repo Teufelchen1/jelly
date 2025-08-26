@@ -1,29 +1,11 @@
-use crate::app::App;
-use crate::Event;
-use std::io::stdin;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
-fn raw_terminal_thread(sender: &Sender<Event>) {
-    let mut buffer = String::new();
-    loop {
-        if let Ok(len) = stdin().read_line(&mut buffer) {
-            if len == 0 {
-                return;
-            }
-            sender.send(Event::TerminalString(buffer.clone())).unwrap();
-        }
-        buffer.clear();
-    }
-}
-
-fn create_raw_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
-    thread::spawn(move || raw_terminal_thread(&sender))
-}
+use super::create_raw_terminal_thread;
+use crate::app::App;
+use crate::Event;
 
 pub fn event_loop_configuration(
     event_channel: &Receiver<Event>,
@@ -52,12 +34,16 @@ pub fn event_loop_configuration(
 
     create_raw_terminal_thread(event_sender);
 
+    let mut terminal_eof = false;
     loop {
         let event = match event_channel.recv_timeout(Duration::from_millis(3000)) {
             Ok(event) => event,
             Err(RecvTimeoutError::Timeout) => {
-                println!("\nTime-out, no response from device :(");
-                return;
+                if terminal_eof {
+                    println!("\nTime-out, no response from device :(");
+                    return;
+                }
+                continue;
             }
             Err(RecvTimeoutError::Disconnected) => panic!(),
         };
@@ -65,14 +51,11 @@ pub fn event_loop_configuration(
             Event::TerminalString(msg) => {
                 app.on_msg_string(&msg);
             }
+            Event::TerminalEOF => {
+                terminal_eof = true;
+            }
             Event::Configuration(data) => {
                 app.on_configuration_msg(&data);
-                if app.unfinished_jobs_count() == 0 {
-                    for msg in app.dump_job_log() {
-                        print!("{msg}");
-                    }
-                    return;
-                }
             }
             Event::SendConfiguration(c) => hardware_event_sender
                 .send(Event::SendConfiguration(c))
@@ -82,6 +65,12 @@ pub fn event_loop_configuration(
                 return;
             }
             _ => (),
+        }
+        if terminal_eof && app.unfinished_jobs_count() == 0 {
+            for msg in app.dump_job_log() {
+                print!("{msg}");
+            }
+            return;
         }
     }
 }

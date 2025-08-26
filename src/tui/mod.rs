@@ -45,7 +45,7 @@ fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
     thread::spawn(move || terminal_thread(&sender))
 }
 
-pub fn tui_event_loop(
+pub fn event_loop_tui(
     event_channel: &Receiver<Event>,
     event_sender: Sender<Event>,
     hardware_event_sender: &Sender<Event>,
@@ -87,7 +87,7 @@ pub fn tui_event_loop(
                     break;
                 }
             }
-            Event::TerminalResize => (),
+            Event::TerminalResize | Event::TerminalEOF => (),
         }
         terminal.draw(|frame| app.draw(frame)).unwrap();
     }

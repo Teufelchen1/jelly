@@ -10,7 +10,7 @@ use crate::events::Event;
 use crate::headless::event_loop_configuration;
 use crate::headless::event_loop_diagnostic;
 use crate::slipmux::create_slipmux_thread;
-use crate::tui::tui_event_loop;
+use crate::tui::event_loop_tui;
 
 mod app;
 mod command;
@@ -28,11 +28,26 @@ struct Cli {
     tty_path: std::path::PathBuf,
 
     /// If true, disables the TUI and passes diagnostic messages via stdio
-    #[arg(short = 'd', long, default_value_t = false)]
+    ///
+    /// This is interactive. Jelly will await input and output indefinitely.
+    /// Configuration messages are ignored.
+    /// This means that any pre-known or configuration-based commands are not
+    /// available.
+    #[arg(short = 'd', long, default_value_t = false, verbatim_doc_comment)]
     headless_diagnostic: bool,
 
     /// If true, disables the TUI and passes configuration messages via stdio
-    #[arg(short = 'c', long, default_value_t = false)]
+    ///
+    /// Use this mode inside scripts and pipe commands into Jelly.
+    /// This may be used interactive.
+    /// Jelly will await input unitl EOF.
+    /// Jelly will wait for output until all commands are finished or
+    /// the time-out is reached. The output will only be displayed once EOF is
+    /// reached. This is to preserve the order of input commands regardless of
+    /// the commands run time.
+    /// Diagnostic messages are ignored.
+    /// Pre-known, configuration-based commands are available.
+    #[arg(short = 'c', long, default_value_t = false, verbatim_doc_comment)]
     headless_configuration: bool,
 }
 
@@ -82,7 +97,7 @@ fn start_tui(args: Cli, main_channel: EventChannel) {
 
     terminal.clear().unwrap();
 
-    tui_event_loop(
+    event_loop_tui(
         &event_receiver,
         event_sender,
         &slipmux_event_sender,

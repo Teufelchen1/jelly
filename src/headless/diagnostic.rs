@@ -1,31 +1,12 @@
-use crate::Event;
-use std::io;
-use std::io::stdin;
+use std::io::stdout;
 use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
-fn raw_terminal_thread(sender: &Sender<Event>) {
-    let mut buffer = String::new();
-    loop {
-        if let Ok(len) = stdin().read_line(&mut buffer) {
-            if len == 0 {
-                println!("Stdin reached EOF. You might continue to receive data from the device.");
-                return;
-            }
-            sender.send(Event::SendDiagnostic(buffer.clone())).unwrap();
-        }
-        buffer.clear();
-    }
-}
-
-fn create_raw_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
-    thread::spawn(move || raw_terminal_thread(&sender))
-}
+use super::create_raw_terminal_thread;
+use crate::Event;
 
 pub fn event_loop_diagnostic(
     event_channel: &Receiver<Event>,
@@ -60,7 +41,7 @@ pub fn event_loop_diagnostic(
         match event {
             Event::Diagnostic(msg) => {
                 print!("{msg}");
-                io::stdout().flush().unwrap();
+                stdout().flush().unwrap();
             }
             Event::SendDiagnostic(d) => hardware_event_sender
                 .send(Event::SendDiagnostic(d))
@@ -68,6 +49,9 @@ pub fn event_loop_diagnostic(
             Event::SerialDisconnect => {
                 println!("\nSerial disconnect :(");
                 return;
+            }
+            Event::TerminalEOF => {
+                println!("Stdin reached EOF. You might continue to receive data from the device.");
             }
             _ => (),
         }
