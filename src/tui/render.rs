@@ -28,7 +28,7 @@ use super::UiState;
 use crate::app::datatypes::DiagnosticLog;
 use crate::app::datatypes::JobLog;
 use crate::app::datatypes::Request;
-use crate::app::UserInputManager;
+use crate::app::user_input_manager::UserInputManager;
 
 impl UiState {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
