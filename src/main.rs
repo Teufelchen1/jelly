@@ -6,15 +6,16 @@ use clap::Parser;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use crate::events::event_loop;
-use crate::events::event_loop_headless;
-use crate::events::event_loop_headless_jelly;
 use crate::events::Event;
+use crate::headless::event_loop_configuration;
+use crate::headless::event_loop_diagnostic;
 use crate::slipmux::create_slipmux_thread;
+use crate::tui::tui_event_loop;
 
 mod app;
 mod command;
 mod events;
+mod headless;
 mod slipmux;
 mod transport;
 mod tui;
@@ -38,13 +39,13 @@ struct Cli {
 fn start_headless_diagnostic(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
-    event_loop_headless(&event_receiver, event_sender, &slipmux_event_sender);
+    event_loop_diagnostic(&event_receiver, event_sender, &slipmux_event_sender);
 }
 
 fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
-    event_loop_headless_jelly(&event_receiver, event_sender, &slipmux_event_sender);
+    event_loop_configuration(&event_receiver, event_sender, &slipmux_event_sender);
 }
 
 fn start_tui(args: Cli, main_channel: EventChannel) {
@@ -81,7 +82,7 @@ fn start_tui(args: Cli, main_channel: EventChannel) {
 
     terminal.clear().unwrap();
 
-    event_loop(
+    tui_event_loop(
         &event_receiver,
         event_sender,
         &slipmux_event_sender,
