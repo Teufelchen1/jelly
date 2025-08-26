@@ -31,20 +31,23 @@ struct Cli {
     ///
     /// This is interactive. Jelly will await input and output indefinitely.
     /// Configuration messages are ignored.
-    /// This means that any pre-known or configuration-based commands are not available.
-    #[arg(short = 'd', long, default_value_t = false)]
+    /// This means that any pre-known or configuration-based commands are not
+    /// available.
+    #[arg(short = 'd', long, default_value_t = false, verbatim_doc_comment)]
     headless_diagnostic: bool,
 
     /// If true, disables the TUI and passes configuration messages via stdio
     ///
     /// Use this mode inside scripts and pipe commands into Jelly.
-    /// This may be used interactive. Jelly will await input unitl EOF. Jelly will wait
-    /// for output until all commands are finished or the time-out is reached.
-    /// The output will only be displayed once EOF is reached. This is to preserve the
-    /// order of input commands regardless of the commands run time.
+    /// This may be used interactive.
+    /// Jelly will await input unitl EOF.
+    /// Jelly will wait for output until all commands are finished or
+    /// the time-out is reached. The output will only be displayed once EOF is
+    /// reached. This is to preserve the order of input commands regardless of
+    /// the commands run time.
     /// Diagnostic messages are ignored.
     /// Pre-known, configuration-based commands are available.
-    #[arg(short = 'c', long, default_value_t = false)]
+    #[arg(short = 'c', long, default_value_t = false, verbatim_doc_comment)]
     headless_configuration: bool,
 }
 
