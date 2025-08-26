@@ -13,4 +13,5 @@ pub enum Event {
     TerminalKey(KeyEvent),
     TerminalMouse(MouseEvent),
     TerminalResize,
+    TerminalEOF,
 }
