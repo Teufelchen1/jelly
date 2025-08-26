@@ -28,6 +28,7 @@ pub enum SaveToFile {
     No,
     AsBin(String),
     AsText(String),
+    ToStdout,
 }
 
 pub struct Job {
@@ -129,6 +130,10 @@ impl Job {
                     }
                 }
             }
+            SaveToFile::ToStdout => {
+                let bin_data: Vec<u8> = self.handler.as_mut().unwrap().export();
+                std::io::stdout().write_all(&bin_data).unwrap();
+            }
         }
         self.log.push_str(&buffer);
         buffer
@@ -201,6 +206,14 @@ impl JobLog {
     pub fn start(&mut self, job: Job) -> usize {
         self.jobs.push(job);
         self.jobs.len() - 1
+    }
+
+    pub fn dump(&self) -> Vec<String> {
+        let mut dump = vec![];
+        for job in &self.jobs {
+            dump.push(job.log.clone());
+        }
+        dump
     }
 }
 
@@ -352,7 +365,7 @@ impl Response {
         }
     }
 
-    fn get_payload(&self) -> String {
+    pub fn get_payload(&self) -> String {
         let payload = &self.coap.message.payload;
         let payload_formatted = if payload.is_empty() {
             "Empty payload".to_owned()

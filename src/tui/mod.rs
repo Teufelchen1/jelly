@@ -1,168 +1,94 @@
-use tui_widgets::scrollview::ScrollViewState;
+use std::io::Stdout;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::Sender;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+use crossterm::event::MouseEventKind;
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+
+use crate::app::App;
+use crate::Event;
+
+pub use ui_state::SelectedTab;
+pub use ui_state::UiState;
 
 mod render;
+mod ui_state;
 
-#[derive(Default, Clone, Copy)]
-enum SelectedTab {
-    #[default]
-    Overview,
-    Diagnostic,
-    Configuration,
-    Commands,
-    Help,
-}
-
-struct ScrollState {
-    state: ScrollViewState,
-    position: usize,
-    follow: bool,
-}
-
-impl ScrollState {
-    fn new() -> Self {
-        Self {
-            state: ScrollViewState::default(),
-            position: 0,
-            follow: true,
-        }
-    }
-
-    fn scroll_down(&mut self) {
-        self.position = self.position.saturating_sub(1);
-        // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
-        self.follow = self.position == 0;
-        self.state.scroll_down();
-    }
-
-    fn scroll_up(&mut self) {
-        self.follow = false;
-        // Can't scroll up when already on top
-        if self.state.offset().y != 0 {
-            self.position = self.position.saturating_add(1);
-        }
-        self.state.scroll_up();
-    }
-
-    fn get_state_for_rendering(&mut self) -> &mut ScrollViewState {
-        // For the "sticky" behavior, where the view remains at the bottom
-        // Needs to be done during rendering as more content could have been added, making
-        // a jump to the bottom necessary
-        if self.follow {
-            self.state.scroll_to_bottom();
-        }
-
-        &mut self.state
-    }
-}
-
-pub struct UiState {
-    device_path: Option<String>,
-    overview_scroll: ScrollState,
-    diagnostic_scroll: ScrollState,
-    configuration_scroll: ScrollState,
-    command_scroll: ScrollState,
-    help_scroll: ScrollState,
-    current_tab: SelectedTab,
-    riot_board: String,
-    riot_version: String,
-}
-
-impl UiState {
-    pub fn new() -> Self {
-        Self {
-            device_path: None,
-
-            current_tab: SelectedTab::Overview,
-
-            overview_scroll: ScrollState::new(),
-            diagnostic_scroll: ScrollState::new(),
-            configuration_scroll: ScrollState::new(),
-            command_scroll: ScrollState::new(),
-            help_scroll: ScrollState::new(),
-
-            riot_board: "Unkown".to_owned(),
-            riot_version: "Unkown".to_owned(),
-        }
-    }
-
-    pub fn set_board_name(&mut self, name: String) {
-        self.riot_board = name;
-    }
-
-    pub fn set_board_version(&mut self, version: String) {
-        self.riot_version = version;
-    }
-
-    pub fn set_device_path(&mut self, path: String) {
-        self.device_path = Some(path);
-    }
-
-    pub fn clear_device_path(&mut self) {
-        self.device_path = None;
-    }
-
-    fn get_config(&self) -> String {
-        format!(
-            "Version: {}\nBoard: {}\n",
-            self.riot_version, self.riot_board,
-        )
-    }
-
-    fn get_connection(&self) -> String {
-        match &self.device_path {
-            Some(device_path) => {
-                format!(
-                    "✅ connected via {device_path} with RIOT {}",
-                    self.riot_version
-                )
+fn terminal_thread(sender: &Sender<Event>) {
+    loop {
+        match crossterm::event::read().unwrap() {
+            crossterm::event::Event::Key(key) => {
+                sender.send(Event::TerminalKey(key)).unwrap();
             }
-            None => "❌ not connected, retrying..".to_owned(),
-        }
-    }
-
-    pub fn scroll_down(&mut self) {
-        match self.current_tab {
-            SelectedTab::Overview => {
-                self.overview_scroll.scroll_down();
-                self.configuration_scroll.scroll_down();
+            crossterm::event::Event::Mouse(mouse) => {
+                if matches!(
+                    mouse.kind,
+                    MouseEventKind::ScrollDown | MouseEventKind::ScrollUp
+                ) {
+                    sender.send(Event::TerminalMouse(mouse)).unwrap();
+                }
             }
-            SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_down(),
-            SelectedTab::Configuration => self.configuration_scroll.scroll_down(),
-            SelectedTab::Commands => self.command_scroll.scroll_down(),
-            SelectedTab::Help => self.help_scroll.scroll_down(),
-        }
-    }
-
-    pub fn scroll_up(&mut self) {
-        match self.current_tab {
-            SelectedTab::Overview => {
-                self.overview_scroll.scroll_up();
-                self.configuration_scroll.scroll_up();
+            crossterm::event::Event::Resize(_columns, _rows) => {
+                sender.send(Event::TerminalResize).unwrap();
             }
-            SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_up(),
-            SelectedTab::Configuration => self.configuration_scroll.scroll_up(),
-            SelectedTab::Commands => self.command_scroll.scroll_up(),
-            SelectedTab::Help => self.help_scroll.scroll_up(),
+            _ => (),
         }
     }
+}
 
-    pub const fn select_overview_view(&mut self) {
-        self.current_tab = SelectedTab::Overview;
-    }
+fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
+    thread::spawn(move || terminal_thread(&sender))
+}
 
-    pub const fn select_diagnostic_view(&mut self) {
-        self.current_tab = SelectedTab::Diagnostic;
-    }
+pub fn event_loop_tui(
+    event_channel: &Receiver<Event>,
+    event_sender: Sender<Event>,
+    hardware_event_sender: &Sender<Event>,
+    mut terminal: Terminal<CrosstermBackend<Stdout>>,
+) {
+    create_terminal_thread(event_sender.clone());
 
-    pub const fn select_configuration_view(&mut self) {
-        self.current_tab = SelectedTab::Configuration;
-    }
+    let mut app = App::new(event_sender);
+    terminal.draw(|frame| app.draw(frame)).unwrap();
 
-    pub const fn select_commands_view(&mut self) {
-        self.current_tab = SelectedTab::Commands;
-    }
-
-    pub const fn select_help_view(&mut self) {
-        self.current_tab = SelectedTab::Help;
+    loop {
+        let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
+            Ok(event) => event,
+            Err(RecvTimeoutError::Timeout) => {
+                continue;
+            }
+            Err(RecvTimeoutError::Disconnected) => panic!(),
+        };
+        match event {
+            Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
+            Event::Configuration(data) => app.on_configuration_msg(&data),
+            Event::Packet(_data) => (),
+            Event::SendDiagnostic(d) => hardware_event_sender
+                .send(Event::SendDiagnostic(d))
+                .unwrap(),
+            Event::SendConfiguration(c) => hardware_event_sender
+                .send(Event::SendConfiguration(c))
+                .unwrap(),
+            Event::SerialConnect(name) => app.on_connect(name),
+            Event::SerialDisconnect => app.on_disconnect(),
+            Event::TerminalString(_msg) => (),
+            Event::TerminalKey(key) => {
+                if !app.on_key(key) {
+                    break;
+                }
+            }
+            Event::TerminalMouse(mouse) => {
+                if !app.on_mouse(mouse) {
+                    break;
+                }
+            }
+            Event::TerminalResize | Event::TerminalEOF => (),
+        }
+        terminal.draw(|frame| app.draw(frame)).unwrap();
     }
 }
