@@ -21,6 +21,7 @@ use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
+use ratatui::widgets::Wrap;
 use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
 
@@ -424,7 +425,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
 
         let text = self.get_config();
         let text = Text::from(text);
-        let paragraph = Paragraph::new(text);
+        let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
         let paragraph_block = paragraph.block(left_block_down);
 
         frame.render_widget(paragraph_block, area);

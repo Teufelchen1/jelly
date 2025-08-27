@@ -39,7 +39,7 @@ pub fn create_slipmux_thread(event_sender: Sender<Event>, device_path: PathBuf) 
 }
 
 fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl Write>>>) {
-    thread::sleep(Duration::from_millis(300));
+    thread::sleep(Duration::from_millis(350));
     while let Ok(event) = receiver.recv() {
         match event {
             Event::SendDiagnostic(msg) => {
@@ -98,6 +98,7 @@ fn read_thread(
                 device_path.to_string_lossy().to_string(),
             ))
             .unwrap();
+
         read_loop(&mut read_port, sender);
 
         {
@@ -116,7 +117,7 @@ fn read_thread(
 fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
     let mut slipmux_decoder = Decoder::new();
     let mut handler = BufferedFrameHandler::new();
-
+    let mut first_frame_error = true;
     loop {
         handler.results.clear();
         let mut buffer = [0; 10240];
@@ -128,6 +129,10 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
                     if num == 0 {
                         sender.send(Event::SerialDisconnect).unwrap();
                         break;
+                    }
+                    if first_frame_error && num == 1 && buffer[0] == 0 {
+                        first_frame_error = false;
+                        continue;
                     }
                     num
                 }
@@ -151,15 +156,19 @@ fn read_loop(read_port: &mut impl Read, sender: &Sender<Event>) {
 
         for slipframe in &handler.results {
             if slipframe.is_err() {
-                sender
-                    .send(Event::Diagnostic(format!(
-                        "Received ({:?}): {:?}\n",
-                        slipframe,
-                        &buffer[..bytes_read]
-                    )))
-                    .unwrap();
+                if !first_frame_error {
+                    sender
+                        .send(Event::Diagnostic(format!(
+                            "Received ({:?}): {:?}\n",
+                            slipframe,
+                            &buffer[..bytes_read]
+                        )))
+                        .unwrap();
+                }
+                first_frame_error = false;
                 continue;
             }
+            first_frame_error = false;
             match slipframe.as_ref().unwrap() {
                 Slipmux::Diagnostic(s) => {
                     sender.send(Event::Diagnostic(s.clone())).unwrap();
