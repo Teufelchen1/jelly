@@ -236,8 +236,11 @@ impl App {
                     }
                     // Display usage info to the user
                     Err(e) => {
+                        self.overall_log.add(&cmd_string);
+                        self.overall_log.add("\n");
                         self.job_log.start(Job::new_failed(cmd_string.clone(), &e));
                         self.overall_log.add(&e);
+                        self.overall_log.add("\n> ");
                     }
                 }
             }

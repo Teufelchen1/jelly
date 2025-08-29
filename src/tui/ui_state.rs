@@ -109,10 +109,7 @@ impl UiState {
     pub fn get_connection(&self) -> String {
         match &self.device_path {
             Some(device_path) => {
-                format!(
-                    "✅ connected via {device_path} with RIOT {}",
-                    self.riot_version
-                )
+                format!("✅ connected via {device_path}")
             }
             None => "❌ not connected, retrying..".to_owned(),
         }

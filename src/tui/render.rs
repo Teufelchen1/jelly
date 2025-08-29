@@ -35,19 +35,23 @@ impl UiState {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
         let tab_titles = [
             "Overview (F1)",
-            "Diagnostic (F2)",
-            "Configuration (F3)",
+            "Text (F2)",
+            "CoAP (F3)",
             "Commands (F4)",
             "Help (F5)",
         ];
         let title = if frame.area().width < 100 {
             "Jelly 🪼"
         } else {
-            "Jelly 🪼: The friendly SLIPMUX for RIOT OS"
+            "Jelly 🪼: The friendly Shell for RIOT OS"
         };
 
-        let title_area =
-            Layout::horizontal([Constraint::Length(72), Constraint::Fill(1)]).split(header_area);
+        let tab_len: usize = tab_titles.map(|x| x.len() + 1).iter().sum();
+        let title_area = Layout::horizontal([
+            Constraint::Length(tab_len.try_into().unwrap()),
+            Constraint::Fill(1),
+        ])
+        .split(header_area);
 
         frame.render_widget(
             Tabs::new(tab_titles)
@@ -82,7 +86,7 @@ impl UiState {
             .title_alignment(Alignment::Left);
 
         // Putting this here is not ideal, todo: somewhat autogenerate command list
-        let text = r"Jelly 🪼: The friendly SLIPMUX for RIOT OS
+        let text = r"Jelly 🪼: The friendly Shell for RIOT OS
 
 Jelly is a tool that allows you to send commands to an attached device. The commands
 are send via slipmux and can be either plain text or CoAP based. A device is typically
@@ -219,7 +223,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
     ) {
         let right_block_up = Block::bordered()
             .border_style(Style::new().gray())
-            .title(vec![Span::from("Configuration Messages")])
+            .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
 
         let mut req_blocks = vec![];
@@ -392,7 +396,7 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
     ) {
         let left_block_up = Block::bordered()
             .border_style(Style::new().gray())
-            .title(vec![Span::from("Diagnostic & Commands")])
+            .title(vec![Span::from("Text & Commands")])
             .title_alignment(Alignment::Left);
 
         let content_width = left_block_up.inner(area).width;

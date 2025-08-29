@@ -1,4 +1,5 @@
 pub use coap_get_template::CoapGet;
+use coap_get_template::Hello;
 use mem::MemRead;
 use multi_endpoints_sample::MultiEndpointSample;
 use ps::Ps;
@@ -25,5 +26,6 @@ pub fn all_commands() -> Vec<Command> {
         MultiEndpointSample::cmd(),
         MemRead::cmd(),
         Ps::cmd(),
+        Hello::cmd(),
     ]
 }

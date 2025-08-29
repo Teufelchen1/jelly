@@ -113,6 +113,10 @@ fn main() {
         println!("{} could not be found.", args.tty_path.display());
         return;
     }
+    if args.headless_diagnostic && args.headless_configuration {
+        println!("No. You can't do both at the same time.");
+        return;
+    }
 
     let main_channel: EventChannel = mpsc::channel();
 
