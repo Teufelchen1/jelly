@@ -94,7 +94,6 @@ impl App {
     fn send_configuration_request(&mut self, msg: &mut Packet) {
         msg.header.message_id = self.get_new_message_id();
         msg.set_token(self.get_new_token());
-        msg.add_option(CoapOption::Block2, vec![0x05]);
 
         let data = encode_buffered(Slipmux::Configuration(msg.to_bytes().unwrap()));
         self.event_sender
