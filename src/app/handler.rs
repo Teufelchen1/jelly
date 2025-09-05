@@ -204,7 +204,6 @@ impl App {
                     request.set_path(&endpoint);
                 }
                 request.message.set_token(self.get_new_token());
-                request.message.add_option(CoapOption::Block2, vec![0x05]);
                 let data =
                     encode_buffered(Slipmux::Configuration(request.message.to_bytes().unwrap()));
                 self.event_sender
