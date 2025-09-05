@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use clap::Parser;
-use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
+use coap_lite::{CoapRequest, Packet};
 use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
@@ -129,8 +129,8 @@ impl CommandHandler for MemRead {
         self.send_request()
     }
 
-    fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
-        let mut decoder = Decoder::new(payload);
+    fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        let mut decoder = Decoder::new(&response.payload);
         if let Ok(bytes) = decoder.bytes() {
             self.buffer.extend_from_slice(bytes);
         }

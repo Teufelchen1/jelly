@@ -2,8 +2,8 @@ use std::fmt::Write;
 
 use clap::Parser;
 use clap::Subcommand;
-use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
+use coap_lite::{CoapRequest, Packet};
 use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
@@ -100,14 +100,14 @@ impl CommandHandler for Saul {
         request
     }
 
-    fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
-        self.payload = payload.to_vec();
+    fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        self.payload.clone_from(&response.payload);
         let mut out = String::new();
-        let mut decoder = Decoder::new(payload);
+        let mut decoder = Decoder::new(&self.payload);
 
         match self.cli.operation {
             None => {
-                out = decode_sensor_list_into_string(payload);
+                out = decode_sensor_list_into_string(&self.payload);
             }
             Some(SaulOperation::Read { id }) => {
                 let data = decoder.map();

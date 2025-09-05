@@ -3,8 +3,8 @@ use std::fmt::Formatter;
 use std::fmt::Write;
 
 use clap::Parser;
-use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
+use coap_lite::{CoapRequest, Packet};
 use minicbor::Decoder;
 
 use super::Command;
@@ -117,10 +117,10 @@ impl CommandHandler for Ps {
         request
     }
 
-    fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
-        self.payload = payload.to_vec();
+    fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        self.payload.clone_from(&response.payload);
         let mut out = String::new();
-        let mut decoder = Decoder::new(payload);
+        let mut decoder = Decoder::new(&self.payload);
         let mut sum_stack = 0;
         let mut sum_stack_used = 0;
         let mut sum_stack_free = 0;

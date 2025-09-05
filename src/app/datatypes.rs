@@ -9,6 +9,7 @@ use coap_lite::CoapRequest;
 use coap_lite::CoapResponse;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
+use coap_lite::Packet;
 use ratatui::prelude::Alignment;
 use ratatui::prelude::Stylize;
 use ratatui::style::Style;
@@ -167,12 +168,12 @@ impl JobLog {
         Self { jobs: vec![] }
     }
 
-    pub fn job_handle_payload(
+    pub fn job_handle_response(
         &mut self,
         job_id: usize,
-        payload: &[u8],
+        response: &Packet,
     ) -> Option<CoapRequest<String>> {
-        self.jobs[job_id].handler.as_mut().unwrap().handle(payload)
+        self.jobs[job_id].handler.as_mut().unwrap().handle(response)
     }
 
     pub fn job_wants_display(&self, job_id: usize) -> bool {

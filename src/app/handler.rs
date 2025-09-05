@@ -86,11 +86,11 @@ impl App {
         self.ui_state.clear_device_path();
     }
 
-    fn handle_pending_job(&mut self, mut hash_index: u64, payload: &[u8]) {
+    fn handle_pending_job(&mut self, mut hash_index: u64, response: &Packet) {
         // Do we have a job / handler for this request?
         // Removes it from the job list here
         if let Some(job_id) = self.ongoing_jobs.remove(&hash_index) {
-            let maybe_request = self.job_log.job_handle_payload(job_id, payload);
+            let maybe_request = self.job_log.job_handle_response(job_id, response);
             if self.job_log.job_wants_display(job_id) {
                 let buffer = self.job_log.job_display(job_id);
                 self.overall_log.add(&buffer);
@@ -124,7 +124,7 @@ impl App {
 
         // Do we have a job / handler for this request?
         // Removes it from the job list if finished
-        self.handle_pending_job(hash_index, &response.payload);
+        self.handle_pending_job(hash_index, &response);
 
         let found_matching_request = self
             .configuration_log

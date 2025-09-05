@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use coap_lite::CoapRequest;
+use coap_lite::{CoapRequest, Packet};
 
 use commands::CoapGet;
 pub use library::CommandLibrary;
@@ -15,7 +15,7 @@ pub trait CommandHandler {
     fn init(&mut self) -> CoapRequest<String>;
 
     /// Called everytime a response is found to the last request this handler has sent.
-    fn handle(&mut self, _payload: &[u8]) -> Option<CoapRequest<String>> {
+    fn handle(&mut self, _payload: &Packet) -> Option<CoapRequest<String>> {
         None
     }
 
