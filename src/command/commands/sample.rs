@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use clap::Parser;
-use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
+use coap_lite::{CoapRequest, Packet};
 use coap_message::MinimalWritableMessage;
 use minicbor::Encoder;
 
@@ -78,8 +78,8 @@ impl CommandHandler for SampleCommand {
         request
     }
 
-    fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
-        self.buffer = String::from_utf8_lossy(payload).to_string();
+    fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        self.buffer = String::from_utf8_lossy(&response.payload).to_string();
         self.buffer = self.buffer.replace(',', "\n");
         self.finished = true;
         self.displayable = true;

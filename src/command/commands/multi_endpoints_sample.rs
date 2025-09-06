@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
-use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
+use coap_lite::{CoapRequest, Packet};
 
 use super::Command;
 use super::CommandHandler;
@@ -48,12 +48,12 @@ impl CommandHandler for MultiEndpointSample {
         request
     }
 
-    fn handle(&mut self, payload: &[u8]) -> Option<CoapRequest<String>> {
+    fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        let decoded = String::from_utf8_lossy(&response.payload);
+
         match self.state_machine {
             0 => {
-                self.buffer += &String::from_utf8_lossy(payload)
-                    .to_string()
-                    .replace(',', "\n");
+                self.buffer += &decoded.replace(',', "\n");
                 self.buffer += "\n";
 
                 let mut request: CoapRequest<String> = CoapRequest::new();
@@ -64,9 +64,7 @@ impl CommandHandler for MultiEndpointSample {
                 Some(request)
             }
             1 => {
-                self.buffer += &String::from_utf8_lossy(payload)
-                    .to_string()
-                    .replace(',', "\n");
+                self.buffer += &decoded.replace(',', "\n");
                 self.buffer += "\n";
 
                 let mut request: CoapRequest<String> = CoapRequest::new();
@@ -77,9 +75,7 @@ impl CommandHandler for MultiEndpointSample {
                 Some(request)
             }
             _ => {
-                self.buffer += &String::from_utf8_lossy(payload)
-                    .to_string()
-                    .replace(',', "\n");
+                self.buffer += &decoded.replace(',', "\n");
                 self.buffer += "\n";
 
                 self.buffer += "==== Done! ====\n";
