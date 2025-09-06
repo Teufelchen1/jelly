@@ -367,6 +367,13 @@ impl Response {
     }
 
     pub fn get_payload(&self) -> String {
+        let is_error = match self.coap.message.header.code {
+            MessageClass::Response(response_type) => response_type.is_error(),
+            // There is *definitely* an error if this happens, but for our purposes, we can't apply
+            // the handling of diagnostic messages.
+            _ => false,
+        };
+
         let payload = &self.coap.message.payload;
         let payload_formatted = if payload.is_empty() {
             "Empty payload".to_owned()
@@ -376,6 +383,9 @@ impl Response {
                     String::from_utf8_lossy(payload).replace(",<", ",\n<")
                 }
                 Some(ContentFormat::TextPlain) => String::from_utf8_lossy(payload).to_string(),
+                // Payload in errors w/o content format is called diagnostic messages and expected
+                // to be text (see RFC7252 Section 5.5.2).
+                None if is_error => String::from_utf8_lossy(payload).to_string(),
                 // this is a cheap-in-terms-of-dependencies hex formatting; `aa bb cc` would be
                 // prettier than `[aa, bb, cc]`, but needs extra dependencies.
                 Some(ContentFormat::ApplicationCBOR) => {
