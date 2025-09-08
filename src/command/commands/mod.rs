@@ -8,11 +8,14 @@ pub use wkc::Wkc;
 use super::Command;
 use super::CommandHandler;
 
+pub mod asynch;
+
 mod coap_get_template;
 mod mem;
 mod multi_endpoints_sample;
 mod ps;
 mod saul;
+mod spider;
 mod wkc;
 
 pub fn all_commands() -> Vec<Command> {
@@ -21,5 +24,6 @@ pub fn all_commands() -> Vec<Command> {
         MultiEndpointSample::cmd(),
         MemRead::cmd(),
         Ps::cmd(),
+        asynch::build(spider::Spider),
     ]
 }
