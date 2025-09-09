@@ -8,6 +8,14 @@ pub use library::CommandLibrary;
 mod commands;
 mod library;
 
+type BoxedCommandHandler = Box<dyn CommandHandler>;
+
+pub enum CommandType {
+    Text(String),
+    CoAP(BoxedCommandHandler),
+    Jelly,
+}
+
 /// Callback API for handling a command.
 pub trait CommandHandler {
     /// This function is called exactly once. It is always the first call for any handler.
@@ -40,8 +48,6 @@ pub trait CommandHandler {
     }
 }
 
-type BoxedCommandHandler = Box<dyn CommandHandler>;
-
 /// Represents a command that the user can type into jelly
 pub struct Command {
     /// The name of the command, this is what the user types into jelly.
@@ -57,7 +63,7 @@ pub struct Command {
     ///
     /// On success, returns an implementation of the `CommandHandler` trait.
     /// On error, returns a human readable usage error.
-    pub parse: fn(&Self, args: &str) -> Result<BoxedCommandHandler, String>,
+    pub parse: fn(&Self, args: &str) -> Result<CommandType, String>,
 }
 
 impl Command {
@@ -67,7 +73,7 @@ impl Command {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
             required_endpoints: vec![],
-            parse: |_, _| Err("Undefined parse function".to_owned()),
+            parse: |c, _a| Ok(CommandType::Text(c.cmd.clone())),
         }
     }
 
@@ -76,7 +82,7 @@ impl Command {
     pub fn from_coap_resource(resource: &str, description: &str) -> Self {
         let mut new = Self::new(resource, description);
         new.required_endpoints.push(resource.to_owned());
-        new.parse = |c, a| Ok(CoapGet::parse(c, a));
+        new.parse = |c, a| Ok(CommandType::CoAP(CoapGet::parse(c, a)));
         new
     }
 

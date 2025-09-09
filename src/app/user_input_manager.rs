@@ -18,12 +18,8 @@ pub enum InputType<'a> {
     /// The user input something that is not known to Jelly
     /// Treated as diagnostic message
     RawCommand(String),
-    /// This input is a known command with a coap endpoint and a handler
-    /// Treated as configuration message
+    /// This input is a known command
     JellyCoapCommand(&'a Command, String, SaveToFile),
-    /// This input is a known command without a coap endpoint
-    /// Treated as diagnostic message
-    JellyCommand(&'a Command, String),
 }
 
 impl UserInputManager {
@@ -148,13 +144,7 @@ impl UserInputManager {
             .known_commands
             .find_by_cmd(cmd_string.split(' ').next().unwrap());
         match maybe_cmd {
-            Some(cmd) => {
-                if cmd.required_endpoints.is_empty() {
-                    InputType::JellyCommand(cmd, cmd_string.to_owned())
-                } else {
-                    InputType::JellyCoapCommand(cmd, cmd_string.to_owned(), file)
-                }
-            }
+            Some(cmd) => InputType::JellyCoapCommand(cmd, cmd_string.to_owned(), file),
             None => {
                 if self.user_input.starts_with('/') {
                     InputType::RawCoap(self.user_input.clone())

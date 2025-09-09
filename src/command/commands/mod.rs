@@ -7,6 +7,7 @@ pub use wkc::Wkc;
 
 use super::Command;
 use super::CommandHandler;
+use super::CommandType;
 
 mod coap_get_template;
 mod mem;
@@ -21,5 +22,11 @@ pub fn all_commands() -> Vec<Command> {
         MultiEndpointSample::cmd(),
         MemRead::cmd(),
         Ps::cmd(),
+        Command {
+            cmd: "NyanCat".to_string(),
+            description: "Fills your input field with nekos".to_string(),
+            required_endpoints: vec![],
+            parse: |_c, _a| Ok(CommandType::Jelly),
+        },
     ]
 }

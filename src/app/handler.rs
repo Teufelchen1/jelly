@@ -21,6 +21,7 @@ use crate::app::InputType;
 use crate::app::Job;
 use crate::app::Request;
 use crate::command::Command;
+use crate::command::CommandType;
 use crate::events::Event;
 
 impl App {
@@ -69,6 +70,7 @@ impl App {
         self.ui_state.set_device_path(name);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
+        request.message.add_option(CoapOption::Block2, vec![0x05]);
         self.send_configuration_request(&mut request.message);
         self.configuration_log.push(Request::new(request));
 
@@ -219,7 +221,7 @@ impl App {
                 let res = (cmd.parse)(cmd, &cmd_string);
                 match res {
                     // User input matches the cli, done with argument parsing
-                    Ok(mut handler) => {
+                    Ok(CommandType::CoAP(mut handler)) => {
                         let mut request = handler.init();
                         self.send_configuration_request(&mut request.message);
                         let hash_index: u64 = token_to_u64(request.message.get_token());
@@ -233,6 +235,22 @@ impl App {
                         self.overall_log.add(&cmd_string);
                         self.overall_log.add("\n> ");
                     }
+                    Ok(CommandType::Text(mut cmd_str)) => {
+                        if !cmd_str.ends_with('\n') {
+                            cmd_str.push('\n');
+                        }
+                        self.event_sender
+                            .send(Event::SendDiagnostic(cmd_str))
+                            .unwrap();
+                    }
+                    Ok(CommandType::Jelly) => {
+                        if cmd.cmd == "NyanCat" {
+                            self.user_input_manager
+                                .user_input
+                                .push_str("Nyan Nyan Nyan Neko Neko");
+                            return;
+                        }
+                    }
                     // Display usage info to the user
                     Err(e) => {
                         self.overall_log.add(&cmd_string);
@@ -241,14 +259,6 @@ impl App {
                         self.overall_log.add(&e);
                     }
                 }
-            }
-            InputType::JellyCommand(_cmd, mut cmd_str) => {
-                if !cmd_str.ends_with('\n') {
-                    cmd_str.push('\n');
-                }
-                self.event_sender
-                    .send(Event::SendDiagnostic(cmd_str))
-                    .unwrap();
             }
         }
 
