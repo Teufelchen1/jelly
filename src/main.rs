@@ -33,7 +33,13 @@ struct Cli {
     /// Configuration messages are ignored.
     /// This means that any pre-known or configuration-based commands are not
     /// available.
-    #[arg(short = 'd', long, default_value_t = false, verbatim_doc_comment)]
+    #[arg(
+        short = 'd',
+        long,
+        default_value_t = false,
+        verbatim_doc_comment,
+        conflicts_with = "headless_configuration"
+    )]
     headless_diagnostic: bool,
 
     /// If true, disables the TUI and passes configuration messages via stdio
@@ -47,7 +53,13 @@ struct Cli {
     /// the commands run time.
     /// Diagnostic messages are ignored.
     /// Pre-known, configuration-based commands are available.
-    #[arg(short = 'c', long, default_value_t = false, verbatim_doc_comment)]
+    #[arg(
+        short = 'c',
+        long,
+        default_value_t = false,
+        verbatim_doc_comment,
+        conflicts_with = "headless_diagnostic"
+    )]
     headless_configuration: bool,
 }
 
