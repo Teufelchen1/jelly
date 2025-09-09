@@ -25,7 +25,11 @@ pub struct SaulCli {
 
 #[derive(Subcommand, Debug)]
 enum SaulOperation {
+    /// Lists all attached sensors and actuators (this is the default)
+    List,
+    /// Read a value from a sensor
     Read { id: u8 },
+    /// Write a 8 bit value into an actuator
     Write { id: u8, data: u8 },
 }
 
@@ -68,7 +72,7 @@ impl CommandHandler for Saul {
 
         let _subcommand = {
             match self.cli.operation {
-                None => encoder.array(1).unwrap().u8(0).unwrap().end(),
+                None | Some(SaulOperation::List) => encoder.array(1).unwrap().u8(0).unwrap().end(),
                 Some(SaulOperation::Read { id }) => encoder
                     .array(2)
                     .unwrap()
@@ -106,7 +110,7 @@ impl CommandHandler for Saul {
         let mut decoder = Decoder::new(&self.payload);
 
         match self.cli.operation {
-            None => {
+            None | Some(SaulOperation::List) => {
                 out = decode_sensor_list_into_string(&self.payload);
             }
             Some(SaulOperation::Read { id }) => {

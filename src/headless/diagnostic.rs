@@ -43,8 +43,8 @@ pub fn event_loop_diagnostic(
                 print!("{msg}");
                 stdout().flush().unwrap();
             }
-            Event::SendDiagnostic(d) => hardware_event_sender
-                .send(Event::SendDiagnostic(d))
+            Event::TerminalString(msg) => hardware_event_sender
+                .send(Event::SendDiagnostic(msg))
                 .unwrap(),
             Event::SerialDisconnect => {
                 println!("\nSerial disconnect :(");
