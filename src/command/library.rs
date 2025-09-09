@@ -1,7 +1,6 @@
 use super::commands::all_commands;
 use super::commands::Wkc;
 use super::Command;
-use super::CommandRegistry;
 
 /// The command library maintains all known commands and provides easy access to them
 pub struct CommandLibrary {

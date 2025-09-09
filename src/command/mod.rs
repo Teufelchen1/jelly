@@ -41,17 +41,6 @@ pub trait CommandHandler {
 }
 
 type BoxedCommandHandler = Box<dyn CommandHandler>;
-/// Helper trait, used as glue between the library, command and handler, unifying the parsing.
-pub trait CommandRegistry {
-    /// Returns a new Command instance for this Handler
-    fn cmd() -> Command;
-
-    /// Parses a cli string, typically via clap
-    ///
-    /// On success, returns an implementation of the `CommandHandler` trait
-    /// On error, returns a human readable usage error
-    fn parse(cmd: &Command, args: String) -> Result<BoxedCommandHandler, String>;
-}
 
 /// Represents a command that the user can type into jelly
 pub struct Command {
@@ -64,11 +53,11 @@ pub struct Command {
     /// The CoAP end-point(s) this command requires, if any.
     pub required_endpoints: Vec<String>,
 
-    /// Parses a cli string, this is typically a wrapper around the `CommandRegistry::parse()` function.
+    /// Parses a cli string.
     ///
     /// On success, returns an implementation of the `CommandHandler` trait.
     /// On error, returns a human readable usage error.
-    pub parse: fn(&Self, args: String) -> Result<BoxedCommandHandler, String>,
+    pub parse: fn(&Self, args: &str) -> Result<BoxedCommandHandler, String>,
 }
 
 impl Command {
@@ -87,7 +76,7 @@ impl Command {
     pub fn from_coap_resource(resource: &str, description: &str) -> Self {
         let mut new = Self::new(resource, description);
         new.required_endpoints.push(resource.to_owned());
-        new.parse = |s, a| CoapGet::parse(s, a);
+        new.parse = |c, a| Ok(CoapGet::parse(c, a));
         new
     }
 

@@ -10,7 +10,6 @@ use minicbor::Encoder;
 
 use super::Command;
 use super::CommandHandler;
-use super::CommandRegistry;
 
 /// This is an example on how to use cbor as payload for the coap request.
 #[derive(Parser, Debug)]
@@ -42,8 +41,8 @@ pub struct Saul {
     cli: SaulCli,
 }
 
-impl CommandRegistry for Saul {
-    fn cmd() -> Command {
+impl Saul {
+    pub fn cmd() -> Command {
         Command {
             cmd: "Saul".to_owned(),
             description: "Saul over coap".to_owned(),
@@ -52,7 +51,7 @@ impl CommandRegistry for Saul {
         }
     }
 
-    fn parse(cmd: &Command, args: String) -> Result<Box<dyn CommandHandler>, String> {
+    fn parse(cmd: &Command, args: &str) -> Result<Box<dyn CommandHandler>, String> {
         let cli = SaulCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
         Ok(Box::new(Self {
             location: cmd.required_endpoints[0].clone(),

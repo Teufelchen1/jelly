@@ -216,7 +216,7 @@ impl App {
             }
             InputType::JellyCoapCommand(cmd, cmd_string, file) => {
                 // Process the user input string into arguments, yielding a handler
-                let res = (cmd.parse)(cmd, cmd_string.clone());
+                let res = (cmd.parse)(cmd, &cmd_string);
                 match res {
                     // User input matches the cli, done with argument parsing
                     Ok(mut handler) => {
