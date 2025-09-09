@@ -14,6 +14,7 @@ mod multi_endpoints_sample;
 mod ps;
 mod saul;
 mod wkc;
+mod write;
 
 pub fn all_commands() -> Vec<Command> {
     vec![
@@ -21,5 +22,6 @@ pub fn all_commands() -> Vec<Command> {
         MultiEndpointSample::cmd(),
         MemRead::cmd(),
         Ps::cmd(),
+        write::cmd(),
     ]
 }
