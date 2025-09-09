@@ -5,7 +5,6 @@ use coap_lite::{CoapRequest, Packet};
 
 use super::Command;
 use super::CommandHandler;
-use super::CommandRegistry;
 
 /// Explicit example for a command that queries the well-known/core. Could have been done
 /// using the template command, but explicit for demonstration.
@@ -16,23 +15,23 @@ pub struct Wkc {
     displayable: bool,
 }
 
-impl CommandRegistry for Wkc {
-    fn cmd() -> Command {
+impl Wkc {
+    pub fn cmd() -> Command {
         Command {
             cmd: "Wkc".to_owned(),
             description: "Query the wkc".to_owned(),
-            parse: |s, a| Self::parse(s, a),
+            parse: |c, a| Ok(Self::parse(c, a)),
             required_endpoints: vec!["/.well-known/core".to_owned()],
         }
     }
 
-    fn parse(cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self {
+    fn parse(cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
+        Box::new(Self {
             location: cmd.required_endpoints[0].clone(),
             buffer: String::new(),
             finished: false,
             displayable: false,
-        }))
+        })
     }
 }
 

@@ -3,7 +3,6 @@ use coap_lite::RequestType as Method;
 
 use super::Command;
 use super::CommandHandler;
-use super::CommandRegistry;
 
 /// This is a template command. It shows the minimum setup for making a
 /// CoAP GET request to a single endpoint. The result is not displayed to the user.
@@ -12,20 +11,10 @@ use super::CommandRegistry;
 /// quick get request via autocomplete.
 pub struct CoapGet(String);
 
-/// Interface with the library and handler
-impl CommandRegistry for CoapGet {
-    fn cmd() -> Command {
-        Command {
-            cmd: "CoapGet".to_owned(),
-            description: "GET a CoAP resource".to_owned(),
-            parse: |s, a| Self::parse(s, a),
-            required_endpoints: vec![],
-        }
-    }
-
+impl CoapGet {
     // Saves the first path of this command...so this won't work with commands that need multiple.
-    fn parse(cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self(cmd.required_endpoints[0].clone())))
+    pub fn parse(cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
+        Box::new(Self(cmd.required_endpoints[0].clone()))
     }
 }
 

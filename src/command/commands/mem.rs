@@ -9,7 +9,6 @@ use minicbor::Encoder;
 
 use super::Command;
 use super::CommandHandler;
-use super::CommandRegistry;
 
 /// Taken and modified from Alex Martens's clap-num
 /// <https://github.com/newAM/clap-num/blob/c6f1065f87f319098943aae75412a0c38c85f11c/src/lib.rs#L347-L384>
@@ -69,6 +68,25 @@ pub struct MemRead {
 }
 
 impl MemRead {
+    pub fn cmd() -> Command {
+        Command {
+            cmd: "MemRead".to_owned(),
+            description: "Read arbitrary memory".to_owned(),
+            parse: Self::parse,
+            required_endpoints: vec!["/jelly/Memory".to_owned()],
+        }
+    }
+
+    fn parse(_cmd: &Command, args: &str) -> Result<Box<dyn CommandHandler>, String> {
+        let cli = MemReadCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
+        Ok(Box::new(Self {
+            buffer: Vec::new(),
+            finished: false,
+            displayable: false,
+            cli,
+        }))
+    }
+
     fn send_request(&mut self) -> CoapRequest<String> {
         let mut buffer: [u8; 10] = [0; 10];
         let mut encoder = Encoder::new(&mut buffer[..]);
@@ -100,27 +118,6 @@ impl MemRead {
             .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
         request.message.set_payload(&buffer).unwrap();
         request
-    }
-}
-
-impl CommandRegistry for MemRead {
-    fn cmd() -> Command {
-        Command {
-            cmd: "MemRead".to_owned(),
-            description: "Read arbitrary memory".to_owned(),
-            parse: |s, a| Self::parse(s, a),
-            required_endpoints: vec!["/jelly/Memory".to_owned()],
-        }
-    }
-
-    fn parse(_cmd: &Command, args: String) -> Result<Box<dyn CommandHandler>, String> {
-        let cli = MemReadCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(Box::new(Self {
-            buffer: Vec::new(),
-            finished: false,
-            displayable: false,
-            cli,
-        }))
     }
 }
 

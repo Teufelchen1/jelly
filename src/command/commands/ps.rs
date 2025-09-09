@@ -9,7 +9,6 @@ use minicbor::Decoder;
 
 use super::Command;
 use super::CommandHandler;
-use super::CommandRegistry;
 
 /// This is an example on how to use cbor as payload for the coap request.
 #[derive(Parser, Debug)]
@@ -27,17 +26,17 @@ pub struct Ps {
     displayable: bool,
 }
 
-impl CommandRegistry for Ps {
-    fn cmd() -> Command {
+impl Ps {
+    pub fn cmd() -> Command {
         Command {
             cmd: "Ps".to_owned(),
             description: "Ps over coap, print thread info".to_owned(),
-            parse: |s, a| Self::parse(s, a),
+            parse: Self::parse,
             required_endpoints: vec!["/jelly/Ps".to_owned()],
         }
     }
 
-    fn parse(cmd: &Command, args: String) -> Result<Box<dyn CommandHandler>, String> {
+    fn parse(cmd: &Command, args: &str) -> Result<Box<dyn CommandHandler>, String> {
         let _cli = PsCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
         Ok(Box::new(Self {
             location: cmd.required_endpoints[0].clone(),

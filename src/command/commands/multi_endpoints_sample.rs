@@ -5,7 +5,6 @@ use coap_lite::{CoapRequest, Packet};
 
 use super::Command;
 use super::CommandHandler;
-use super::CommandRegistry;
 
 /// This is an example for writing a command that needs to issue multiple CoAP requests and
 /// keep track of the state while doing so.
@@ -16,12 +15,12 @@ pub struct MultiEndpointSample {
     state_machine: usize,
 }
 
-impl CommandRegistry for MultiEndpointSample {
-    fn cmd() -> Command {
+impl MultiEndpointSample {
+    pub fn cmd() -> Command {
         Command {
             cmd: "MultiEndpointSample".to_owned(),
             description: "Query multiple endpoints at once!".to_owned(),
-            parse: |s, a| Self::parse(s, a),
+            parse: |c, a| Ok(Self::parse(c, a)),
             required_endpoints: vec![
                 "/jelly/board".to_owned(),
                 "/shell/reboot".to_owned(),
@@ -30,13 +29,13 @@ impl CommandRegistry for MultiEndpointSample {
         }
     }
 
-    fn parse(_cmd: &Command, _args: String) -> Result<Box<dyn CommandHandler>, String> {
-        Ok(Box::new(Self {
+    fn parse(_cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
+        Box::new(Self {
             buffer: "==== Fetched a lot! ====\n".to_owned(),
             finished: false,
             displayable: false,
             state_machine: 0,
-        }))
+        })
     }
 }
 
