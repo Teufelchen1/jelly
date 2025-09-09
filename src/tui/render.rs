@@ -86,49 +86,7 @@ impl UiState {
             .title_alignment(Alignment::Left);
 
         // Putting this here is not ideal, todo: somewhat autogenerate command list
-        let text = r"Jelly 🪼: The friendly Shell for RIOT OS
-
-Jelly is a tool that allows you to send commands to an attached device. The commands
-are send via slipmux and can be either plain text or CoAP based. A device is typically
-connected via a serial (e.g. /dev/ttyUSB0) but Jelly also supports connecting via a unix
-socket, as long as the device speaks slipmux.
-
-Hotkeys:
-    Mousewheel: Scroll up and down.
-    F1: Presents an overview, showing diagnostic messages next to the configuration messages.
-    F2: Shows only the diagnostic messages.
-    F3: Shows only the configuration messages.
-    F5: This help :)
-    ESC: Quit Jelly.
-    RET: Send a command.
-    TAB: Autocomplete.
-    RIGHT: Autocomplete.
-
-You can always type in a command into the `User Input` field. You do not need to select it.
-When autocomplete is available, indicated by a light gray text in front of your cursor, 
-press TAB or RIGHT to complete your input.
-
-There are multiple classes of commands: 
-- Raw diagnostic commands, these are written in all lowercase and are send as is to the device.
-- CoAP endpoints, indicated by the leading `/`, send a CoAP GET request via a configuration
-    message to its path. The response, if any, will be logged in the configuration view.
-    Most endpoints are auto-discovered by Jelly but you can always send a GET request to any
-    endpoint as long as it starts with `/`.
-- Jelly commands, distinguishable by the leading uppercase letter, are commands that are 
-    run mainly on your host and only communicate with the device via configuration messages.
-    Every Jelly command offers usage information and help via the `--help` flag.
-    These commands can issue multiple CoAP requests and may take time to complete. They render
-    their own output into the diagnostic view and should look & feel close to the raw commands.
-- If you type in something that is not recognized by Jelly, it will be send as a raw string
-    via a diagnostic message to the device.
-
-Saving output:
-If you run a Jelly command, you can redirect the output into a file on your local filesystem.
-`Saul > /tmp/saul.txt`
-Some commands may allow exporting binary data. To export that use the `%>` redirect.
-`Saul %> /tmp/saul.cbor`
-If a command doesn't offer binary export, the `%>` will automatically downgrade to text export.
-";
+        let text = include_str!("help.txt");
         let mut text = Text::from(text);
         let path = env::current_dir();
         match path {
@@ -143,20 +101,15 @@ If a command doesn't offer binary export, the `%>` will automatically downgrade 
             }
         }
 
-        let content_width = border_block.inner(area).width;
-        let messages_hight = u16::try_from(text.height()).unwrap_or(u16::MAX);
+        let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
 
-        let mut scroll_view = ScrollView::new(Size::new(
-            // Make room for the scroll bar
-            content_width - 1,
-            messages_hight,
-        ));
+        // Make room for the scroll bar
+        let content_width = border_block.inner(area).width - 1;
+        let messages_hight = u16::try_from(paragraph.line_count(content_width)).unwrap_or(u16::MAX);
 
-        let paragraph = Paragraph::new(text);
-        scroll_view.render_widget(
-            paragraph,
-            Rect::new(0, 0, content_width - 1, messages_hight),
-        );
+        let mut scroll_view = ScrollView::new(Size::new(content_width, messages_hight));
+
+        scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, messages_hight));
 
         frame.render_stateful_widget(
             scroll_view,
