@@ -8,6 +8,18 @@ pub use library::CommandLibrary;
 mod commands;
 mod library;
 
+type BoxedCommandHandler = Box<dyn CommandHandler>;
+
+/// The type of the command, Jellys behaviour towards that command depons on this
+pub enum CommandType {
+    /// A raw diagnostic text message, will be send as is to the device
+    Text(String),
+    /// A command that does CoAP interactions
+    CoAP(BoxedCommandHandler),
+    /// A Jelly internal command, e.g. Help
+    Jelly,
+}
+
 /// Callback API for handling a command.
 pub trait CommandHandler {
     /// This function is called exactly once. It is always the first call for any handler.
@@ -33,14 +45,13 @@ pub trait CommandHandler {
     /// Provides a buffer into which the handler can write the result.
     fn display(&self, _buffer: &mut String) {}
 
+    /// Asks the command to provide a 'reasonable' binary export of its content
     fn export(&self) -> Vec<u8> {
         let mut buffer = String::new();
         self.display(&mut buffer);
         buffer.as_bytes().to_vec()
     }
 }
-
-type BoxedCommandHandler = Box<dyn CommandHandler>;
 
 /// Represents a command that the user can type into jelly
 pub struct Command {
@@ -55,29 +66,41 @@ pub struct Command {
 
     /// Parses a cli string.
     ///
-    /// On success, returns an implementation of the `CommandHandler` trait.
+    /// On success, returns a `CommandType`.
     /// On error, returns a human readable usage error.
-    pub parse: fn(&Self, args: &str) -> Result<BoxedCommandHandler, String>,
+    pub parse: fn(&Self, args: &str) -> Result<CommandType, String>,
 }
 
 impl Command {
-    /// Creates a new command without an end-point
-    pub fn new(cmd: &str, description: &str) -> Self {
+    /// Creates a new command without an end-point, send as raw diagnostic message
+    pub fn new_text_type(cmd: &str, description: &str) -> Self {
         Self {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
             required_endpoints: vec![],
-            parse: |_, _| Err("Undefined parse function".to_owned()),
+            parse: |c, _a| Ok(CommandType::Text(c.cmd.clone())),
         }
     }
 
-    /// Creates a new command from an CoAP end-point / location.
+    /// Creates a new command for Jelly internal usage
+    pub fn new_jelly_type(cmd: &str, description: &str) -> Self {
+        Self {
+            cmd: cmd.to_owned(),
+            description: description.to_owned(),
+            required_endpoints: vec![],
+            parse: |_c, _a| Ok(CommandType::Jelly),
+        }
+    }
+
+    /// Creates a new command that performs a CoAP GET request to a resource location.
     /// The location will become the commands name (what the user has to type in)
-    pub fn from_coap_resource(resource: &str, description: &str) -> Self {
-        let mut new = Self::new(resource, description);
-        new.required_endpoints.push(resource.to_owned());
-        new.parse = |c, a| Ok(CoapGet::parse(c, a));
-        new
+    pub fn new_coap_get(resource: &str, description: &str) -> Self {
+        Self {
+            cmd: resource.to_owned(),
+            description: description.to_owned(),
+            required_endpoints: vec![resource.to_owned()],
+            parse: |c, a| Ok(CommandType::CoAP(CoapGet::parse(c, a))),
+        }
     }
 
     /// Creates a new command from a special, RIOT specific CoAP end-point.
@@ -86,7 +109,7 @@ impl Command {
         let cmd = location
             .strip_prefix("/shell/")
             .expect("Failed to parse shell command location!");
-        Self::new(cmd, description)
+        Self::new_text_type(cmd, description)
     }
 
     /// Replaces the decription of a command

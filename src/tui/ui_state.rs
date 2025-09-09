@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use tui_widgets::scrollview::ScrollViewState;
 
 #[derive(Default, Clone, Copy)]
@@ -61,6 +62,7 @@ pub struct UiState {
     pub command_scroll: ScrollState,
     pub help_scroll: ScrollState,
     pub current_tab: SelectedTab,
+    pub command_help_list: String,
     riot_board: String,
     riot_version: String,
 }
@@ -78,8 +80,24 @@ impl UiState {
             command_scroll: ScrollState::new(),
             help_scroll: ScrollState::new(),
 
+            command_help_list: String::new(),
+
             riot_board: "Unkown".to_owned(),
             riot_version: "Unkown".to_owned(),
+        }
+    }
+
+    pub fn set_command_help_list(&mut self, cmds: Vec<(String, String, String)>) {
+        self.command_help_list.clear();
+        for (cmd, description, help) in cmds {
+            if help.is_empty() {
+                let _ = writeln!(self.command_help_list, "{cmd:<20}: {description}");
+            } else {
+                let _ = writeln!(
+                    self.command_help_list,
+                    "{cmd:<20}: {description} | see --help for more information"
+                );
+            }
         }
     }
 

@@ -64,6 +64,26 @@ impl App {
 
     pub fn force_all_commands_availabe(&mut self) {
         self.user_input_manager.force_all_commands_availabe();
+        self.populate_command_help_list();
+    }
+
+    fn populate_command_help_list(&mut self) {
+        let cmd_list = self
+            .user_input_manager
+            .known_commands
+            .list_available_commands();
+
+        // Vec<(Name, Description, Help)>
+        let err_list = cmd_list
+            .into_iter()
+            .map(|cmd| {
+                (cmd.parse)(cmd, &format!("{:} --help", cmd.cmd)).map_or_else(
+                    |x| (cmd.cmd.clone(), cmd.description.clone(), x),
+                    |_| (cmd.cmd.clone(), cmd.description.clone(), String::new()),
+                )
+            })
+            .collect::<Vec<_>>();
+        self.ui_state.set_command_help_list(err_list);
     }
 
     pub fn unfinished_jobs_count(&self) -> usize {

@@ -5,6 +5,7 @@ use coap_lite::{CoapRequest, Packet};
 
 use super::Command;
 use super::CommandHandler;
+use super::CommandType;
 
 /// This is an example for writing a command that needs to issue multiple CoAP requests and
 /// keep track of the state while doing so.
@@ -20,7 +21,7 @@ impl MultiEndpointSample {
         Command {
             cmd: "MultiEndpointSample".to_owned(),
             description: "Query multiple endpoints at once!".to_owned(),
-            parse: |c, a| Ok(Self::parse(c, a)),
+            parse: |c, a| Ok(CommandType::CoAP(Self::parse(c, a))),
             required_endpoints: vec![
                 "/jelly/board".to_owned(),
                 "/shell/reboot".to_owned(),

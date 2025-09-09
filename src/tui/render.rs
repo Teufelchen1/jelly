@@ -29,6 +29,9 @@ use super::UiState;
 use crate::app::datatypes::DiagnosticLog;
 use crate::app::datatypes::JobLog;
 use crate::app::datatypes::Request;
+use crate::app::user_input_manager::InputType::Command;
+use crate::app::user_input_manager::InputType::RawCoap;
+use crate::app::user_input_manager::InputType::RawCommand;
 use crate::app::user_input_manager::UserInputManager;
 
 impl UiState {
@@ -92,7 +95,7 @@ impl UiState {
         match path {
             Ok(path) => {
                 text.push_line(Line::from(format!(
-                    "Your current working directory is: {:}",
+                    "Your current working directory is: {:}\n",
                     path.display()
                 )));
             }
@@ -100,6 +103,9 @@ impl UiState {
                 text.push_line(Line::from("Your current working directory is unkown\n"));
             }
         }
+
+        text.push_line(Line::from("# Known commands\n"));
+        text.extend(Text::from(self.command_help_list.clone()));
 
         let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
 
@@ -226,12 +232,12 @@ impl UiState {
     }
 
     fn render_user_input(frame: &mut Frame, area: Rect, user_input_manager: &UserInputManager) {
-        let right_block_down = Block::bordered()
-            .border_style(Style::new().gray())
-            .title(vec![Span::from("User Input")])
-            .title_alignment(Alignment::Left);
-
         if user_input_manager.input_empty() {
+            let right_block_down = Block::bordered()
+                .border_style(Style::new().gray())
+                .title(vec![Span::from("User Input")])
+                .title_alignment(Alignment::Left);
+
             let mut text = Text::from(
                 Span::from("Type a command, for example: ").patch_style(Style::new().dark_gray()),
             );
@@ -244,6 +250,15 @@ impl UiState {
             frame.render_widget(paragraph, area);
             return;
         }
+        let title = match user_input_manager.classify_input() {
+            RawCoap(_) => "User Input: Raw CoAP request",
+            RawCommand(_) => "User Input: Raw diagnostic command",
+            Command(cmd, _, _) => &format!("User Input: {cmd}"),
+        };
+        let right_block_down = Block::bordered()
+            .border_style(Style::new().gray())
+            .title(vec![Span::from(title)])
+            .title_alignment(Alignment::Left);
 
         let box_size: usize = usize::from(area.width.checked_sub(2).unwrap_or(1));
         let input_len = user_input_manager.user_input.len();
