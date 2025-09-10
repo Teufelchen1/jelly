@@ -23,8 +23,15 @@ pub fn all_commands() -> Vec<Command> {
         MemRead::cmd(),
         Ps::cmd(),
         Command {
-            cmd: "NyanCat".to_string(),
-            description: "Fills your input field with nekos".to_string(),
+            cmd: "Help".to_owned(),
+            description: "Jelly Help".to_owned(),
+            required_endpoints: vec![],
+            parse: |_c, _a| Ok(CommandType::Jelly),
+        },
+        Command {
+            cmd: "ForceCmdsAvailable".to_owned(),
+            description: "Enables all implemented commands disregarding their requirements"
+                .to_owned(),
             required_endpoints: vec![],
             parse: |_c, _a| Ok(CommandType::Jelly),
         },

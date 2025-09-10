@@ -10,7 +10,19 @@ pub struct UserInputManager {
     pub cursor_position: usize,
 }
 
-pub enum InputType<'a> {
+// pub enum InputType<'a> {
+//     /// The user input something that is not known to Jelly but it
+//     /// starts with a `/` so it likely is a coap endpoint
+//     /// Treated as configuration message
+//     RawCoap(String),
+//     /// The user input something that is not known to Jelly
+//     /// Treated as diagnostic message
+//     RawCommand(String),
+//     /// This input is a known command
+//     JellyCommand(&'a Command, String, SaveToFile),
+// }
+
+pub enum InputType {
     /// The user input something that is not known to Jelly but it
     /// starts with a `/` so it likely is a coap endpoint
     /// Treated as configuration message
@@ -19,7 +31,7 @@ pub enum InputType<'a> {
     /// Treated as diagnostic message
     RawCommand(String),
     /// This input is a known command
-    JellyCoapCommand(&'a Command, String, SaveToFile),
+    JellyCommand(String, String, SaveToFile),
 }
 
 impl UserInputManager {
@@ -125,7 +137,7 @@ impl UserInputManager {
         self.user_input.is_empty()
     }
 
-    pub fn classify_input(&self) -> InputType<'_> {
+    pub fn classify_input(&self) -> InputType {
         let (cmd_string, file) = if let Some((cmd_string, path)) = self.user_input.split_once("%>")
         {
             let path = path.trim();
@@ -144,7 +156,7 @@ impl UserInputManager {
             .known_commands
             .find_by_cmd(cmd_string.split(' ').next().unwrap());
         match maybe_cmd {
-            Some(cmd) => InputType::JellyCoapCommand(cmd, cmd_string.to_owned(), file),
+            Some(cmd) => InputType::JellyCommand(cmd.cmd.clone(), cmd_string.to_owned(), file),
             None => {
                 if self.user_input.starts_with('/') {
                     InputType::RawCoap(self.user_input.clone())

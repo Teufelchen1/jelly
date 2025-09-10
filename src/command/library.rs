@@ -56,6 +56,10 @@ impl CommandLibrary {
         self.cmds.iter().map(|x| x.cmd.clone()).collect()
     }
 
+    pub fn list_available_commands(&self) -> Vec<&Command> {
+        self.cmds.iter().collect()
+    }
+
     /// Adds a `Command`
     pub fn add(&mut self, cmd: Command) {
         self.cmds.push(cmd);

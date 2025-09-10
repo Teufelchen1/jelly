@@ -15,6 +15,7 @@ use slipmux::Slipmux;
 
 use super::datatypes::token_to_u64;
 use super::datatypes::Response;
+use super::datatypes::SaveToFile;
 
 use crate::app::App;
 use crate::app::InputType;
@@ -63,6 +64,7 @@ impl App {
 
         self.user_input_manager
             .check_for_new_available_commands(&eps);
+        self.populate_command_help_list();
     }
 
     pub fn on_connect(&mut self, name: String) {
@@ -195,6 +197,60 @@ impl App {
         true
     }
 
+    fn execute_command(&mut self, cmd: &str, cmd_string: &str, file: SaveToFile) {
+        // This works around a lifetime issue
+        let cmd = self
+            .user_input_manager
+            .known_commands
+            .find_by_cmd(cmd)
+            .unwrap();
+        // Process the user input string into arguments, yielding a handler
+        let res = (cmd.parse)(cmd, cmd_string);
+        match res {
+            // User input matches the cli, done with argument parsing
+            Ok(CommandType::CoAP(mut handler)) => {
+                let mut request = handler.init();
+                self.send_configuration_request(&mut request.message);
+                let hash_index: u64 = token_to_u64(request.message.get_token());
+                self.configuration_log.push(Request::new(request));
+                let job_id = self
+                    .job_log
+                    .start(Job::new(handler, file, cmd_string.to_owned()));
+                self.ongoing_jobs.insert(hash_index, job_id);
+
+                // Mimiking RIOTs shell behavior for UX
+                self.overall_log.add(cmd_string);
+                self.overall_log.add("\n> ");
+            }
+            Ok(CommandType::Text(mut cmd_str)) => {
+                if !cmd_str.ends_with('\n') {
+                    cmd_str.push('\n');
+                }
+                self.event_sender
+                    .send(Event::SendDiagnostic(cmd_str))
+                    .unwrap();
+            }
+            Ok(CommandType::Jelly) => {
+                // This is kinda hacky but the alternative would be to pass &mut App
+                // into the command handler?
+                if cmd.cmd == "Help" {
+                    self.ui_state.select_help_view();
+                }
+                if cmd.cmd == "ForceCmdsAvailable" {
+                    self.force_all_commands_availabe();
+                }
+            }
+            // Display usage info to the user
+            Err(e) => {
+                self.overall_log.add(cmd_string);
+                self.overall_log.add("\n");
+                self.job_log
+                    .start(Job::new_failed(cmd_string.to_owned(), &e));
+                self.overall_log.add(&e);
+            }
+        }
+    }
+
     fn handle_command_commit(&mut self) {
         match self.user_input_manager.classify_input() {
             InputType::RawCoap(endpoint) => {
@@ -216,49 +272,8 @@ impl App {
             InputType::RawCommand(cmd) => {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
             }
-            InputType::JellyCoapCommand(cmd, cmd_string, file) => {
-                // Process the user input string into arguments, yielding a handler
-                let res = (cmd.parse)(cmd, &cmd_string);
-                match res {
-                    // User input matches the cli, done with argument parsing
-                    Ok(CommandType::CoAP(mut handler)) => {
-                        let mut request = handler.init();
-                        self.send_configuration_request(&mut request.message);
-                        let hash_index: u64 = token_to_u64(request.message.get_token());
-                        self.configuration_log.push(Request::new(request));
-                        let job_id =
-                            self.job_log
-                                .start(Job::new(handler, file, cmd_string.clone()));
-                        self.ongoing_jobs.insert(hash_index, job_id);
-
-                        // Mimiking RIOTs shell behavior for UX
-                        self.overall_log.add(&cmd_string);
-                        self.overall_log.add("\n> ");
-                    }
-                    Ok(CommandType::Text(mut cmd_str)) => {
-                        if !cmd_str.ends_with('\n') {
-                            cmd_str.push('\n');
-                        }
-                        self.event_sender
-                            .send(Event::SendDiagnostic(cmd_str))
-                            .unwrap();
-                    }
-                    Ok(CommandType::Jelly) => {
-                        if cmd.cmd == "NyanCat" {
-                            self.user_input_manager
-                                .user_input
-                                .push_str("Nyan Nyan Nyan Neko Neko");
-                            return;
-                        }
-                    }
-                    // Display usage info to the user
-                    Err(e) => {
-                        self.overall_log.add(&cmd_string);
-                        self.overall_log.add("\n");
-                        self.job_log.start(Job::new_failed(cmd_string.clone(), &e));
-                        self.overall_log.add(&e);
-                    }
-                }
+            InputType::JellyCommand(cmd, cmd_string, file) => {
+                self.execute_command(&cmd, &cmd_string, file);
             }
         }
 

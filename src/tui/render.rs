@@ -92,7 +92,7 @@ impl UiState {
         match path {
             Ok(path) => {
                 text.push_line(Line::from(format!(
-                    "Your current working directory is: {:}",
+                    "Your current working directory is: {:}\n",
                     path.display()
                 )));
             }
@@ -100,6 +100,9 @@ impl UiState {
                 text.push_line(Line::from("Your current working directory is unkown\n"));
             }
         }
+
+        text.push_line(Line::from("# Known commands\n"));
+        text.extend(Text::from(self.command_help_list.clone()));
 
         let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
 
