@@ -45,10 +45,8 @@ impl App {
                     let new_command = Command::from_location(s, "A RIOT shell command");
                     self.user_input_manager.known_commands.add(new_command);
 
-                    let new_endpoint = Command::from_coap_resource(
-                        s,
-                        "A CoAP resource describing a RIOT shell command",
-                    );
+                    let new_endpoint =
+                        Command::new_coap_get(s, "A CoAP resource describing a RIOT shell command");
                     self.user_input_manager.known_commands.add(new_endpoint);
 
                     // Fetch description
@@ -56,7 +54,7 @@ impl App {
                     self.send_configuration_request(&mut request.message);
                     self.configuration_log.push(Request::new(request));
                 } else {
-                    let new_command = Command::from_coap_resource(s, "A CoAP resource");
+                    let new_command = Command::new_coap_get(s, "A CoAP resource");
                     self.user_input_manager.known_commands.add(new_command);
                 }
             }
@@ -272,7 +270,7 @@ impl App {
             InputType::RawCommand(cmd) => {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
             }
-            InputType::JellyCommand(cmd, cmd_string, file) => {
+            InputType::Command(cmd, cmd_string, file) => {
                 self.execute_command(&cmd, &cmd_string, file);
             }
         }

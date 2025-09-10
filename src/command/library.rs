@@ -1,5 +1,4 @@
 use super::commands::all_commands;
-use super::commands::Wkc;
 use super::Command;
 
 /// The command library maintains all known commands and provides easy access to them
@@ -15,11 +14,7 @@ impl CommandLibrary {
     /// - /.well-known/core: Query the wkc
     pub fn default() -> Self {
         Self {
-            cmds: vec![
-                Command::new("help", "Prints all available commands"),
-                Command::from_coap_resource("/.well-known/core", "Query the wkc"),
-                Wkc::cmd(),
-            ],
+            cmds: vec![],
             stored_cmds: all_commands(),
         }
     }

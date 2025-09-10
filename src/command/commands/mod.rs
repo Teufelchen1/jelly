@@ -22,18 +22,13 @@ pub fn all_commands() -> Vec<Command> {
         MultiEndpointSample::cmd(),
         MemRead::cmd(),
         Ps::cmd(),
-        Command {
-            cmd: "Help".to_owned(),
-            description: "Jelly Help".to_owned(),
-            required_endpoints: vec![],
-            parse: |_c, _a| Ok(CommandType::Jelly),
-        },
-        Command {
-            cmd: "ForceCmdsAvailable".to_owned(),
-            description: "Enables all implemented commands disregarding their requirements"
-                .to_owned(),
-            required_endpoints: vec![],
-            parse: |_c, _a| Ok(CommandType::Jelly),
-        },
+        Wkc::cmd(),
+        Command::new_text_type("help", "Prints all available commands"),
+        Command::new_coap_get("/.well-known/core", "Query the wkc"),
+        Command::new_jelly_type("Help", "Jelly Help"),
+        Command::new_jelly_type(
+            "ForceCmdsAvailable",
+            "Enables all implemented commands disregarding their requirements",
+        ),
     ]
 }
