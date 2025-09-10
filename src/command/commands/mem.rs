@@ -9,6 +9,7 @@ use minicbor::Encoder;
 
 use super::Command;
 use super::CommandHandler;
+use super::CommandType;
 
 /// Taken and modified from Alex Martens's clap-num
 /// <https://github.com/newAM/clap-num/blob/c6f1065f87f319098943aae75412a0c38c85f11c/src/lib.rs#L347-L384>
@@ -77,14 +78,14 @@ impl MemRead {
         }
     }
 
-    fn parse(_cmd: &Command, args: &str) -> Result<Box<dyn CommandHandler>, String> {
+    fn parse(_cmd: &Command, args: &str) -> Result<CommandType, String> {
         let cli = MemReadCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(Box::new(Self {
+        Ok(CommandType::CoAP(Box::new(Self {
             buffer: Vec::new(),
             finished: false,
             displayable: false,
             cli,
-        }))
+        })))
     }
 
     fn send_request(&mut self) -> CoapRequest<String> {

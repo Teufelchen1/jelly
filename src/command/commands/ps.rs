@@ -9,6 +9,7 @@ use minicbor::Decoder;
 
 use super::Command;
 use super::CommandHandler;
+use super::CommandType;
 
 /// This is an example on how to use cbor as payload for the coap request.
 #[derive(Parser, Debug)]
@@ -36,15 +37,15 @@ impl Ps {
         }
     }
 
-    fn parse(cmd: &Command, args: &str) -> Result<Box<dyn CommandHandler>, String> {
+    fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
         let _cli = PsCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(Box::new(Self {
+        Ok(CommandType::CoAP(Box::new(Self {
             location: cmd.required_endpoints[0].clone(),
             buffer: String::new(),
             payload: vec![],
             finished: false,
             displayable: false,
-        }))
+        })))
     }
 }
 

@@ -5,6 +5,7 @@ use coap_lite::{CoapRequest, Packet};
 
 use super::Command;
 use super::CommandHandler;
+use super::CommandType;
 
 /// Explicit example for a command that queries the well-known/core. Could have been done
 /// using the template command, but explicit for demonstration.
@@ -20,7 +21,7 @@ impl Wkc {
         Command {
             cmd: "Wkc".to_owned(),
             description: "Query the wkc".to_owned(),
-            parse: |c, a| Ok(Self::parse(c, a)),
+            parse: |c, a| Ok(CommandType::CoAP(Self::parse(c, a))),
             required_endpoints: vec!["/.well-known/core".to_owned()],
         }
     }
