@@ -37,3 +37,8 @@ minicbor = "2"
 serialport = { version = "4", default-features = false }
 slipmux = "0.3.2"
 tui-widgets = { version = "0.4", default-features = false, features = ["scrollview"] }
+smol = "2.0.2"
+futures-lite = "2.6.1"
+async-channel = "2.5.0"
+eyre = "0.6.12"
+url = "2.5.7"
