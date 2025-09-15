@@ -8,6 +8,7 @@ pub enum SelectedTab {
     Diagnostic,
     Configuration,
     Commands,
+    Net,
     Help,
 }
 
@@ -26,14 +27,14 @@ impl ScrollState {
         }
     }
 
-    fn scroll_down(&mut self) {
+    const fn scroll_down(&mut self) {
         self.position = self.position.saturating_sub(1);
         // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
         self.follow = self.position == 0;
         self.state.scroll_down();
     }
 
-    fn scroll_up(&mut self) {
+    const fn scroll_up(&mut self) {
         self.follow = false;
         // Can't scroll up when already on top
         if self.state.offset().y != 0 {
@@ -56,10 +57,12 @@ impl ScrollState {
 
 pub struct UiState {
     device_path: Option<String>,
+    iface_name: Option<String>,
     pub overview_scroll: ScrollState,
     pub diagnostic_scroll: ScrollState,
     pub configuration_scroll: ScrollState,
     pub command_scroll: ScrollState,
+    pub net_scroll: ScrollState,
     pub help_scroll: ScrollState,
     pub current_tab: SelectedTab,
     pub command_help_list: String,
@@ -71,6 +74,7 @@ impl UiState {
     pub fn new() -> Self {
         Self {
             device_path: None,
+            iface_name: None,
 
             current_tab: SelectedTab::Overview,
 
@@ -78,12 +82,13 @@ impl UiState {
             diagnostic_scroll: ScrollState::new(),
             configuration_scroll: ScrollState::new(),
             command_scroll: ScrollState::new(),
+            net_scroll: ScrollState::new(),
             help_scroll: ScrollState::new(),
 
             command_help_list: String::new(),
 
-            riot_board: "Unkown".to_owned(),
-            riot_version: "Unkown".to_owned(),
+            riot_board: "Unknown".to_owned(),
+            riot_version: "Unknown".to_owned(),
         }
     }
 
@@ -109,6 +114,10 @@ impl UiState {
         self.riot_version = version;
     }
 
+    pub fn set_iface_name(&mut self, name: String) {
+        self.iface_name = Some(name);
+    }
+
     pub fn set_device_path(&mut self, path: String) {
         self.device_path = Some(path);
     }
@@ -125,15 +134,21 @@ impl UiState {
     }
 
     pub fn get_connection(&self) -> String {
+        let net = match &self.iface_name {
+            Some(iface_name) => {
+                format!(" | Network via {iface_name}")
+            }
+            None => String::new(),
+        };
         match &self.device_path {
             Some(device_path) => {
-                format!("✅ connected via {device_path}")
+                format!("✅ connected via {device_path}{net}")
             }
-            None => "❌ not connected, retrying..".to_owned(),
+            None => format!("❌ not connected, retrying..{net}"),
         }
     }
 
-    pub fn scroll_down(&mut self) {
+    pub const fn scroll_down(&mut self) {
         match self.current_tab {
             SelectedTab::Overview => {
                 self.overview_scroll.scroll_down();
@@ -142,11 +157,12 @@ impl UiState {
             SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_down(),
             SelectedTab::Configuration => self.configuration_scroll.scroll_down(),
             SelectedTab::Commands => self.command_scroll.scroll_down(),
+            SelectedTab::Net => self.net_scroll.scroll_down(),
             SelectedTab::Help => self.help_scroll.scroll_down(),
         }
     }
 
-    pub fn scroll_up(&mut self) {
+    pub const fn scroll_up(&mut self) {
         match self.current_tab {
             SelectedTab::Overview => {
                 self.overview_scroll.scroll_up();
@@ -155,6 +171,7 @@ impl UiState {
             SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_up(),
             SelectedTab::Configuration => self.configuration_scroll.scroll_up(),
             SelectedTab::Commands => self.command_scroll.scroll_up(),
+            SelectedTab::Net => self.net_scroll.scroll_up(),
             SelectedTab::Help => self.help_scroll.scroll_up(),
         }
     }
@@ -177,5 +194,9 @@ impl UiState {
 
     pub const fn select_help_view(&mut self) {
         self.current_tab = SelectedTab::Help;
+    }
+
+    pub const fn select_net_view(&mut self) {
+        self.current_tab = SelectedTab::Net;
     }
 }

@@ -1,3 +1,7 @@
+use crate::create_network_thread;
+use crate::create_slipmux_thread;
+use crate::Cli;
+use crate::EventChannel;
 use std::io::Stdout;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -45,10 +49,63 @@ fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
     thread::spawn(move || terminal_thread(&sender))
 }
 
+pub fn start_tui(args: Cli, main_channel: EventChannel) {
+    fn reset_terminal() {
+        crossterm::terminal::disable_raw_mode().unwrap();
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::event::DisableMouseCapture,
+            crossterm::cursor::Show
+        )
+        .unwrap();
+    }
+
+    let (event_sender, event_receiver) = main_channel;
+    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+
+    let network_event_sender = if let Some(network_name) = args.network {
+        let name = network_name.unwrap_or_else(|| "slip".to_owned());
+        Some(create_network_thread(event_sender.clone(), &name))
+    } else {
+        None
+    };
+
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic| {
+        reset_terminal();
+        original_hook(panic);
+    }));
+
+    crossterm::terminal::enable_raw_mode().unwrap();
+    let mut stdout = std::io::stdout();
+    crossterm::execute!(
+        stdout,
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture,
+        crossterm::cursor::Hide
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout)).unwrap();
+
+    terminal.clear().unwrap();
+
+    event_loop_tui(
+        &event_receiver,
+        event_sender,
+        &slipmux_event_sender,
+        network_event_sender.as_ref(),
+        terminal,
+    );
+
+    reset_terminal();
+}
+
 pub fn event_loop_tui(
     event_channel: &Receiver<Event>,
     event_sender: Sender<Event>,
     hardware_event_sender: &Sender<Event>,
+    network_event_sender: Option<&Sender<Event>>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
     create_terminal_thread(event_sender.clone());
@@ -67,13 +124,24 @@ pub fn event_loop_tui(
         match event {
             Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
             Event::Configuration(data) => app.on_configuration_msg(&data),
-            Event::Packet(_data) => (),
+            Event::Packet(packet) => {
+                app.on_packet(&packet);
+                if let Some(n_e_sender) = network_event_sender {
+                    n_e_sender.send(Event::Packet(packet)).unwrap();
+                }
+            }
             Event::SendDiagnostic(d) => hardware_event_sender
                 .send(Event::SendDiagnostic(d))
                 .unwrap(),
             Event::SendConfiguration(c) => hardware_event_sender
                 .send(Event::SendConfiguration(c))
                 .unwrap(),
+            Event::SendPacket(packet) => {
+                app.off_packet(&packet);
+                hardware_event_sender
+                    .send(Event::SendPacket(packet))
+                    .unwrap();
+            }
             Event::SerialConnect(name) => app.on_connect(name),
             Event::SerialDisconnect => app.on_disconnect(),
             Event::TerminalString(_msg) => (),
@@ -88,6 +156,7 @@ pub fn event_loop_tui(
                 }
             }
             Event::TerminalResize | Event::TerminalEOF => (),
+            Event::NetworkConnect(iface) => app.on_interface_creation(iface),
         }
         terminal.draw(|frame| app.draw(frame)).unwrap();
     }

@@ -62,6 +62,10 @@ impl App {
         self.populate_command_help_list();
     }
 
+    pub fn on_interface_creation(&mut self, name: String) {
+        self.ui_state.set_iface_name(name);
+    }
+
     pub fn on_connect(&mut self, name: String) {
         self.connected = true;
         self.ui_state.set_device_path(name);
@@ -167,7 +171,17 @@ impl App {
         self.overall_log.add(msg);
     }
 
-    pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
+    // Packet from the node to the host
+    pub fn on_packet(&mut self, packet: &[u8]) {
+        self.packet_log.add_to_host(packet);
+    }
+
+    // Packet from the host to the node
+    pub fn off_packet(&mut self, packet: &[u8]) {
+        self.packet_log.add_to_node(packet);
+    }
+
+    pub const fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
                 self.ui_state.scroll_down();
@@ -318,6 +332,9 @@ impl App {
                 self.ui_state.select_commands_view();
             }
             KeyCode::F(5) => {
+                self.ui_state.select_net_view();
+            }
+            KeyCode::F(12) => {
                 self.ui_state.select_help_view();
                 self.populate_command_help_list();
             }

@@ -3,20 +3,22 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 
 use clap::Parser;
-use ratatui::backend::CrosstermBackend;
-use ratatui::Terminal;
 
 use crate::events::Event;
-use crate::headless::event_loop_configuration;
-use crate::headless::event_loop_diagnostic;
+use crate::headless::start_headless_configuration;
+use crate::headless::start_headless_diagnostic;
+use crate::headless::start_headless_diagnostic_network;
+use crate::headless::start_headless_network;
 use crate::slipmux::create_slipmux_thread;
-use crate::tui::event_loop_tui;
+use crate::tui::start_tui;
+use network::create_network_thread;
 
 mod app;
 mod command;
 mod datatypes;
 mod events;
 mod headless;
+mod network;
 mod slipmux;
 mod transport;
 mod tui;
@@ -27,6 +29,14 @@ type EventChannel = (Sender<Event>, Receiver<Event>);
 struct Cli {
     /// The path to the UART TTY interface
     tty_path: std::path::PathBuf,
+
+    /// If enabled, creates a SLIP network interface
+    /// Optionally specifies the base name of the interface
+    ///
+    /// Requires higher privileges to create the TUN interface.
+    #[arg(short = 't', long, verbatim_doc_comment)]
+    #[allow(clippy::option_option)]
+    network: Option<Option<String>>,
 
     /// If true, disables the TUI and passes diagnostic messages via stdio
     ///
@@ -59,65 +69,21 @@ struct Cli {
         long,
         default_value_t = false,
         verbatim_doc_comment,
-        conflicts_with = "headless_diagnostic"
+        conflicts_with_all = ["headless_diagnostic", "headless_network"]
     )]
     headless_configuration: bool,
-}
 
-fn start_headless_diagnostic(args: Cli, main_channel: EventChannel) {
-    let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
-    event_loop_diagnostic(&event_receiver, event_sender, &slipmux_event_sender);
-}
-
-fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
-    let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
-    event_loop_configuration(&event_receiver, event_sender, &slipmux_event_sender);
-}
-
-fn start_tui(args: Cli, main_channel: EventChannel) {
-    fn reset_terminal() {
-        crossterm::terminal::disable_raw_mode().unwrap();
-        crossterm::execute!(
-            std::io::stdout(),
-            crossterm::terminal::LeaveAlternateScreen,
-            crossterm::event::DisableMouseCapture,
-            crossterm::cursor::Show
-        )
-        .unwrap();
-    }
-
-    let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
-
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic| {
-        reset_terminal();
-        original_hook(panic);
-    }));
-
-    crossterm::terminal::enable_raw_mode().unwrap();
-    let mut stdout = std::io::stdout();
-    crossterm::execute!(
-        stdout,
-        crossterm::terminal::EnterAlternateScreen,
-        crossterm::event::EnableMouseCapture,
-        crossterm::cursor::Hide
-    )
-    .unwrap();
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout)).unwrap();
-
-    terminal.clear().unwrap();
-
-    event_loop_tui(
-        &event_receiver,
-        event_sender,
-        &slipmux_event_sender,
-        terminal,
-    );
-
-    reset_terminal();
+    /// If true, disables the TUI and acts as a network interface only
+    ///
+    /// Configuration messages are ignored.
+    #[arg(
+        short = 'n',
+        long,
+        default_value_t = false,
+        verbatim_doc_comment,
+        conflicts_with = "headless_configuration"
+    )]
+    headless_network: bool,
 }
 
 fn main() {
@@ -129,8 +95,12 @@ fn main() {
 
     let main_channel: EventChannel = mpsc::channel();
 
-    if args.headless_diagnostic {
+    if args.headless_diagnostic && (args.headless_network || args.network.is_some()) {
+        start_headless_diagnostic_network(args, main_channel);
+    } else if args.headless_diagnostic {
         start_headless_diagnostic(args, main_channel);
+    } else if args.headless_network {
+        start_headless_network(args, main_channel);
     } else if args.headless_configuration {
         start_headless_configuration(args, main_channel);
     } else {
