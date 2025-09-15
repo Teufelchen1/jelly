@@ -30,6 +30,7 @@ pub struct App {
     configuration_log: Vec<Request>,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
+    packet_log: Vec<Vec<u8>>,
     user_input_manager: UserInputManager,
     ui_state: UiState,
     token_count: u16,
@@ -48,6 +49,7 @@ impl App {
             configuration_log: vec![],
             configuration_packets: vec![],
             diagnostic_log: DiagnosticLog::new(),
+            packet_log: vec![],
 
             user_input_manager: UserInputManager::new(),
 
@@ -109,6 +111,7 @@ impl App {
             &self.configuration_log,
             &self.diagnostic_log,
             &self.overall_log,
+            &self.packet_log,
         );
     }
 }

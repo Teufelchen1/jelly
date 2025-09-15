@@ -69,6 +69,7 @@ impl App {
         self.ui_state.set_device_path(name);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
+        request.message.add_option(CoapOption::Block2, vec![0x05]);
         self.send_configuration_request(&mut request.message);
         self.configuration_log.push(Request::new(request));
 
@@ -178,6 +179,10 @@ impl App {
     pub fn on_diagnostic_msg(&mut self, msg: &str) {
         self.diagnostic_log.add(msg);
         self.overall_log.add(msg);
+    }
+
+    pub fn on_packet(&mut self, packet: &[u8]) {
+        self.packet_log.push(packet.to_vec());
     }
 
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
@@ -311,6 +316,9 @@ impl App {
             }
             KeyCode::F(5) => {
                 self.ui_state.select_help_view();
+            }
+            KeyCode::F(6) => {
+                self.ui_state.select_net_view();
             }
             KeyCode::Esc => {
                 return false;

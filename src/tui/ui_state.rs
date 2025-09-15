@@ -8,6 +8,7 @@ pub enum SelectedTab {
     Configuration,
     Commands,
     Help,
+    Net,
 }
 
 pub struct ScrollState {
@@ -125,6 +126,7 @@ impl UiState {
             SelectedTab::Configuration => self.configuration_scroll.scroll_down(),
             SelectedTab::Commands => self.command_scroll.scroll_down(),
             SelectedTab::Help => self.help_scroll.scroll_down(),
+            _ => (),
         }
     }
 
@@ -138,6 +140,7 @@ impl UiState {
             SelectedTab::Configuration => self.configuration_scroll.scroll_up(),
             SelectedTab::Commands => self.command_scroll.scroll_up(),
             SelectedTab::Help => self.help_scroll.scroll_up(),
+            _ => (),
         }
     }
 
@@ -159,5 +162,9 @@ impl UiState {
 
     pub const fn select_help_view(&mut self) {
         self.current_tab = SelectedTab::Help;
+    }
+
+    pub const fn select_net_view(&mut self) {
+        self.current_tab = SelectedTab::Net;
     }
 }

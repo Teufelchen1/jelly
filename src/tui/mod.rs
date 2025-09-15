@@ -67,7 +67,7 @@ pub fn event_loop_tui(
         match event {
             Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
             Event::Configuration(data) => app.on_configuration_msg(&data),
-            Event::Packet(_data) => (),
+            Event::Packet(packet) => app.on_packet(&packet),
             Event::SendDiagnostic(d) => hardware_event_sender
                 .send(Event::SendDiagnostic(d))
                 .unwrap(),
