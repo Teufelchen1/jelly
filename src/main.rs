@@ -3,12 +3,14 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 
 use clap::Parser;
+use network::create_network_thread;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::events::Event;
 use crate::headless::event_loop_configuration;
 use crate::headless::event_loop_diagnostic;
+use crate::headless::event_loop_network;
 use crate::slipmux::create_slipmux_thread;
 use crate::tui::event_loop_tui;
 
@@ -16,6 +18,7 @@ mod app;
 mod command;
 mod events;
 mod headless;
+mod network;
 mod slipmux;
 mod transport;
 mod tui;
@@ -61,6 +64,15 @@ struct Cli {
         conflicts_with = "headless_diagnostic"
     )]
     headless_configuration: bool,
+
+    #[arg(
+        short = 'n',
+        long,
+        default_value_t = false,
+        verbatim_doc_comment,
+        conflicts_with = "headless_diagnostic"
+    )]
+    headless_network: bool,
 }
 
 fn start_headless_diagnostic(args: Cli, main_channel: EventChannel) {
@@ -73,6 +85,18 @@ fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
     event_loop_configuration(&event_receiver, event_sender, &slipmux_event_sender);
+}
+
+fn start_headless_network(args: Cli, main_channel: EventChannel) {
+    let (event_sender, event_receiver) = main_channel;
+    let network_event_sender = create_network_thread(event_sender.clone());
+    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    event_loop_network(
+        &event_receiver,
+        event_sender,
+        &slipmux_event_sender,
+        &network_event_sender,
+    );
 }
 
 fn start_tui(args: Cli, main_channel: EventChannel) {
@@ -88,6 +112,7 @@ fn start_tui(args: Cli, main_channel: EventChannel) {
     }
 
     let (event_sender, event_receiver) = main_channel;
+    let network_event_sender = create_network_thread(event_sender.clone());
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
 
     let original_hook = std::panic::take_hook();
@@ -113,6 +138,7 @@ fn start_tui(args: Cli, main_channel: EventChannel) {
         &event_receiver,
         event_sender,
         &slipmux_event_sender,
+        &network_event_sender,
         terminal,
     );
 
@@ -132,6 +158,8 @@ fn main() {
         start_headless_diagnostic(args, main_channel);
     } else if args.headless_configuration {
         start_headless_configuration(args, main_channel);
+    } else if args.headless_network {
+        start_headless_network(args, main_channel);
     } else {
         start_tui(args, main_channel);
         println!("Thank you for using Jelly 🪼");

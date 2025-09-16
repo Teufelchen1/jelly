@@ -49,6 +49,7 @@ pub fn event_loop_tui(
     event_channel: &Receiver<Event>,
     event_sender: Sender<Event>,
     hardware_event_sender: &Sender<Event>,
+    network_event_sender: &Sender<Event>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
     create_terminal_thread(event_sender.clone());
@@ -67,12 +68,20 @@ pub fn event_loop_tui(
         match event {
             Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
             Event::Configuration(data) => app.on_configuration_msg(&data),
-            Event::Packet(packet) => app.on_packet(&packet),
+            Event::Packet(packet) => {
+                app.on_packet(&packet);
+                network_event_sender
+                    .send(Event::SendPacket(packet))
+                    .unwrap();
+            }
             Event::SendDiagnostic(d) => hardware_event_sender
                 .send(Event::SendDiagnostic(d))
                 .unwrap(),
             Event::SendConfiguration(c) => hardware_event_sender
                 .send(Event::SendConfiguration(c))
+                .unwrap(),
+            Event::SendPacket(packet) => hardware_event_sender
+                .send(Event::SendPacket(packet))
                 .unwrap(),
             Event::SerialConnect(name) => app.on_connect(name),
             Event::SerialDisconnect => app.on_disconnect(),

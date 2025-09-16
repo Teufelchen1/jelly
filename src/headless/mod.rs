@@ -6,9 +6,11 @@ use std::thread::JoinHandle;
 
 pub use configuration::event_loop_configuration;
 pub use diagnostic::event_loop_diagnostic;
+pub use network::event_loop_network;
 
 mod configuration;
 mod diagnostic;
+mod network;
 
 fn raw_terminal_thread(sender: &Sender<Event>) {
     let mut buffer = String::new();

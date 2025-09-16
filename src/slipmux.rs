@@ -67,6 +67,16 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
                 // Pseudo rate limit the outgoing data as to not overwhelm embedded devices
                 thread::sleep(Duration::from_millis(50));
             }
+            Event::SendPacket(packet) => {
+                let data = encode_buffered(Slipmux::Packet(packet));
+                if let Some(port) = (*port_guard.lock().unwrap()).as_mut() {
+                    port.write_all(&data).unwrap();
+                    port.flush().unwrap();
+                } else {
+                    // Nothing to do, drop the message silently
+                    continue;
+                }
+            }
             _ => todo!(),
         }
     }

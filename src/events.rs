@@ -7,6 +7,7 @@ pub enum Event {
     Packet(Vec<u8>),
     SendDiagnostic(String),
     SendConfiguration(Vec<u8>),
+    SendPacket(Vec<u8>),
     SerialConnect(String),
     SerialDisconnect,
     TerminalString(String),
