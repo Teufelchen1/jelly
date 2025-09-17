@@ -37,4 +37,4 @@ minicbor = "2"
 serialport = { version = "4", default-features = false }
 slipmux = "0.3.2"
 tui-widgets = { version = "0.4", default-features = false, features = ["scrollview"] }
-tun-rs = "*"
+tun-rs = {version = "2", features = ["interruptible"]}

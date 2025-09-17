@@ -1,44 +1,53 @@
+use std::io::ErrorKind::Interrupted;
 use std::io::ErrorKind::TimedOut;
 use std::io::ErrorKind::WouldBlock;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::thread;
 
+use tun_rs::InterruptEvent;
 use tun_rs::SyncDevice;
 
 use crate::events::Event;
 
 pub fn create_network_thread(event_sender: Sender<Event>) -> Sender<Event> {
     let (slipmux_sender, slipmux_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
+    let (packet_sender, packet_receiver): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
 
     use tun_rs::DeviceBuilder;
     let dev = DeviceBuilder::new()
-        .name("utun7")
+        .name("tun1")
         .ipv6("fe80::acab", 64)
-        .mtu(1400)
         .multi_queue(true)
         .build_sync()
         .unwrap();
 
-    let dev2 = dev.try_clone().unwrap();
+    let interruptor = Arc::new(InterruptEvent::new().unwrap());
+    let interruptor2 = interruptor.clone();
+
     thread::Builder::new()
         .name("NetworkWriter".to_owned())
-        .spawn(move || write_thread(&slipmux_receiver, dev2))
+        .spawn(move || write_thread(&slipmux_receiver, &packet_sender, &interruptor))
         .unwrap();
     thread::Builder::new()
         .name("NetworkReader".to_owned())
-        .spawn(move || read_thread(&event_sender, dev))
+        .spawn(move || read_thread(&event_sender, dev, &packet_receiver, &interruptor2))
         .unwrap();
     slipmux_sender
 }
 
-fn write_thread(receiver: &Receiver<Event>, tun_dev: SyncDevice) {
+fn write_thread(
+    receiver: &Receiver<Event>,
+    packet_sender: &Sender<Vec<u8>>,
+    interruptor: &InterruptEvent,
+) {
     while let Ok(event) = receiver.recv() {
         match event {
             Event::Packet(packet) => {
-                println!("<- Send packet to host {:}", packet.len());
-                tun_dev.send(&packet).unwrap();
+                let _ = interruptor.trigger();
+                packet_sender.send(packet.clone()).unwrap();
             }
             _ => {
                 println!("Something went wrong");
@@ -47,10 +56,16 @@ fn write_thread(receiver: &Receiver<Event>, tun_dev: SyncDevice) {
     }
 }
 
-fn read_thread(sender: &Sender<Event>, tun_dev: SyncDevice) {
+fn read_thread(
+    sender: &Sender<Event>,
+    tun_dev: SyncDevice,
+    packet_receiver: &Receiver<Vec<u8>>,
+    interruptor: &InterruptEvent,
+) {
     loop {
         let mut buf = [0; 65535];
-        let res = tun_dev.recv(&mut buf);
+        let _ = tun_dev.set_nonblocking(true);
+        let res = tun_dev.recv_intr(&mut buf, &interruptor);
         let bytes_read = {
             match res {
                 Ok(num) => {
@@ -67,18 +82,28 @@ fn read_thread(sender: &Sender<Event>, tun_dev: SyncDevice) {
                     if err.kind() == WouldBlock || err.kind() == TimedOut {
                         continue;
                     }
+                    if err.kind() == Interrupted {
+                        if interruptor.is_trigger() {
+                            interruptor.reset().unwrap();
+                            if let Ok(packet) = packet_receiver.try_recv() {
+                                tun_dev.send(&packet).unwrap();
+                                println!("<- Send packet to host {:} bytes", packet.len());
+                            }
+
+                            continue;
+                        } else {
+                            continue;
+                        }
+                    }
                     sender
-                        .send(Event::Diagnostic(format!("Tun Port error {err:?}\n")))
+                        .send(Event::Diagnostic(format!("Tun Port error {err:?}")))
                         .unwrap();
                     sender.send(Event::SerialDisconnect).unwrap();
                     break;
                 }
             }
         };
-        println!(
-            "-> Got packet from host {bytes_read} bytes\n{:?}",
-            &buf[..bytes_read]
-        );
+        println!("-> Got packet from host {bytes_read} bytes");
         sender
             .send(Event::SendPacket(buf[..bytes_read].to_vec()))
             .unwrap();

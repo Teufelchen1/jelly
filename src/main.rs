@@ -89,8 +89,8 @@ fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
 
 fn start_headless_network(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
-    let network_event_sender = create_network_thread(event_sender.clone());
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    let network_event_sender = create_network_thread(event_sender.clone());
     event_loop_network(
         &event_receiver,
         event_sender,
