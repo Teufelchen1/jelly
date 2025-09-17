@@ -10,6 +10,16 @@ use coap_lite::CoapResponse;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
 use coap_lite::Packet;
+use pnet_packet::icmp::IcmpPacket;
+use pnet_packet::icmp::IcmpTypes;
+use pnet_packet::icmp::MutableIcmpPacket;
+use pnet_packet::icmpv6::Icmpv6Packet;
+use pnet_packet::icmpv6::Icmpv6Types;
+use pnet_packet::icmpv6::MutableIcmpv6Packet;
+use pnet_packet::ip::IpNextHeaderProtocols;
+use pnet_packet::ipv4::{Ipv4Packet, MutableIpv4Packet};
+use pnet_packet::ipv6::{Ipv6Packet, MutableIpv6Packet};
+use pnet_packet::Packet as IpPacket;
 use ratatui::prelude::Alignment;
 use ratatui::prelude::Stylize;
 use ratatui::style::Style;
@@ -529,5 +539,119 @@ impl Request {
             let size = text.lines.len() + 2;
             (size, Paragraph::new(text).block(block))
         }
+    }
+}
+
+pub enum PacketDirection {
+    ToNode(Ipv6Packet<'static>),
+    ToHost(Ipv6Packet<'static>),
+}
+
+impl PacketDirection {
+    fn get_title(&self) -> String {
+        match self {
+            Self::ToNode(packet) => {
+                format!(
+                    "Host [{:}] -> Node [{:}]",
+                    packet.get_source(),
+                    packet.get_destination()
+                )
+            }
+            Self::ToHost(packet) => {
+                format!(
+                    "Host [{:}] <- Node [{:}]",
+                    packet.get_destination(),
+                    packet.get_source(),
+                )
+            }
+        }
+    }
+
+    fn get_payload(&self) -> String {
+        match self {
+            Self::ToNode(packet) | Self::ToHost(packet) => {
+                let protocol = match packet.get_next_header() {
+                    IpNextHeaderProtocols::Icmpv6 => {
+                        match Icmpv6Packet::new(packet.payload())
+                            .unwrap()
+                            .get_icmpv6_type()
+                        {
+                            Icmpv6Types::EchoRequest => "ICMP6 EchoRequest",
+                            Icmpv6Types::EchoReply => "ICMP6 EchoReply",
+                            _ => "ICMP6",
+                        }
+                    }
+                    _ => "Unkown",
+                };
+
+                format!(
+                    "Proto: {:} TTL {:3} Payload length: {:}",
+                    protocol,
+                    packet.get_hop_limit(),
+                    packet.get_payload_length()
+                )
+            }
+        }
+    }
+
+    pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
+        let block = Block::new()
+            .borders(Borders::TOP | Borders::BOTTOM)
+            .style(Style::new().gray())
+            .title(self.get_title())
+            .title_alignment(Alignment::Left);
+
+        let text = Text::from(self.get_payload()).reset_style();
+
+        let size = text.lines.len() + 2;
+        (size, Paragraph::new(text).block(block))
+    }
+}
+
+pub struct PacketLog {
+    log: Vec<PacketDirection>,
+}
+
+impl PacketLog {
+    pub fn new() -> Self {
+        Self { log: vec![] }
+    }
+    pub fn add_to_host(&mut self, packet: &[u8]) {
+        match packet[0] >> 4 {
+            4 => {
+                // IPv4
+                //let ipv4_packet = Ipv4Packet::new(packet).unwrap();
+            }
+            6 => {
+                // IPv6
+                self.log.push(PacketDirection::ToHost(
+                    Ipv6Packet::owned(packet.to_vec()).unwrap(),
+                ));
+            }
+            _ => {
+                // unknown
+            }
+        }
+        //self.log.push(PacketDirection::ToHost(packet.to_vec()));
+    }
+    pub fn add_to_node(&mut self, packet: &[u8]) {
+        match packet[0] >> 4 {
+            4 => {
+                // IPv4
+                //let ipv4_packet = Ipv4Packet::new(packet).unwrap();
+            }
+            6 => {
+                // IPv6
+                self.log.push(PacketDirection::ToNode(
+                    Ipv6Packet::owned(packet.to_vec()).unwrap(),
+                ));
+            }
+            _ => {
+                // unknown
+            }
+        }
+    }
+    pub fn log(&self) -> &[PacketDirection] {
+        &self.log
     }
 }

@@ -52,11 +52,9 @@ pub fn event_loop_network(
                 return;
             }
             Event::Packet(packet) => {
-                println!("<- Got packet from node");
                 network_event_sender.send(Event::Packet(packet)).unwrap();
             }
             Event::SendPacket(packet) => {
-                println!("-> Send packet to node");
                 hardware_event_sender
                     .send(Event::SendPacket(packet))
                     .unwrap();

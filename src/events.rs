@@ -1,6 +1,7 @@
 use crossterm::event::KeyEvent;
 use crossterm::event::MouseEvent;
 
+#[derive(Debug)]
 pub enum Event {
     Diagnostic(String),
     Configuration(Vec<u8>),

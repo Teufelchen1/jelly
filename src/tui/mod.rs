@@ -70,9 +70,7 @@ pub fn event_loop_tui(
             Event::Configuration(data) => app.on_configuration_msg(&data),
             Event::Packet(packet) => {
                 app.on_packet(&packet);
-                network_event_sender
-                    .send(Event::SendPacket(packet))
-                    .unwrap();
+                network_event_sender.send(Event::Packet(packet)).unwrap();
             }
             Event::SendDiagnostic(d) => hardware_event_sender
                 .send(Event::SendDiagnostic(d))
@@ -80,9 +78,12 @@ pub fn event_loop_tui(
             Event::SendConfiguration(c) => hardware_event_sender
                 .send(Event::SendConfiguration(c))
                 .unwrap(),
-            Event::SendPacket(packet) => hardware_event_sender
-                .send(Event::SendPacket(packet))
-                .unwrap(),
+            Event::SendPacket(packet) => {
+                app.off_packet(&packet);
+                hardware_event_sender
+                    .send(Event::SendPacket(packet))
+                    .unwrap();
+            }
             Event::SerialConnect(name) => app.on_connect(name),
             Event::SerialDisconnect => app.on_disconnect(),
             Event::TerminalString(_msg) => (),

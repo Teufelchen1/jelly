@@ -112,8 +112,8 @@ fn start_tui(args: Cli, main_channel: EventChannel) {
     }
 
     let (event_sender, event_receiver) = main_channel;
-    let network_event_sender = create_network_thread(event_sender.clone());
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    let network_event_sender = create_network_thread(event_sender.clone());
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {

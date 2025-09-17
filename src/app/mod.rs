@@ -7,6 +7,7 @@ use coap_lite::Packet;
 use coap_lite::RequestType as Method;
 use datatypes::DiagnosticLog;
 use datatypes::JobLog;
+use datatypes::PacketLog;
 use rand::Rng;
 use ratatui::Frame;
 use slipmux::encode_buffered;
@@ -30,7 +31,7 @@ pub struct App {
     configuration_log: Vec<Request>,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
-    packet_log: Vec<Vec<u8>>,
+    packet_log: PacketLog,
     user_input_manager: UserInputManager,
     ui_state: UiState,
     token_count: u16,
@@ -49,7 +50,7 @@ impl App {
             configuration_log: vec![],
             configuration_packets: vec![],
             diagnostic_log: DiagnosticLog::new(),
-            packet_log: vec![],
+            packet_log: PacketLog::new(),
 
             user_input_manager: UserInputManager::new(),
 

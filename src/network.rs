@@ -87,7 +87,6 @@ fn read_thread(
                             interruptor.reset().unwrap();
                             if let Ok(packet) = packet_receiver.try_recv() {
                                 tun_dev.send(&packet).unwrap();
-                                println!("<- Send packet to host {:} bytes", packet.len());
                             }
 
                             continue;
@@ -103,7 +102,6 @@ fn read_thread(
                 }
             }
         };
-        println!("-> Got packet from host {bytes_read} bytes");
         sender
             .send(Event::SendPacket(buf[..bytes_read].to_vec()))
             .unwrap();

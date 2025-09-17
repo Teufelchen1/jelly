@@ -72,7 +72,6 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
             }
             Event::SendPacket(packet) => {
                 let data = encode_buffered(Slipmux::Packet(packet));
-                println!("Encoded packet is: {:} bytes", data.len());
                 if let Some(port) = (*port_guard.lock().unwrap()).as_mut() {
                     // There is odd behavior in certain usbttys, chunking reduces those.
                     for chunk in data.chunks(64) {

@@ -181,8 +181,14 @@ impl App {
         self.overall_log.add(msg);
     }
 
+    // Packet from the node to the host
     pub fn on_packet(&mut self, packet: &[u8]) {
-        self.packet_log.push(packet.to_vec());
+        self.packet_log.add_to_host(packet);
+    }
+
+    // Packet from the host to the node
+    pub fn off_packet(&mut self, packet: &[u8]) {
+        self.packet_log.add_to_node(packet);
     }
 
     pub fn on_mouse(&mut self, mouse: MouseEvent) -> bool {

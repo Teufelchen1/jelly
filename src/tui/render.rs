@@ -28,6 +28,7 @@ use tui_widgets::scrollview::ScrollView;
 use super::UiState;
 use crate::app::datatypes::DiagnosticLog;
 use crate::app::datatypes::JobLog;
+use crate::app::datatypes::PacketLog;
 use crate::app::datatypes::Request;
 use crate::app::user_input_manager::UserInputManager;
 
@@ -441,7 +442,7 @@ impl UiState {
         configuration_log: &[Request],
         diagnostic_log: &DiagnosticLog,
         overall_log: &DiagnosticLog,
-        net_log: &Vec<Vec<u8>>,
+        net_log: &PacketLog,
     ) {
         let main_layout = Layout::new(
             Direction::Vertical,
@@ -543,23 +544,11 @@ impl UiState {
                 let total_length: u16 = {
                     let mut sum = 0;
                     // temporay limitation to work around ratatui bug #1855
-                    let start = usize::try_from(max(i64::try_from(net_log.len()).unwrap() - 10, 0))
-                        .unwrap();
-                    for req in &net_log[start..] {
-                        let block = Block::new()
-                            .borders(Borders::TOP | Borders::BOTTOM)
-                            .style(Style::new().gray())
-                            .title(vec![Span::from(if req[0] > 0x40 && req[0] < 0x4F {
-                                "-> IPv4"
-                            } else {
-                                "-> IPv6"
-                            })])
-                            .title_alignment(Alignment::Left);
-
-                        let text = Text::from(format!("{req:?}")).reset_style();
-                        let size = text.lines.len() + 2;
-                        let para = Paragraph::new(text).block(block);
-
+                    let start =
+                        usize::try_from(max(i64::try_from(net_log.log().len()).unwrap() - 10, 0))
+                            .unwrap();
+                    for req in &net_log.log()[start..] {
+                        let (size, para) = req.paragraph();
                         req_blocks.push(para);
                         sum += size;
                         constrains.push(Constraint::Length(size.try_into().unwrap()));
