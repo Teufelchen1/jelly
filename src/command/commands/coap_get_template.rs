@@ -7,7 +7,7 @@ use super::CommandHandler;
 /// This is a template command. It shows the minimum setup for making a
 /// CoAP GET request to a single endpoint. The result is not displayed to the user.
 /// Allthought the default overview of received CoAP responses will show a summary.
-/// This is used make all endpoints in the /.well-known/core available for a
+/// This is used to make all endpoints in the /.well-known/core available for a
 /// quick get request via autocomplete.
 pub struct CoapGet(String);
 
