@@ -218,8 +218,8 @@ impl App {
                 // into the command handler?
                 if cmd.cmd == "Help" {
                     self.ui_state.select_help_view();
-                }
-                if cmd.cmd == "ForceCmdsAvailable" {
+                    self.populate_command_help_list();
+                } else if cmd.cmd == "ForceCmdsAvailable" {
                     self.force_all_commands_availabe();
                 }
             }
@@ -319,6 +319,7 @@ impl App {
             }
             KeyCode::F(5) => {
                 self.ui_state.select_help_view();
+                self.populate_command_help_list();
             }
             KeyCode::Esc => {
                 return false;

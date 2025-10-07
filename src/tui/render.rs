@@ -101,7 +101,7 @@ impl UiState {
                 text.push_line(Line::from("Your current working directory is unkown\n"));
             }
         }
-
+        text.push_line(Line::from(""));
         text.push_line(Line::from("# Known commands\n"));
         text.extend(Text::from(self.command_help_list.clone()));
 
