@@ -11,7 +11,7 @@ use slipmux::Slipmux;
 
 use crate::events::Event;
 use crate::tui::UiState;
-use coap_log::Request;
+use coap_log::CoapLog;
 use diagnostic_log::DiagnosticLog;
 use job_log::Job;
 use job_log::JobLog;
@@ -28,7 +28,7 @@ pub mod user_input_manager;
 pub struct App {
     connected: bool,
     event_sender: Sender<Event>,
-    configuration_log: Vec<Request>,
+    configuration_log: CoapLog,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
     user_input_manager: UserInputManager,
@@ -46,7 +46,7 @@ impl App {
             connected: false,
             event_sender,
 
-            configuration_log: vec![],
+            configuration_log: CoapLog::new(),
             configuration_packets: vec![],
             diagnostic_log: DiagnosticLog::new(),
 

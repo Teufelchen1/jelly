@@ -2,7 +2,6 @@ use std::fmt::Write;
 
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
-use coap_lite::CoapResponse;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
 use crossterm::event::KeyCode;
@@ -14,13 +13,11 @@ use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
 use super::coap_log::token_to_u64;
-use super::coap_log::Response;
 use super::job_log::SaveToFile;
+use super::App;
+use super::InputType;
+use super::Job;
 
-use crate::app::App;
-use crate::app::InputType;
-use crate::app::Job;
-use crate::app::Request;
 use crate::command::Command;
 use crate::command::CommandType;
 use crate::events::Event;
@@ -52,7 +49,7 @@ impl App {
                     // Fetch description
                     let mut request: CoapRequest<String> = Self::build_get_request(s);
                     self.send_configuration_request(&mut request.message);
-                    self.configuration_log.push(Request::new(request));
+                    self.configuration_log.push(request);
                 } else {
                     let new_command = Command::new_coap_get(s, "A CoAP resource");
                     self.user_input_manager.known_commands.add(new_command);
@@ -72,15 +69,15 @@ impl App {
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
         request.message.add_option(CoapOption::Block2, vec![0x05]);
         self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(Request::new(request));
+        self.configuration_log.push(request);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/jelly/board");
         self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(Request::new(request));
+        self.configuration_log.push(request);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/jelly/ver");
         self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(Request::new(request));
+        self.configuration_log.push(request);
     }
 
     pub fn on_disconnect(&mut self) {
@@ -101,11 +98,8 @@ impl App {
             // The token is our key for the hashmap, so we need to recalculate
             if let Some(mut next_request) = maybe_request {
                 self.send_configuration_request(&mut next_request.message);
-                hash_index = 0;
-                for byte in next_request.message.get_token() {
-                    hash_index += u64::from(*byte);
-                }
-                self.configuration_log.push(Request::new(next_request));
+                hash_index = token_to_u64(next_request.message.get_token());
+                self.configuration_log.push(next_request);
             }
             // Not finished? Re-add it to the job list
             if self.job_log.job_is_finished(job_id) {
@@ -128,19 +122,10 @@ impl App {
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response);
 
-        let found_matching_request = self
-            .configuration_log
-            .iter()
-            .position(|req| req.token == hash_index);
-        if let Some(request_pos) = found_matching_request {
-            self.configuration_log[request_pos]
-                .res
-                .push(Response::new(CoapResponse {
-                    message: response.clone(),
-                }));
+        if let Some(request) = self.configuration_log.get_request_by_token(hash_index) {
+            request.add_response(response.clone());
 
-            let request = &self.configuration_log[request_pos].req;
-            let option_list_ = request.message.get_option(CoapOption::UriPath);
+            let option_list_ = request.req.message.get_option(CoapOption::UriPath);
             if let Some(option_list) = option_list_ {
                 let mut uri_path = String::new();
                 for option in option_list {
@@ -210,7 +195,7 @@ impl App {
                 let mut request = handler.init();
                 self.send_configuration_request(&mut request.message);
                 let hash_index: u64 = token_to_u64(request.message.get_token());
-                self.configuration_log.push(Request::new(request));
+                self.configuration_log.push(request);
                 let job_id = self
                     .job_log
                     .start(Job::new(handler, file, cmd_string.to_owned()));
@@ -265,7 +250,7 @@ impl App {
                 self.event_sender
                     .send(Event::SendConfiguration(data))
                     .unwrap();
-                self.configuration_log.push(Request::new(request));
+                self.configuration_log.push(request);
             }
             InputType::RawCommand(cmd) => {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
