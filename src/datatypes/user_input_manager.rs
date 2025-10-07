@@ -1,4 +1,5 @@
-use crate::app::SaveToFile;
+use super::job_log::SaveToFile;
+
 use crate::command::Command;
 use crate::command::CommandLibrary;
 

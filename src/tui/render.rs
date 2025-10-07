@@ -26,13 +26,11 @@ use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
 
 use super::UiState;
-use crate::app::coap_log::CoapLog;
-use crate::app::diagnostic_log::DiagnosticLog;
-use crate::app::job_log::JobLog;
-use crate::app::user_input_manager::InputType::Command;
-use crate::app::user_input_manager::InputType::RawCoap;
-use crate::app::user_input_manager::InputType::RawCommand;
-use crate::app::user_input_manager::UserInputManager;
+use crate::datatypes::coap_log::CoapLog;
+use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::job_log::JobLog;
+use crate::datatypes::user_input_manager::InputType;
+use crate::datatypes::user_input_manager::UserInputManager;
 
 impl UiState {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
@@ -232,9 +230,9 @@ impl UiState {
             return;
         }
         let title = match user_input_manager.classify_input() {
-            RawCoap(_) => "User Input: Raw CoAP request",
-            RawCommand(_) => "User Input: Raw diagnostic command",
-            Command(cmd, _, _) => &format!("User Input: {cmd}"),
+            InputType::RawCoap(_) => "User Input: Raw CoAP request",
+            InputType::RawCommand(_) => "User Input: Raw diagnostic command",
+            InputType::Command(cmd, _, _) => &format!("User Input: {cmd}"),
         };
         let right_block_down = Block::bordered()
             .border_style(Style::new().gray())

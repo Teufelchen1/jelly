@@ -14,6 +14,7 @@ use crate::tui::event_loop_tui;
 
 mod app;
 mod command;
+mod datatypes;
 mod events;
 mod headless;
 mod slipmux;

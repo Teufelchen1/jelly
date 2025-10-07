@@ -12,14 +12,14 @@ use crossterm::event::MouseEventKind;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
-use super::coap_log::token_to_u64;
-use super::job_log::SaveToFile;
 use super::App;
 use super::InputType;
 use super::Job;
 
 use crate::command::Command;
 use crate::command::CommandType;
+use crate::datatypes::coap_log::token_to_u64;
+use crate::datatypes::job_log::SaveToFile;
 use crate::events::Event;
 
 impl App {

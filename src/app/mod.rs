@@ -9,21 +9,16 @@ use ratatui::Frame;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
+use crate::datatypes::coap_log::CoapLog;
+use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::job_log::Job;
+use crate::datatypes::job_log::JobLog;
+use crate::datatypes::user_input_manager::InputType;
+use crate::datatypes::user_input_manager::UserInputManager;
 use crate::events::Event;
 use crate::tui::UiState;
-use coap_log::CoapLog;
-use diagnostic_log::DiagnosticLog;
-use job_log::Job;
-use job_log::JobLog;
-use job_log::SaveToFile;
-use user_input_manager::InputType;
-use user_input_manager::UserInputManager;
 
-pub mod coap_log;
-pub mod diagnostic_log;
 mod handler;
-pub mod job_log;
-pub mod user_input_manager;
 
 pub struct App {
     connected: bool,
