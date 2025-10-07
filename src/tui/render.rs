@@ -26,13 +26,11 @@ use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
 
 use super::UiState;
-use crate::app::datatypes::DiagnosticLog;
-use crate::app::datatypes::JobLog;
-use crate::app::datatypes::Request;
-use crate::app::user_input_manager::InputType::Command;
-use crate::app::user_input_manager::InputType::RawCoap;
-use crate::app::user_input_manager::InputType::RawCommand;
-use crate::app::user_input_manager::UserInputManager;
+use crate::datatypes::coap_log::CoapLog;
+use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::job_log::JobLog;
+use crate::datatypes::user_input_manager::InputType;
+use crate::datatypes::user_input_manager::UserInputManager;
 
 impl UiState {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
@@ -177,7 +175,7 @@ impl UiState {
         &mut self,
         frame: &mut Frame,
         area: Rect,
-        configuration_log: &[Request],
+        configuration_log: &CoapLog,
         short: bool,
     ) {
         let right_block_up = Block::bordered()
@@ -185,26 +183,7 @@ impl UiState {
             .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
 
-        let mut req_blocks = vec![];
-        let mut constrains = vec![];
-        let total_length: u16 = {
-            let mut sum = 0;
-            // temporay limitation to work around ratatui bug #1855
-            let start =
-                usize::try_from(max(i64::try_from(configuration_log.len()).unwrap() - 10, 0))
-                    .unwrap();
-            for req in &configuration_log[start..] {
-                let (size, para) = if short {
-                    req.paragraph_short()
-                } else {
-                    req.paragraph()
-                };
-                req_blocks.push(para);
-                sum += size;
-                constrains.push(Constraint::Length(size.try_into().unwrap()));
-            }
-            sum.try_into().unwrap_or(u16::MAX)
-        };
+        let (total_length, req_blocks, constrains) = configuration_log.to_paragraphs(short);
 
         let width = if right_block_up.inner(area).height < total_length {
             // Make room for the scroll bar
@@ -251,9 +230,9 @@ impl UiState {
             return;
         }
         let title = match user_input_manager.classify_input() {
-            RawCoap(_) => "User Input: Raw CoAP request",
-            RawCommand(_) => "User Input: Raw diagnostic command",
-            Command(cmd, _, _) => &format!("User Input: {cmd}"),
+            InputType::RawCoap(_) => "User Input: Raw CoAP request",
+            InputType::RawCommand(_) => "User Input: Raw diagnostic command",
+            InputType::Command(cmd, _, _) => &format!("User Input: {cmd}"),
         };
         let right_block_down = Block::bordered()
             .border_style(Style::new().gray())
@@ -408,7 +387,7 @@ impl UiState {
         frame: &mut Frame,
         main_area: Rect,
         user_input_manager: &UserInputManager,
-        configuration_log: &[Request],
+        configuration_log: &CoapLog,
         overall_log: &DiagnosticLog,
     ) {
         let main_chunks = Layout::default()
@@ -452,7 +431,7 @@ impl UiState {
         frame: &mut Frame,
         user_input_manager: &UserInputManager,
         job_log: &JobLog,
-        configuration_log: &[Request],
+        configuration_log: &CoapLog,
         diagnostic_log: &DiagnosticLog,
         overall_log: &DiagnosticLog,
     ) {

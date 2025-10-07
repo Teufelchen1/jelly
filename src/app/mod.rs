@@ -1,33 +1,29 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 
-use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
-use datatypes::DiagnosticLog;
-use datatypes::JobLog;
 use rand::Rng;
 use ratatui::Frame;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
-use crate::app::datatypes::Job;
-use crate::app::datatypes::Request;
-use crate::app::datatypes::SaveToFile;
-use crate::app::user_input_manager::InputType;
-use crate::app::user_input_manager::UserInputManager;
+use crate::datatypes::coap_log::CoapLog;
+use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::job_log::Job;
+use crate::datatypes::job_log::JobLog;
+use crate::datatypes::user_input_manager::InputType;
+use crate::datatypes::user_input_manager::UserInputManager;
 use crate::events::Event;
 use crate::tui::UiState;
 
-pub mod datatypes;
 mod handler;
-pub mod user_input_manager;
 
 pub struct App {
     connected: bool,
     event_sender: Sender<Event>,
-    configuration_log: Vec<Request>,
+    configuration_log: CoapLog,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
     user_input_manager: UserInputManager,
@@ -45,7 +41,7 @@ impl App {
             connected: false,
             event_sender,
 
-            configuration_log: vec![],
+            configuration_log: CoapLog::new(),
             configuration_packets: vec![],
             diagnostic_log: DiagnosticLog::new(),
 
