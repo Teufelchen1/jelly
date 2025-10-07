@@ -18,6 +18,8 @@ use ratatui::widgets::Wrap;
 
 use crate::command::CommandHandler;
 
+pub type JobId = usize;
+
 pub enum SaveToFile {
     No,
     AsBin(String),
@@ -151,13 +153,13 @@ impl JobLog {
 
     pub fn job_handle_response(
         &mut self,
-        job_id: usize,
+        job_id: JobId,
         response: &Packet,
     ) -> Option<CoapRequest<String>> {
         self.jobs[job_id].handler.as_mut().unwrap().handle(response)
     }
 
-    pub fn job_wants_display(&self, job_id: usize) -> bool {
+    pub fn job_wants_display(&self, job_id: JobId) -> bool {
         if self.jobs[job_id].handler.is_some() {
             self.jobs[job_id].handler.as_ref().unwrap().want_display()
         } else {
@@ -165,7 +167,7 @@ impl JobLog {
         }
     }
 
-    pub fn job_display(&mut self, job_id: usize) -> String {
+    pub fn job_display(&mut self, job_id: JobId) -> String {
         if self.jobs[job_id].handler.is_some() {
             self.jobs[job_id].handle_display()
         } else {
@@ -173,7 +175,7 @@ impl JobLog {
         }
     }
 
-    pub fn job_is_finished(&self, job_id: usize) -> bool {
+    pub fn job_is_finished(&self, job_id: JobId) -> bool {
         if self.jobs[job_id].handler.is_some() {
             self.jobs[job_id].handler.as_ref().unwrap().is_finished()
         } else {
@@ -181,11 +183,11 @@ impl JobLog {
         }
     }
 
-    pub fn job_finish(&mut self, job_id: usize) {
+    pub fn job_finish(&mut self, job_id: JobId) {
         self.jobs[job_id].finish();
     }
 
-    pub fn start(&mut self, job: Job) -> usize {
+    pub fn start(&mut self, job: Job) -> JobId {
         self.jobs.push(job);
         self.jobs.len() - 1
     }

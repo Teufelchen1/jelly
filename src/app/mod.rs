@@ -12,6 +12,7 @@ use slipmux::Slipmux;
 use crate::datatypes::coap_log::CoapLog;
 use crate::datatypes::diagnostic_log::DiagnosticLog;
 use crate::datatypes::job_log::Job;
+use crate::datatypes::job_log::JobId;
 use crate::datatypes::job_log::JobLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
@@ -31,7 +32,7 @@ pub struct App {
     token_count: u16,
     next_mid: u16,
     overall_log: DiagnosticLog,
-    ongoing_jobs: HashMap<u64, usize>,
+    ongoing_jobs: HashMap<u64, JobId>,
     job_log: JobLog,
 }
 
