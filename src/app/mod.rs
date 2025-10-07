@@ -5,22 +5,23 @@ use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
-use datatypes::DiagnosticLog;
-use datatypes::JobLog;
 use rand::Rng;
 use ratatui::Frame;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
-use crate::app::datatypes::Job;
-use crate::app::datatypes::Request;
-use crate::app::datatypes::SaveToFile;
-use crate::app::user_input_manager::InputType;
-use crate::app::user_input_manager::UserInputManager;
 use crate::events::Event;
 use crate::tui::UiState;
+use datatypes::Job;
+use datatypes::JobLog;
+use datatypes::Request;
+use datatypes::SaveToFile;
+use diagnostic_log::DiagnosticLog;
+use user_input_manager::InputType;
+use user_input_manager::UserInputManager;
 
 pub mod datatypes;
+pub mod diagnostic_log;
 mod handler;
 pub mod user_input_manager;
 
