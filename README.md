@@ -2,12 +2,10 @@
 # Jelly 🪼
 
 The friendly shell for constrained devices.
-Pure Rust implementation of [draft-bormann-t2trg-slipmux-03](https://datatracker.ietf.org/doc/html/draft-bormann-t2trg-slipmux-03).
-
 
 ## What is Jelly?
 
-Jelly is an utility that speaks [slipmux](https://datatracker.ietf.org/doc/html/draft-bormann-t2trg-slipmux-03) with an embedded device via UART. It presents itself as a regular shell with bonus features. Jelly tries to move the current [RIOT](https://github.com/RIOT-OS/RIOT) shell from the constrained device into the host computer.
+Jelly is an utility that speaks [slipmux](https://datatracker.ietf.org/doc/html/draft-bormann-t2trg-slipmux-03) with an embedded device via UART. It presents itself as a regular shell with bonus features. Jelly tries to move the current [RIOT](https://github.com/RIOT-OS/RIOT) shell from the constrained device onto the host computer.
 
 ## Usage
 
