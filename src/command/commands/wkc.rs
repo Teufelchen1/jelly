@@ -9,31 +9,29 @@ use super::CommandType;
 
 /// Explicit example for a command that queries the well-known/core. Could have been done
 /// using the template command, but explicit for demonstration.
-pub struct Wkc {
+struct Wkc {
     location: String,
     buffer: String,
     finished: bool,
     displayable: bool,
 }
 
-impl Wkc {
-    pub fn cmd() -> Command {
-        Command {
-            cmd: "Wkc".to_owned(),
-            description: "Query the wkc".to_owned(),
-            parse: |c, a| Ok(CommandType::CoAP(Self::parse(c, a))),
-            required_endpoints: vec!["/.well-known/core".to_owned()],
-        }
+pub fn cmd() -> Command {
+    Command {
+        cmd: "Wkc".to_owned(),
+        description: "Query the wkc".to_owned(),
+        parse: |c, a| Ok(CommandType::CoAP(parse(c, a))),
+        required_endpoints: vec!["/.well-known/core".to_owned()],
     }
+}
 
-    fn parse(cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
-        Box::new(Self {
-            location: cmd.required_endpoints[0].clone(),
-            buffer: String::new(),
-            finished: false,
-            displayable: false,
-        })
-    }
+fn parse(cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
+    Box::new(Wkc {
+        location: cmd.required_endpoints[0].clone(),
+        buffer: String::new(),
+        finished: false,
+        displayable: false,
+    })
 }
 
 impl CommandHandler for Wkc {

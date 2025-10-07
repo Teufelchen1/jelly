@@ -61,33 +61,33 @@ pub struct MemReadCli {
     size: u32,
 }
 
-pub struct MemRead {
+struct MemRead {
     buffer: Vec<u8>,
     finished: bool,
     displayable: bool,
     cli: MemReadCli,
 }
 
+pub fn cmd() -> Command {
+    Command {
+        cmd: "MemRead".to_owned(),
+        description: "Read arbitrary memory".to_owned(),
+        parse,
+        required_endpoints: vec!["/jelly/Memory".to_owned()],
+    }
+}
+
+fn parse(_cmd: &Command, args: &str) -> Result<CommandType, String> {
+    let cli = MemReadCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
+    Ok(CommandType::CoAP(Box::new(MemRead {
+        buffer: Vec::new(),
+        finished: false,
+        displayable: false,
+        cli,
+    })))
+}
+
 impl MemRead {
-    pub fn cmd() -> Command {
-        Command {
-            cmd: "MemRead".to_owned(),
-            description: "Read arbitrary memory".to_owned(),
-            parse: Self::parse,
-            required_endpoints: vec!["/jelly/Memory".to_owned()],
-        }
-    }
-
-    fn parse(_cmd: &Command, args: &str) -> Result<CommandType, String> {
-        let cli = MemReadCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(CommandType::CoAP(Box::new(Self {
-            buffer: Vec::new(),
-            finished: false,
-            displayable: false,
-            cli,
-        })))
-    }
-
     fn send_request(&mut self) -> CoapRequest<String> {
         let mut buffer: [u8; 10] = [0; 10];
         let mut encoder = Encoder::new(&mut buffer[..]);

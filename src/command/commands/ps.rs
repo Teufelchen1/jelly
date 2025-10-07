@@ -19,7 +19,7 @@ use super::CommandType;
 #[command(about = "This is ps over coap")]
 struct PsCli {}
 
-pub struct Ps {
+struct Ps {
     location: String,
     buffer: String,
     payload: Vec<u8>,
@@ -27,26 +27,24 @@ pub struct Ps {
     displayable: bool,
 }
 
-impl Ps {
-    pub fn cmd() -> Command {
-        Command {
-            cmd: "Ps".to_owned(),
-            description: "Ps over coap, print thread info".to_owned(),
-            parse: Self::parse,
-            required_endpoints: vec!["/jelly/Ps".to_owned()],
-        }
+pub fn cmd() -> Command {
+    Command {
+        cmd: "Ps".to_owned(),
+        description: "Ps over coap, print thread info".to_owned(),
+        parse,
+        required_endpoints: vec!["/jelly/Ps".to_owned()],
     }
+}
 
-    fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
-        let _cli = PsCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(CommandType::CoAP(Box::new(Self {
-            location: cmd.required_endpoints[0].clone(),
-            buffer: String::new(),
-            payload: vec![],
-            finished: false,
-            displayable: false,
-        })))
-    }
+fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
+    let _cli = PsCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
+    Ok(CommandType::CoAP(Box::new(Ps {
+        location: cmd.required_endpoints[0].clone(),
+        buffer: String::new(),
+        payload: vec![],
+        finished: false,
+        displayable: false,
+    })))
 }
 
 enum ThreadStatus {

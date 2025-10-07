@@ -9,35 +9,33 @@ use super::CommandType;
 
 /// This is an example for writing a command that needs to issue multiple CoAP requests and
 /// keep track of the state while doing so.
-pub struct MultiEndpointSample {
+struct MultiEndpointSample {
     buffer: String,
     finished: bool,
     displayable: bool,
     state_machine: usize,
 }
 
-impl MultiEndpointSample {
-    pub fn cmd() -> Command {
-        Command {
-            cmd: "MultiEndpointSample".to_owned(),
-            description: "Query multiple endpoints at once!".to_owned(),
-            parse: |c, a| Ok(CommandType::CoAP(Self::parse(c, a))),
-            required_endpoints: vec![
-                "/jelly/board".to_owned(),
-                "/shell/reboot".to_owned(),
-                "/.well-known/core".to_owned(),
-            ],
-        }
+pub fn cmd() -> Command {
+    Command {
+        cmd: "MultiEndpointSample".to_owned(),
+        description: "Query multiple endpoints at once!".to_owned(),
+        parse: |c, a| Ok(CommandType::CoAP(parse(c, a))),
+        required_endpoints: vec![
+            "/jelly/board".to_owned(),
+            "/shell/reboot".to_owned(),
+            "/.well-known/core".to_owned(),
+        ],
     }
+}
 
-    fn parse(_cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
-        Box::new(Self {
-            buffer: "==== Fetched a lot! ====\n".to_owned(),
-            finished: false,
-            displayable: false,
-            state_machine: 0,
-        })
-    }
+fn parse(_cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
+    Box::new(MultiEndpointSample {
+        buffer: "==== Fetched a lot! ====\n".to_owned(),
+        finished: false,
+        displayable: false,
+        state_machine: 0,
+    })
 }
 
 impl CommandHandler for MultiEndpointSample {

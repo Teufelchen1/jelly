@@ -33,7 +33,7 @@ enum SaulOperation {
     Write { id: u8, data: u8 },
 }
 
-pub struct Saul {
+struct Saul {
     location: String,
     buffer: String,
     payload: Vec<u8>,
@@ -42,27 +42,25 @@ pub struct Saul {
     cli: SaulCli,
 }
 
-impl Saul {
-    pub fn cmd() -> Command {
-        Command {
-            cmd: "Saul".to_owned(),
-            description: "Saul over coap".to_owned(),
-            parse: |s, a| Self::parse(s, a),
-            required_endpoints: vec!["/jelly/Saul".to_owned()],
-        }
+pub fn cmd() -> Command {
+    Command {
+        cmd: "Saul".to_owned(),
+        description: "Saul over coap".to_owned(),
+        parse: |s, a| parse(s, a),
+        required_endpoints: vec!["/jelly/Saul".to_owned()],
     }
+}
 
-    fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
-        let cli = SaulCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-        Ok(CommandType::CoAP(Box::new(Self {
-            location: cmd.required_endpoints[0].clone(),
-            buffer: String::new(),
-            payload: vec![],
-            finished: false,
-            displayable: false,
-            cli,
-        })))
-    }
+fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
+    let cli = SaulCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
+    Ok(CommandType::CoAP(Box::new(Saul {
+        location: cmd.required_endpoints[0].clone(),
+        buffer: String::new(),
+        payload: vec![],
+        finished: false,
+        displayable: false,
+        cli,
+    })))
 }
 
 impl CommandHandler for Saul {
