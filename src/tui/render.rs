@@ -26,9 +26,9 @@ use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
 
 use super::UiState;
-use crate::app::datatypes::JobLog;
-use crate::app::datatypes::Request;
+use crate::app::coap_log::Request;
 use crate::app::diagnostic_log::DiagnosticLog;
+use crate::app::job_log::JobLog;
 use crate::app::user_input_manager::InputType::Command;
 use crate::app::user_input_manager::InputType::RawCoap;
 use crate::app::user_input_manager::InputType::RawCommand;

@@ -13,9 +13,9 @@ use crossterm::event::MouseEventKind;
 use slipmux::encode_buffered;
 use slipmux::Slipmux;
 
-use super::datatypes::token_to_u64;
-use super::datatypes::Response;
-use super::datatypes::SaveToFile;
+use super::coap_log::token_to_u64;
+use super::coap_log::Response;
+use super::job_log::SaveToFile;
 
 use crate::app::App;
 use crate::app::InputType;

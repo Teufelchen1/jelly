@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 
-use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::Packet;
 use coap_lite::RequestType as Method;
@@ -12,17 +11,18 @@ use slipmux::Slipmux;
 
 use crate::events::Event;
 use crate::tui::UiState;
-use datatypes::Job;
-use datatypes::JobLog;
-use datatypes::Request;
-use datatypes::SaveToFile;
+use coap_log::Request;
 use diagnostic_log::DiagnosticLog;
+use job_log::Job;
+use job_log::JobLog;
+use job_log::SaveToFile;
 use user_input_manager::InputType;
 use user_input_manager::UserInputManager;
 
-pub mod datatypes;
+pub mod coap_log;
 pub mod diagnostic_log;
 mod handler;
+pub mod job_log;
 pub mod user_input_manager;
 
 pub struct App {
