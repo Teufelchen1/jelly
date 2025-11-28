@@ -3,9 +3,11 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use super::create_raw_terminal_thread;
 use crate::app::App;
 use crate::Event;
+
+use super::await_serial_connect;
+use super::create_raw_terminal_thread;
 
 pub fn event_loop_configuration(
     event_channel: &Receiver<Event>,
@@ -14,25 +16,17 @@ pub fn event_loop_configuration(
 ) {
     let mut app = App::new(event_sender.clone());
     app.force_all_commands_availabe();
-    // The first event must be the serial connect. We wait for that event before processing
-    // stdin. If we were to process stdin first, we might try to send data to the device
-    // before it is even connected. This data would be lost.
-    let event = match event_channel.recv_timeout(Duration::from_millis(5000)) {
-        Ok(event) => event,
-        Err(RecvTimeoutError::Timeout) => {
-            println!("Time-out while waiting for serial to connect.");
+
+    match await_serial_connect(event_channel) {
+        Ok(name) => {
+            app.on_connect(name);
+            create_raw_terminal_thread(event_sender);
+        }
+        Err(e) => {
+            println!("{e}");
             return;
         }
-        Err(RecvTimeoutError::Disconnected) => panic!(),
-    };
-    if let Event::SerialConnect(name) = event {
-        app.on_connect(name);
-    } else {
-        println!("Unkown event occoured while waiting for serial to connect.");
-        return;
     }
-
-    create_raw_terminal_thread(event_sender);
 
     let mut terminal_eof = false;
     loop {

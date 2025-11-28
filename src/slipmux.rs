@@ -58,14 +58,29 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
             }
             Event::SendConfiguration(conf) => {
                 if let Some(port) = (*port_guard.lock().unwrap()).as_mut() {
-                    port.write_all(&conf).unwrap();
-                    port.flush().unwrap();
+                    // There is odd behavior in certain usbttys, chunking reduces those.
+                    for chunk in conf.chunks(64) {
+                        port.write_all(chunk).unwrap();
+                        port.flush().unwrap();
+                    }
                 } else {
                     // Nothing to do, drop the message silently
                     continue;
                 }
                 // Pseudo rate limit the outgoing data as to not overwhelm embedded devices
                 thread::sleep(Duration::from_millis(50));
+            }
+            Event::SendPacket(packet) => {
+                let data = encode_buffered(Slipmux::Packet(packet));
+                if let Some(port) = (*port_guard.lock().unwrap()).as_mut() {
+                    // There is odd behavior in certain usbttys, chunking reduces those.
+                    for chunk in data.chunks(64) {
+                        port.write_all(chunk).unwrap();
+                        port.flush().unwrap();
+                    }
+                } else {
+                    // Nothing to do, drop the message silently
+                }
             }
             _ => todo!(),
         }

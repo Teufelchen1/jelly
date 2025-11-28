@@ -29,6 +29,7 @@ use super::UiState;
 use crate::datatypes::coap_log::CoapLog;
 use crate::datatypes::diagnostic_log::DiagnosticLog;
 use crate::datatypes::job_log::JobLog;
+use crate::datatypes::packet_log::PacketLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 
@@ -39,7 +40,8 @@ impl UiState {
             "Text (F2)",
             "CoAP (F3)",
             "Commands (F4)",
-            "Help (F5)",
+            "Net (F5)",
+            "Help (F12)",
         ];
         let title = if frame.area().width < 100 {
             "Jelly 🪼"
@@ -122,6 +124,53 @@ impl UiState {
         );
 
         frame.render_widget(border_block, area);
+    }
+
+    fn render_network(&mut self, frame: &mut Frame, area: Rect, net_log: &PacketLog) {
+        let right_block_up = Block::bordered()
+            .border_style(Style::new().gray())
+            .title(vec![Span::from("Network packets")])
+            .title_alignment(Alignment::Left);
+
+        let mut req_blocks = vec![];
+        let mut constrains = vec![];
+        let total_length: u16 = {
+            let mut sum = 0;
+            // temporay limitation to work around ratatui bug #1855
+            let start =
+                usize::try_from(max(i64::try_from(net_log.log().len()).unwrap() - 10, 0)).unwrap();
+            for req in &net_log.log()[start..] {
+                let (size, para) = req.paragraph();
+                req_blocks.push(para);
+                sum += size;
+                constrains.push(Constraint::Length(size.try_into().unwrap()));
+            }
+            sum.try_into().unwrap_or(u16::MAX)
+        };
+
+        let width = if right_block_up.inner(area).height < total_length {
+            // Make room for the scroll bar
+            right_block_up.inner(area).width - 1
+        } else {
+            right_block_up.inner(area).width
+        };
+
+        let mut scroll_view = ScrollView::new(Size::new(width, total_length));
+        let buf = scroll_view.buf_mut();
+        let scroll_view_area = buf.area;
+        let areas: Vec<Rect> = Layout::vertical(constrains)
+            .split(scroll_view_area)
+            .to_vec();
+        for (a, req_b) in zip(areas, req_blocks) {
+            req_b.render(a, buf);
+        }
+
+        frame.render_stateful_widget(
+            scroll_view,
+            right_block_up.inner(area),
+            self.configuration_scroll.get_state_for_rendering(),
+        );
+        frame.render_widget(right_block_up, area);
     }
 
     fn render_commands(&mut self, frame: &mut Frame, area: Rect, job_log: &JobLog) {
@@ -431,10 +480,10 @@ impl UiState {
         frame: &mut Frame,
         user_input_manager: &UserInputManager,
         job_log: &JobLog,
-        configuration_log: &CoapLog,
-        diagnostic_log: &DiagnosticLog,
-        overall_log: &DiagnosticLog,
+        logs: (&CoapLog, &DiagnosticLog, &DiagnosticLog, &PacketLog),
     ) {
+        let (configuration_log, diagnostic_log, overall_log, net_log) = logs;
+
         let main_layout = Layout::new(
             Direction::Vertical,
             [
@@ -500,6 +549,18 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_commands(frame, chunk_upper, job_log);
+                Self::render_user_input(frame, chunk_lower, user_input_manager);
+            }
+            super::SelectedTab::Net => {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1), Constraint::Length(input_min_size)].as_ref())
+                    .split(main_area);
+
+                let chunk_upper = chunks[0];
+                let chunk_lower = chunks[1];
+
+                self.render_network(frame, chunk_upper, net_log);
                 Self::render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Help => {

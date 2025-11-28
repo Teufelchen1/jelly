@@ -14,6 +14,7 @@ use crate::datatypes::diagnostic_log::DiagnosticLog;
 use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobId;
 use crate::datatypes::job_log::JobLog;
+use crate::datatypes::packet_log::PacketLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 use crate::events::Event;
@@ -27,6 +28,7 @@ pub struct App {
     configuration_log: CoapLog,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
+    packet_log: PacketLog,
     user_input_manager: UserInputManager,
     ui_state: UiState,
     token_count: u16,
@@ -38,6 +40,8 @@ pub struct App {
 
 impl App {
     pub fn new(event_sender: Sender<Event>) -> Self {
+        let mut user_input_manager = UserInputManager::new();
+        user_input_manager.check_for_new_available_commands(&[]);
         Self {
             connected: false,
             event_sender,
@@ -45,8 +49,9 @@ impl App {
             configuration_log: CoapLog::new(),
             configuration_packets: vec![],
             diagnostic_log: DiagnosticLog::new(),
+            packet_log: PacketLog::new(),
 
-            user_input_manager: UserInputManager::new(),
+            user_input_manager,
 
             ui_state: UiState::new(),
 
@@ -119,13 +124,13 @@ impl App {
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {
-        self.ui_state.draw(
-            frame,
-            &self.user_input_manager,
-            &self.job_log,
+        let logs = (
             &self.configuration_log,
             &self.diagnostic_log,
             &self.overall_log,
+            &self.packet_log,
         );
+        self.ui_state
+            .draw(frame, &self.user_input_manager, &self.job_log, logs);
     }
 }
