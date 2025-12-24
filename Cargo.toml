@@ -1,10 +1,17 @@
 [package]
-name = "Jelly"
-description = "A tool to interact with a shell via Slipmux"
-version = "0.1.0"
-edition = "2021"
 authors = ["Bennet Hattesen <bennet.hattesen@haw-hamburg.de>"]
+categories = ["command-line-utilities"]
+description = "A tool to interact with a shell via Slipmux"
+edition = "2024"
+homepage = "https://github.com/teufelchen1/jelly"
+keywords = ["slip", "serial", "coap", "shell"]
+
+license = "MIT OR Apache-2.0"
+name = "Jelly"
+readme = "README.md"
+repository = "https://github.com/teufelchen1/jelly"
 rust-version = "1.89"
+version = "0.1.0"
 
 [lints.rust]
 unsafe_code = "forbid"
