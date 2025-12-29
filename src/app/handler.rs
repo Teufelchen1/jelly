@@ -118,6 +118,31 @@ impl App {
     pub fn on_configuration_msg(&mut self, data: &[u8]) {
         let response = Packet::from_bytes(data).unwrap();
 
+        if matches!(response.header.code, coap_lite::MessageClass::Request(_)) {
+            // Someone sent *us* a request -- but we don't do that (yet?).
+            //
+            // We could also RST here, but there's some danger this would get mixed up in other
+            // operations, so let's just send a simple minimal good response.
+
+            use coap_lite::MessageType::*;
+            if matches!(response.header.get_type(), Confirmable | NonConfirmable) {
+                let mut real_response = Packet::new();
+                real_response.header.message_id = response.header.message_id;
+                real_response.header.code = coap_lite::MessageClass::Response(coap_lite::ResponseType::NotFound);
+                real_response.set_token(response.get_token().into());
+                real_response.header.set_type(
+                    if response.header.get_type() == Confirmable {
+                        Acknowledgement
+                    } else {
+                        NonConfirmable
+                    }
+                );
+                self.send_configuration_message(&mut real_response);
+            }
+
+            return;
+        }
+
         // Get the key for the hashmap
         let token = response.get_token();
         let hash_index = token_to_u64(token);

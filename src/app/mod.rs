@@ -117,6 +117,10 @@ impl App {
         msg.header.message_id = self.get_new_message_id();
         msg.set_token(self.get_new_token());
 
+        self.send_configuration_message(msg);
+    }
+
+    fn send_configuration_message(&mut self, msg: &mut Packet) {
         let data = encode_buffered(Slipmux::Configuration(msg.to_bytes().unwrap()));
         self.event_sender
             .send(Event::SendConfiguration(data))
