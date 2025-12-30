@@ -142,7 +142,7 @@ impl App {
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response);
 
-        if let Some(request) = self.configuration_log.get_request_by_token(hash_index) {
+        let expected = if let Some(request) = self.configuration_log.get_request_by_token(hash_index) {
             request.add_response(response.clone());
 
             let option_list_ = request.req.message.get_option(CoapOption::UriPath);
@@ -175,10 +175,26 @@ impl App {
                     }
                 }
             }
+            true
         } else {
             // This should never happen, as it means that the riot node
             // proactively send a configuration message
-            self.configuration_packets.push(response);
+            self.configuration_packets.push(response.clone());
+            false
+        };
+
+        if response.header.get_type() == coap_lite::MessageType::Confirmable {
+            if expected {
+                let mut empty_ack = Packet::new();
+                empty_ack.header.code = coap_lite::MessageClass::Empty;
+                self.send_configuration_acknowledging(&mut empty_ack, &response);
+            } else {
+                let mut empty_rst = Packet::new();
+                empty_rst.header.code = coap_lite::MessageClass::Empty;
+                empty_rst.header.set_type(coap_lite::MessageType::Reset);
+                empty_rst.header.message_id = response.header.message_id;
+                self.send_configuration_message(&mut empty_rst);
+            }
         }
     }
 
