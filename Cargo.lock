@@ -1441,7 +1441,7 @@ dependencies = [
 [[package]]
 name = "tun-rs"
 version = "2.7.6"
-source = "git+https://github.com/tun-rs/tun-rs?branch=issue-104-unprivileged-tun#f7a80b37a220df01d17066de5a96f2838b45b931"
+source = "git+https://github.com/tun-rs/tun-rs#c3d99bf87b994e329c84ce31153896995710d291"
 dependencies = [
  "byteorder",
  "bytes",
