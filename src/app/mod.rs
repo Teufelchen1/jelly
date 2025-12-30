@@ -125,7 +125,7 @@ impl App {
 
     /// Sends a message that acknowledges some original message.
     fn send_configuration_acknowledging(&mut self, msg: &mut Packet, received_msg: &Packet) {
-        use coap_lite::MessageType::*;
+        use coap_lite::MessageType::{Confirmable, Acknowledgement, NonConfirmable};
 
         msg.set_token(received_msg.get_token().into());
         msg.header.message_id = received_msg.header.message_id;

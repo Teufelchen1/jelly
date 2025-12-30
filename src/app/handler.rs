@@ -124,7 +124,7 @@ impl App {
             // We could also RST here, but there's some danger this would get mixed up in other
             // operations, so let's just send a simple minimal good response.
 
-            use coap_lite::MessageType::*;
+            use coap_lite::MessageType::{Confirmable, NonConfirmable};
             if matches!(response.header.get_type(), Confirmable | NonConfirmable) {
                 let mut real_response = Packet::new();
                 real_response.header.code = coap_lite::MessageClass::Response(coap_lite::ResponseType::NotFound);
