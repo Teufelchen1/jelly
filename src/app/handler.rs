@@ -127,17 +127,8 @@ impl App {
             use coap_lite::MessageType::*;
             if matches!(response.header.get_type(), Confirmable | NonConfirmable) {
                 let mut real_response = Packet::new();
-                real_response.header.message_id = response.header.message_id;
                 real_response.header.code = coap_lite::MessageClass::Response(coap_lite::ResponseType::NotFound);
-                real_response.set_token(response.get_token().into());
-                real_response.header.set_type(
-                    if response.header.get_type() == Confirmable {
-                        Acknowledgement
-                    } else {
-                        NonConfirmable
-                    }
-                );
-                self.send_configuration_message(&mut real_response);
+                self.send_configuration_acknowledging(&mut real_response, &response);
             }
 
             return;

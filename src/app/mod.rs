@@ -113,9 +113,29 @@ impl App {
         request
     }
 
+    /// Sends a CoAP message as a new request, assigning it a message ID an token in-place.
+    ///
+    /// The user is expected to clone the token out of the message to match the responses.
     fn send_configuration_request(&mut self, msg: &mut Packet) {
         msg.header.message_id = self.get_new_message_id();
         msg.set_token(self.get_new_token());
+
+        self.send_configuration_message(msg);
+    }
+
+    /// Sends a message that acknowledges some original message.
+    fn send_configuration_acknowledging(&mut self, msg: &mut Packet, received_msg: &Packet) {
+        use coap_lite::MessageType::*;
+
+        msg.set_token(received_msg.get_token().into());
+        msg.header.message_id = received_msg.header.message_id;
+        msg.header.set_type(
+            if received_msg.header.get_type() == Confirmable {
+                Acknowledgement
+            } else {
+                NonConfirmable
+            }
+        );
 
         self.send_configuration_message(msg);
     }
