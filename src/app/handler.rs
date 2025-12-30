@@ -193,7 +193,7 @@ impl App {
                 empty_rst.header.code = coap_lite::MessageClass::Empty;
                 empty_rst.header.set_type(coap_lite::MessageType::Reset);
                 empty_rst.header.message_id = response.header.message_id;
-                self.send_configuration_message(&mut empty_rst);
+                self.send_configuration_message(&empty_rst);
             }
         }
     }

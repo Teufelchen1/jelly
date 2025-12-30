@@ -140,7 +140,8 @@ impl App {
         self.send_configuration_message(msg);
     }
 
-    fn send_configuration_message(&mut self, msg: &mut Packet) {
+    #[allow(clippy::needless_pass_by_ref_mut, reason = "implementation may change")]
+    fn send_configuration_message(&mut self, msg: &Packet) {
         let data = encode_buffered(Slipmux::Configuration(msg.to_bytes().unwrap()));
         self.event_sender
             .send(Event::SendConfiguration(data))
