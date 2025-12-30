@@ -4,24 +4,24 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use slipmux::encode_buffered;
 use slipmux::BufferedFrameHandler;
 use slipmux::DecodeStatus;
 use slipmux::Decoder;
 use slipmux::Error;
 use slipmux::Slipmux;
+use slipmux::encode_buffered;
 
 use crate::events::Event;
-use crate::transport::new_port;
 use crate::transport::ReaderWriter;
+use crate::transport::new_port;
 
 pub fn create_slipmux_thread(event_sender: Sender<Event>, device_path: PathBuf) -> Sender<Event> {
     let (slipmux_sender, slipmux_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();

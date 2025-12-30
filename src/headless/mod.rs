@@ -5,12 +5,12 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::create_network_thread;
-use crate::create_slipmux_thread;
-use crate::mpsc::RecvTimeoutError;
 use crate::Cli;
 use crate::Event;
 use crate::EventChannel;
+use crate::create_network_thread;
+use crate::create_slipmux_thread;
+use crate::mpsc::RecvTimeoutError;
 
 use configuration::event_loop_configuration;
 use diagnostic::event_loop_diagnostic;
