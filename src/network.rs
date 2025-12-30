@@ -2,10 +2,10 @@ use std::io::ErrorKind;
 use std::io::ErrorKind::Interrupted;
 use std::io::ErrorKind::TimedOut;
 use std::io::ErrorKind::WouldBlock;
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
 use std::thread;
 
 use tun_rs::DeviceBuilder;
@@ -22,7 +22,11 @@ pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Sender<
 
         while index <= 9 {
             let name = format!("{name}{index}");
-            match DeviceBuilder::new().name(&name).build_sync() {
+            match DeviceBuilder::new()
+                .name(&name)
+                .inherit_enable_state()
+                .build_sync()
+            {
                 Ok(dev) => return (dev, name),
                 Err(err) => match err.kind() {
                     ErrorKind::AlreadyExists => {

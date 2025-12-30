@@ -1,5 +1,5 @@
-use std::io::stdout;
 use std::io::Write;
+use std::io::stdout;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;

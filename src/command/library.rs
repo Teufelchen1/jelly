@@ -1,5 +1,5 @@
-use super::commands::all_commands;
 use super::Command;
+use super::commands::all_commands;
 
 /// The command library maintains all known commands and provides easy access to them
 pub struct CommandLibrary {

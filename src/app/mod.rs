@@ -6,8 +6,8 @@ use coap_lite::Packet;
 use coap_lite::RequestType as Method;
 use rand::Rng;
 use ratatui::Frame;
-use slipmux::encode_buffered;
 use slipmux::Slipmux;
+use slipmux::encode_buffered;
 
 use crate::datatypes::coap_log::CoapLog;
 use crate::datatypes::diagnostic_log::DiagnosticLog;

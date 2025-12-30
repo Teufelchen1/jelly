@@ -1,3 +1,4 @@
+use pnet_packet::Packet as IpPacket;
 use pnet_packet::icmp::IcmpPacket;
 use pnet_packet::icmp::IcmpTypes;
 use pnet_packet::icmpv6::Icmpv6Packet;
@@ -7,7 +8,6 @@ use pnet_packet::ipv4::Ipv4Packet;
 use pnet_packet::ipv6::Ipv6Packet;
 use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
-use pnet_packet::Packet as IpPacket;
 use ratatui::prelude::Alignment;
 use ratatui::prelude::Stylize;
 use ratatui::style::Style;
