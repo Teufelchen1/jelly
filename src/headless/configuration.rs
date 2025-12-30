@@ -3,8 +3,8 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use crate::app::App;
 use crate::Event;
+use crate::app::App;
 
 use super::await_serial_connect;
 use super::create_raw_terminal_thread;

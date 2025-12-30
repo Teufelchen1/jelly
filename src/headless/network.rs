@@ -3,8 +3,8 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use crate::datatypes::packet_log::PacketLog;
 use crate::Event;
+use crate::datatypes::packet_log::PacketLog;
 
 pub fn event_loop_network(
     event_receiver: &Receiver<Event>,
