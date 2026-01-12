@@ -67,22 +67,29 @@ impl PacketDirection {
                 let protocol = packet.get_next_header();
                 let protocol_info = match protocol {
                     IpNextHeaderProtocols::Icmpv6 => {
-                        match Icmpv6Packet::new(packet.payload())
-                            .unwrap()
-                            .get_icmpv6_type()
-                        {
-                            Icmpv6Types::EchoRequest => "EchoRequest",
-                            Icmpv6Types::EchoReply => "EchoReply",
-                            _ => "",
+                        if let Some(icmp_packet) = Icmpv6Packet::new(packet.payload()) {
+                            match icmp_packet.get_icmpv6_type() {
+                                Icmpv6Types::EchoRequest => "EchoRequest",
+                                Icmpv6Types::EchoReply => "EchoReply",
+                                _ => "",
+                            }
+                        } else {
+                            ""
                         }
                     }
                     IpNextHeaderProtocols::Tcp => {
-                        let tcp = TcpPacket::new(packet.payload()).unwrap();
-                        &format!("port {:}", tcp.get_destination())
+                        if let Some(tcp) = TcpPacket::new(packet.payload()) {
+                            &format!("port {:}", tcp.get_destination())
+                        } else {
+                            ""
+                        }
                     }
                     IpNextHeaderProtocols::Udp => {
-                        let ucp = UdpPacket::new(packet.payload()).unwrap();
-                        &format!("port {:}", ucp.get_destination())
+                        if let Some(udp) = UdpPacket::new(packet.payload()) {
+                            &format!("port {:}", udp.get_destination())
+                        } else {
+                            ""
+                        }
                     }
                     _ => "",
                 };
@@ -99,19 +106,29 @@ impl PacketDirection {
                 let protocol = packet.get_next_level_protocol();
                 let protocol_info = match protocol {
                     IpNextHeaderProtocols::Icmp => {
-                        match IcmpPacket::new(packet.payload()).unwrap().get_icmp_type() {
-                            IcmpTypes::EchoRequest => "EchoRequest",
-                            IcmpTypes::EchoReply => "EchoReply",
-                            _ => "",
+                        if let Some(icmp_packet) = IcmpPacket::new(packet.payload()) {
+                            match icmp_packet.get_icmp_type() {
+                                IcmpTypes::EchoRequest => "EchoRequest",
+                                IcmpTypes::EchoReply => "EchoReply",
+                                _ => "",
+                            }
+                        } else {
+                            ""
                         }
                     }
                     IpNextHeaderProtocols::Tcp => {
-                        let tcp = TcpPacket::new(packet.payload()).unwrap();
-                        &format!("port {:}", tcp.get_destination())
+                        if let Some(tcp) = TcpPacket::new(packet.payload()) {
+                            &format!("port {:}", tcp.get_destination())
+                        } else {
+                            ""
+                        }
                     }
                     IpNextHeaderProtocols::Udp => {
-                        let ucp = UdpPacket::new(packet.payload()).unwrap();
-                        &format!("port {:}", ucp.get_destination())
+                        if let Some(udp) = UdpPacket::new(packet.payload()) {
+                            &format!("port {:}", udp.get_destination())
+                        } else {
+                            ""
+                        }
                     }
                     _ => "",
                 };
@@ -129,7 +146,7 @@ impl PacketDirection {
 
     pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
         let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
+            .borders(Borders::BOTTOM)
             .style(Style::new().gray())
             .title(self.get_title())
             .title_alignment(Alignment::Left);
@@ -150,11 +167,11 @@ impl PacketLog {
         match packet[0] >> 4 {
             // IPv4
             4 => Ok(PacketDirection::ToHost4(
-                Ipv4Packet::owned(packet.to_vec()).unwrap(),
+                Ipv4Packet::owned(packet.to_vec()).ok_or(())?,
             )),
             // IPv6
             6 => Ok(PacketDirection::ToHost6(
-                Ipv6Packet::owned(packet.to_vec()).unwrap(),
+                Ipv6Packet::owned(packet.to_vec()).ok_or(())?,
             )),
             _ => Err(()),
         }
@@ -163,11 +180,11 @@ impl PacketLog {
         match packet[0] >> 4 {
             // IPv4
             4 => Ok(PacketDirection::ToNode4(
-                Ipv4Packet::owned(packet.to_vec()).unwrap(),
+                Ipv4Packet::owned(packet.to_vec()).ok_or(())?,
             )),
             // IPv6
             6 => Ok(PacketDirection::ToNode6(
-                Ipv6Packet::owned(packet.to_vec()).unwrap(),
+                Ipv6Packet::owned(packet.to_vec()).ok_or(())?,
             )),
             _ => Err(()),
         }
