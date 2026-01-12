@@ -71,6 +71,10 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
         None
     };
 
+    // The app queries the terminal on creation for its colour theme
+    // So we create it here early, before messing with the terminal ourselves
+    let app = App::new(event_sender.clone());
+
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
         reset_terminal();
@@ -90,9 +94,11 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 
     terminal.clear().unwrap();
 
+    create_terminal_thread(event_sender);
+
     event_loop_tui(
+        app,
         &event_receiver,
-        event_sender,
         &slipmux_event_sender,
         network_event_sender.as_ref(),
         terminal,
@@ -102,15 +108,12 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 }
 
 pub fn event_loop_tui(
+    mut app: App,
     event_channel: &Receiver<Event>,
-    event_sender: Sender<Event>,
     hardware_event_sender: &Sender<Event>,
     network_event_sender: Option<&Sender<Event>>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
-    create_terminal_thread(event_sender.clone());
-
-    let mut app = App::new(event_sender);
     terminal.draw(|frame| app.draw(frame)).unwrap();
 
     loop {

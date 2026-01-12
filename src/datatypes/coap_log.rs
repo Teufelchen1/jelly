@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -10,15 +9,11 @@ use coap_lite::CoapResponse;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
 use coap_lite::Packet;
-use ratatui::layout::Alignment;
-use ratatui::layout::Constraint;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 pub fn token_to_u64(token: &[u8]) -> u64 {
@@ -34,7 +29,7 @@ pub fn token_to_u64(token: &[u8]) -> u64 {
 }
 
 pub struct CoapLog {
-    requests: Vec<Request>,
+    pub requests: Vec<Request>,
 }
 
 impl CoapLog {
@@ -44,29 +39,6 @@ impl CoapLog {
 
     pub fn push(&mut self, request: CoapRequest<String>) {
         self.requests.push(Request::new(request));
-    }
-
-    pub fn to_paragraphs(&'_ self, short: bool) -> (u16, Vec<Paragraph<'_>>, Vec<Constraint>) {
-        let mut req_blocks = vec![];
-        let mut constrains = vec![];
-        let total_length: u16 = {
-            let mut sum = 0;
-            // temporay limitation to work around ratatui bug #1855
-            let start =
-                usize::try_from(max(i64::try_from(self.requests.len()).unwrap() - 10, 0)).unwrap();
-            for req in &self.requests[start..] {
-                let (size, para) = if short {
-                    req.paragraph_short()
-                } else {
-                    req.paragraph()
-                };
-                req_blocks.push(para);
-                sum += size;
-                constrains.push(Constraint::Length(size.try_into().unwrap()));
-            }
-            sum.try_into().unwrap_or(u16::MAX)
-        };
-        (total_length, req_blocks, constrains)
     }
 
     pub fn get_request_by_token(&mut self, token: u64) -> Option<&mut Request> {
@@ -97,7 +69,7 @@ impl Request {
             .push(Response::new(CoapResponse { message: response }));
     }
 
-    fn get_request_title(&self) -> String {
+    pub fn get_request_title(&self) -> String {
         let mut out = String::new();
         let dt: DateTime<Utc> = self.time.into();
         _ = write!(out, "[{}]", dt.format("%H:%M:%S%.3f"));
@@ -130,7 +102,7 @@ impl Request {
         out
     }
 
-    fn get_request_title_short(&self) -> String {
+    pub fn get_request_title_short(&self) -> String {
         let mut out = String::new();
         match self.req.message.header.code {
             MessageClass::Empty => _ = write!(out, "Empty"),
@@ -152,18 +124,12 @@ impl Request {
     }
 
     pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
-        let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .style(Style::new().gray())
-            .title(vec![Span::from(self.get_request_title())])
-            .title_alignment(Alignment::Left);
-
         if self.res.is_empty() {
-            (3, Paragraph::new("Awaiting response").block(block))
+            (1, Paragraph::new("Awaiting response"))
         } else {
             let mut text = Text::default().reset_style();
             let mut header = Line::default();
-            let timestamp = self.res[0].get_timestamp().gray();
+            let timestamp = self.res[0].get_timestamp();
             let status = self.res[0].get_status();
             let payload = Text::from(self.res[0].get_payload());
 
@@ -173,20 +139,14 @@ impl Request {
 
             text.push_line(header);
             text.extend(payload);
-            let size = text.lines.len() + 2;
-            (size, Paragraph::new(text).block(block))
+            let height = text.lines.len();
+            (height, Paragraph::new(text))
         }
     }
 
     pub fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
-        let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .style(Style::new().gray())
-            .title(self.get_request_title_short())
-            .title_alignment(Alignment::Left);
-
         if self.res.is_empty() {
-            (3, Paragraph::new("Awaiting response").block(block))
+            (1, Paragraph::new("Awaiting response"))
         } else {
             let mut text = Text::default().reset_style();
             let mut header = Line::default();
@@ -198,8 +158,8 @@ impl Request {
 
             text.push_line(header);
             text.extend(payload);
-            let size = text.lines.len() + 2;
-            (size, Paragraph::new(text).block(block))
+            let height = text.lines.len();
+            (height, Paragraph::new(text))
         }
     }
 }

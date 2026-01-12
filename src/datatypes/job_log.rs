@@ -7,12 +7,6 @@ use chrono::prelude::DateTime;
 use chrono::prelude::Utc;
 use coap_lite::CoapRequest;
 use coap_lite::Packet;
-use ratatui::prelude::Alignment;
-use ratatui::prelude::Stylize;
-use ratatui::style::Style;
-use ratatui::style::Styled;
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 
@@ -123,21 +117,16 @@ impl Job {
         buffer
     }
 
-    pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
+    pub fn get_title(&self) -> String {
         let dt: DateTime<Utc> = self.start_time.into();
-        let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .style(Style::new().gray())
-            .title(format!("[{}] {}", dt.format("%H:%M:%S%.3f"), self.cli))
-            .title_alignment(Alignment::Left);
+        format!("[{}] {}", dt.format("%H:%M:%S%.3f"), self.cli)
+    }
 
-        let size = self.log.lines().count() + 2;
+    pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
+        let size = self.log.lines().count();
         (
             size,
-            Paragraph::new(self.log.clone())
-                .wrap(Wrap { trim: false })
-                .block(block)
-                .set_style(Style::reset()),
+            Paragraph::new(self.log.clone()).wrap(Wrap { trim: false }),
         )
     }
 }

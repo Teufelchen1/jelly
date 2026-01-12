@@ -1,4 +1,11 @@
 use std::fmt::Write;
+
+use ratatui::style::Color;
+use ratatui::style::Style;
+use ratatui::style::Stylize;
+use terminal_colorsaurus::QueryOptions;
+use terminal_colorsaurus::ThemeMode;
+use terminal_colorsaurus::theme_mode;
 use tui_widgets::scrollview::ScrollViewState;
 
 #[derive(Default, Clone, Copy)]
@@ -55,6 +62,37 @@ impl ScrollState {
     }
 }
 
+struct ColorPalette {
+    border: Style,
+    tab_selected: Style,
+    downlight: Style,
+}
+
+impl ColorPalette {
+    fn new_dark() -> Self {
+        Self {
+            border: Style::new().gray(),
+            tab_selected: Style::new().fg(Color::Black).bg(Color::White),
+            downlight: Style::new().dark_gray(),
+        }
+    }
+
+    fn new_light() -> Self {
+        Self {
+            border: Style::new().dark_gray(),
+            tab_selected: Style::new().fg(Color::White).bg(Color::Black),
+            downlight: Color::Indexed(240).into(),
+        }
+    }
+
+    fn from(theme: ThemeMode) -> Self {
+        match theme {
+            ThemeMode::Dark => Self::new_dark(),
+            ThemeMode::Light => Self::new_light(),
+        }
+    }
+}
+
 pub struct UiState {
     device_path: Option<String>,
     iface_name: Option<String>,
@@ -68,6 +106,7 @@ pub struct UiState {
     pub command_help_list: String,
     riot_board: String,
     riot_version: String,
+    theme: ColorPalette,
 }
 
 impl UiState {
@@ -89,7 +128,23 @@ impl UiState {
 
             riot_board: "Unknown".to_owned(),
             riot_version: "Unknown".to_owned(),
+
+            theme: ColorPalette::from(
+                theme_mode(QueryOptions::default()).unwrap_or(ThemeMode::Dark),
+            ),
         }
+    }
+
+    pub const fn border_style(&self) -> Style {
+        self.theme.border
+    }
+
+    pub const fn selected_style(&self) -> Style {
+        self.theme.tab_selected
+    }
+
+    pub const fn downlight(&self) -> Style {
+        self.theme.downlight
     }
 
     pub fn set_command_help_list(&mut self, cmds: Vec<(String, String, String)>) {
