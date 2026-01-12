@@ -9,8 +9,8 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
-use slipmux::encode_buffered;
 use slipmux::Slipmux;
+use slipmux::encode_buffered;
 
 use super::App;
 use super::InputType;
