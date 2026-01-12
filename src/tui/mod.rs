@@ -1,7 +1,7 @@
-use crate::create_network_thread;
-use crate::create_slipmux_thread;
 use crate::Cli;
 use crate::EventChannel;
+use crate::create_network_thread;
+use crate::create_slipmux_thread;
 use std::io::Stdout;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -11,11 +11,11 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crossterm::event::MouseEventKind;
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 
-use crate::app::App;
 use crate::Event;
+use crate::app::App;
 
 pub use ui_state::SelectedTab;
 pub use ui_state::UiState;

@@ -263,7 +263,8 @@ impl Response {
         };
 
         let payload = &self.coap.message.payload;
-        let payload_formatted = if payload.is_empty() {
+
+        if payload.is_empty() {
             "Empty payload".to_owned()
         } else {
             match self.coap.message.get_content_format() {
@@ -286,8 +287,6 @@ impl Response {
                     format!("{payload:02x?}")
                 }
             }
-        };
-
-        payload_formatted
+        }
     }
 }

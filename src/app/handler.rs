@@ -9,8 +9,8 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
-use slipmux::encode_buffered;
 use slipmux::Slipmux;
+use slipmux::encode_buffered;
 
 use super::App;
 use super::InputType;
@@ -118,6 +118,23 @@ impl App {
     pub fn on_configuration_msg(&mut self, data: &[u8]) {
         let response = Packet::from_bytes(data).unwrap();
 
+        if matches!(response.header.code, coap_lite::MessageClass::Request(_)) {
+            // Someone sent *us* a request -- but we don't do that (yet?).
+            //
+            // We could also RST here, but there's some danger this would get mixed up in other
+            // operations, so let's just send a simple minimal good response.
+
+            use coap_lite::MessageType::{Confirmable, NonConfirmable};
+            if matches!(response.header.get_type(), Confirmable | NonConfirmable) {
+                let mut real_response = Packet::new();
+                real_response.header.code =
+                    coap_lite::MessageClass::Response(coap_lite::ResponseType::NotFound);
+                self.send_configuration_acknowledging(&mut real_response, &response);
+            }
+
+            return;
+        }
+
         // Get the key for the hashmap
         let token = response.get_token();
         let hash_index = token_to_u64(token);
@@ -126,43 +143,60 @@ impl App {
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response);
 
-        if let Some(request) = self.configuration_log.get_request_by_token(hash_index) {
-            request.add_response(response.clone());
+        let expected =
+            if let Some(request) = self.configuration_log.get_request_by_token(hash_index) {
+                request.add_response(response.clone());
 
-            let option_list_ = request.req.message.get_option(CoapOption::UriPath);
-            if let Some(option_list) = option_list_ {
-                let mut uri_path = String::new();
-                for option in option_list {
-                    _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
-                }
-                match uri_path.as_str() {
-                    "/jelly/board" => self
-                        .ui_state
-                        .set_board_name(String::from_utf8_lossy(&response.payload).to_string()),
-                    "/jelly/ver" => self
-                        .ui_state
-                        .set_board_version(String::from_utf8_lossy(&response.payload).to_string()),
+                let option_list_ = request.req.message.get_option(CoapOption::UriPath);
+                if let Some(option_list) = option_list_ {
+                    let mut uri_path = String::new();
+                    for option in option_list {
+                        _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
+                    }
+                    match uri_path.as_str() {
+                        "/jelly/board" => self
+                            .ui_state
+                            .set_board_name(String::from_utf8_lossy(&response.payload).to_string()),
+                        "/jelly/ver" => self.ui_state.set_board_version(
+                            String::from_utf8_lossy(&response.payload).to_string(),
+                        ),
 
-                    "/.well-known/core" => self.on_well_known_core(&response),
-                    _ => {
-                        // RIOT specific hook
-                        if uri_path.starts_with("/shell/") {
-                            let dscr = String::from_utf8_lossy(&response.payload);
-                            self.user_input_manager
-                                .update_command_description_by_location(&uri_path, &dscr);
+                        "/.well-known/core" => self.on_well_known_core(&response),
+                        _ => {
+                            // RIOT specific hook
+                            if uri_path.starts_with("/shell/") {
+                                let dscr = String::from_utf8_lossy(&response.payload);
+                                self.user_input_manager
+                                    .update_command_description_by_location(&uri_path, &dscr);
 
-                            self.user_input_manager.update_command_description_by_name(
-                                uri_path.strip_prefix("/shell/").unwrap(),
-                                &dscr,
-                            );
+                                self.user_input_manager.update_command_description_by_name(
+                                    uri_path.strip_prefix("/shell/").unwrap(),
+                                    &dscr,
+                                );
+                            }
                         }
                     }
                 }
+                true
+            } else {
+                // This should never happen, as it means that the riot node
+                // proactively send a configuration message
+                self.configuration_packets.push(response.clone());
+                false
+            };
+
+        if response.header.get_type() == coap_lite::MessageType::Confirmable {
+            if expected {
+                let mut empty_ack = Packet::new();
+                empty_ack.header.code = coap_lite::MessageClass::Empty;
+                self.send_configuration_acknowledging(&mut empty_ack, &response);
+            } else {
+                let mut empty_rst = Packet::new();
+                empty_rst.header.code = coap_lite::MessageClass::Empty;
+                empty_rst.header.set_type(coap_lite::MessageType::Reset);
+                empty_rst.header.message_id = response.header.message_id;
+                self.send_configuration_message(&empty_rst);
             }
-        } else {
-            // This should never happen, as it means that the riot node
-            // proactively send a configuration message
-            self.configuration_packets.push(response);
         }
     }
 

@@ -3,6 +3,7 @@ use std::cmp::min;
 use std::env;
 use std::iter::zip;
 
+use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -22,7 +23,6 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
-use ratatui::Frame;
 use tui_widgets::scrollview::ScrollView;
 
 use super::UiState;

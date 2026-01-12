@@ -2,10 +2,10 @@ use std::io::ErrorKind;
 use std::io::ErrorKind::Interrupted;
 use std::io::ErrorKind::TimedOut;
 use std::io::ErrorKind::WouldBlock;
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
 use std::thread;
 
 use tun_rs::DeviceBuilder;

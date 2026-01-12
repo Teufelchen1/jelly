@@ -6,8 +6,8 @@ use coap_lite::Packet;
 use coap_lite::RequestType as Method;
 use rand::Rng;
 use ratatui::Frame;
-use slipmux::encode_buffered;
 use slipmux::Slipmux;
+use slipmux::encode_buffered;
 
 use crate::datatypes::coap_log::CoapLog;
 use crate::datatypes::diagnostic_log::DiagnosticLog;
@@ -113,10 +113,34 @@ impl App {
         request
     }
 
+    /// Sends a CoAP message as a new request, assigning it a message ID an token in-place.
+    ///
+    /// The user is expected to clone the token out of the message to match the responses.
     fn send_configuration_request(&mut self, msg: &mut Packet) {
         msg.header.message_id = self.get_new_message_id();
         msg.set_token(self.get_new_token());
 
+        self.send_configuration_message(msg);
+    }
+
+    /// Sends a message that acknowledges some original message.
+    fn send_configuration_acknowledging(&mut self, msg: &mut Packet, received_msg: &Packet) {
+        use coap_lite::MessageType::{Acknowledgement, Confirmable, NonConfirmable};
+
+        msg.set_token(received_msg.get_token().into());
+        msg.header.message_id = received_msg.header.message_id;
+        msg.header
+            .set_type(if received_msg.header.get_type() == Confirmable {
+                Acknowledgement
+            } else {
+                NonConfirmable
+            });
+
+        self.send_configuration_message(msg);
+    }
+
+    #[allow(clippy::needless_pass_by_ref_mut, reason = "implementation may change")]
+    fn send_configuration_message(&mut self, msg: &Packet) {
         let data = encode_buffered(Slipmux::Configuration(msg.to_bytes().unwrap()));
         self.event_sender
             .send(Event::SendConfiguration(data))
