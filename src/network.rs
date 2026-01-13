@@ -14,6 +14,22 @@ use tun_rs::SyncDevice;
 
 use crate::events::Event;
 
+fn get_addr_as_string(addrs: std::io::Result<Vec<std::net::IpAddr>>) -> Option<String> {
+    if let Ok(addrs) = addrs {
+        for addr in addrs {
+            if addr.is_ipv4() {
+                return Some(addr.to_string());
+            } else if addr.is_ipv6() {
+                if addr.is_multicast() || addr.is_loopback() || addr.is_unspecified() {
+                    continue;
+                }
+                return Some(addr.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Sender<Event> {
     let (jelly_packet_sender, jelly_packet_receiver): (Sender<Event>, Receiver<Event>) =
         mpsc::channel();
@@ -38,9 +54,15 @@ pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Sender<
 
     dev.set_nonblocking(true).unwrap();
 
-    event_sender
-        .send(Event::NetworkConnect(name.to_owned()))
-        .unwrap();
+    let addr = get_addr_as_string(dev.addresses());
+
+    let name = if let Some(addr) = addr {
+        format!("{name} {addr}")
+    } else {
+        name.to_owned()
+    };
+
+    event_sender.send(Event::NetworkConnect(name)).unwrap();
 
     let interruptor = Arc::new(InterruptEvent::new().unwrap());
     let interruptor2 = interruptor.clone();
