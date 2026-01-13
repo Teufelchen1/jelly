@@ -5,12 +5,12 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::Cli;
-use crate::Event;
-use crate::EventChannel;
 use crate::create_network_thread;
 use crate::create_slipmux_thread;
 use crate::mpsc::RecvTimeoutError;
+use crate::Cli;
+use crate::Event;
+use crate::EventChannel;
 
 use configuration::event_loop_configuration;
 use diagnostic::event_loop_diagnostic;
@@ -81,6 +81,7 @@ pub fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
 
 pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
+
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
 
     match await_serial_connect(&event_receiver) {
@@ -94,8 +95,12 @@ pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
         }
     }
 
-    let name = args.network.flatten().unwrap_or_else(|| "slip".to_owned());
-    let network_event_sender = create_network_thread(event_sender, &name);
+    let name = args.network.flatten().unwrap_or_else(|| "slip0".to_owned());
+    let network_event_sender = if let Ok(nes) = create_network_thread(event_sender, &name) {
+        nes
+    } else {
+        return;
+    };
 
     event_loop_network(
         &event_receiver,
@@ -106,6 +111,7 @@ pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
 
 pub fn start_headless_diagnostic_network(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
+
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
 
     match await_serial_connect(&event_receiver) {
@@ -119,8 +125,12 @@ pub fn start_headless_diagnostic_network(args: Cli, main_channel: EventChannel) 
         }
     }
 
-    let name = args.network.flatten().unwrap_or_else(|| "slip".to_owned());
-    let network_event_sender = create_network_thread(event_sender, &name);
+    let name = args.network.flatten().unwrap_or_else(|| "slip0".to_owned());
+    let network_event_sender = if let Ok(nes) = create_network_thread(event_sender, &name) {
+        nes
+    } else {
+        return;
+    };
 
     event_loop_diagnostic_network(
         &event_receiver,

@@ -2,10 +2,10 @@ use std::io::ErrorKind;
 use std::io::ErrorKind::Interrupted;
 use std::io::ErrorKind::TimedOut;
 use std::io::ErrorKind::WouldBlock;
-use std::sync::Arc;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::thread;
 
 use tun_rs::DeviceBuilder;
@@ -30,27 +30,35 @@ fn get_addr_as_string(addrs: std::io::Result<Vec<std::net::IpAddr>>) -> Option<S
     None
 }
 
-pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Sender<Event> {
+pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Result<Sender<Event>, ()> {
     let (jelly_packet_sender, jelly_packet_receiver): (Sender<Event>, Receiver<Event>) =
         mpsc::channel();
     let (internal_packet_sender, internal_packet_receiver): (Sender<Vec<u8>>, Receiver<Vec<u8>>) =
         mpsc::channel();
 
-    let Ok(dev) = DeviceBuilder::new()
+    let dev = DeviceBuilder::new()
         .name(name)
         .inherit_enable_state()
         .build_sync()
-        .map_err(|err| match err.kind() {
+        .map_err(|err| {
+            match err.kind() {
             ErrorKind::ResourceBusy => {
-                panic!("Network interface {name} is used by another program (possibly another Jelly instance); each running instance needs a dedicated interface.");
+                println!("Network interface {name} is used by another program (possibly another Jelly instance).");
+                println!("Each running instance needs a dedicated interface.");
             }
             ErrorKind::PermissionDenied => {
-                panic!("Not enough permissions to open network interface {name}. On Linux using NetworkManager, can create an interface with this command:\nsudo nmcli connection add type tun mode tun owner $(id -u) ifname {name} con-name {name} ipv6.method shared");
+                println!("Not enough permissions to open network interface {name} or the device might not exist.");
+                println!("Using NetworkManager, you can create an interface with this command:");
+                println!("sudo nmcli connection add type tun mode tun owner $(id -u) ifname {name} con-name {name} ipv6.method shared");
+                println!("Using ip tools, you can create an interface with this command:");
+                println!("sudo ip tuntap add {name} mode tun user $(id -u)");
             }
             _ => {
-                panic!("Error creating tun interface: {:}", err.kind());
+                println!("Error creating tun interface: {:}", err.kind()); 
             }
-        });
+        }
+        ()
+    })?;
 
     dev.set_nonblocking(true).unwrap();
 
@@ -88,7 +96,7 @@ pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Sender<
             );
         })
         .unwrap();
-    jelly_packet_sender
+    Ok(jelly_packet_sender)
 }
 
 fn write_thread(
