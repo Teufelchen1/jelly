@@ -11,8 +11,6 @@ use ratatui::layout::Layout;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
-use ratatui::style::Color;
-use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -58,7 +56,7 @@ impl UiState {
 
         frame.render_widget(
             Tabs::new(tab_titles)
-                .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
+                .highlight_style(self.selected_style())
                 .select(self.current_tab as usize)
                 .padding("", "")
                 .divider(" "),
@@ -84,7 +82,7 @@ impl UiState {
 
     fn render_help(&mut self, frame: &mut Frame, area: Rect) {
         let border_block = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("Help")])
             .title_alignment(Alignment::Left);
 
@@ -128,7 +126,7 @@ impl UiState {
 
     fn render_network(&mut self, frame: &mut Frame, area: Rect, net_log: &PacketLog) {
         let right_block_up = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("Network packets")])
             .title_alignment(Alignment::Left);
 
@@ -140,8 +138,14 @@ impl UiState {
             let start =
                 usize::try_from(max(i64::try_from(net_log.log().len()).unwrap() - 10, 0)).unwrap();
             for req in &net_log.log()[start..] {
+                let block = Block::new()
+                    .borders(Borders::BOTTOM)
+                    .style(self.border_style())
+                    .title(req.get_title())
+                    .title_alignment(Alignment::Left);
                 let (size, para) = req.paragraph();
-                req_blocks.push(para);
+                req_blocks.push(para.block(block));
+                let size = size + 2;
                 sum += size;
                 constrains.push(Constraint::Length(size.try_into().unwrap()));
             }
@@ -175,7 +179,7 @@ impl UiState {
 
     fn render_commands(&mut self, frame: &mut Frame, area: Rect, job_log: &JobLog) {
         let right_block_up = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("Commands")])
             .title_alignment(Alignment::Left);
 
@@ -187,8 +191,15 @@ impl UiState {
             let start =
                 usize::try_from(max(i64::try_from(job_log.jobs.len()).unwrap() - 10, 0)).unwrap();
             for job in &job_log.jobs[start..] {
+                let block = Block::new()
+                    .borders(Borders::BOTTOM)
+                    .style(self.border_style())
+                    .title(job.get_title())
+                    .title_alignment(Alignment::Left);
                 let (size, para) = job.paragraph();
-                req_blocks.push(para);
+                let size = size + 2;
+                let para = para.reset();
+                req_blocks.push(para.block(block));
                 sum += size;
                 constrains.push(Constraint::Length(size.try_into().unwrap()));
             }
@@ -228,11 +239,44 @@ impl UiState {
         short: bool,
     ) {
         let right_block_up = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
 
-        let (total_length, req_blocks, constrains) = configuration_log.to_paragraphs(short);
+        let (total_length, req_blocks, constrains) = {
+            let mut req_blocks = vec![];
+            let mut constrains = vec![];
+            let total_length: u16 = {
+                let mut sum = 0;
+                // temporay limitation to work around ratatui bug #1855
+                let start = usize::try_from(max(
+                    i64::try_from(configuration_log.requests.len()).unwrap() - 10,
+                    0,
+                ))
+                .unwrap();
+                for req in &configuration_log.requests[start..] {
+                    let block = Block::new()
+                        .borders(Borders::TOP | Borders::BOTTOM)
+                        .style(self.border_style())
+                        .title_alignment(Alignment::Left);
+                    let (size, para) = if short {
+                        let block = block.title(vec![Span::from(req.get_request_title_short())]);
+                        let (size, para) = req.paragraph_short();
+                        (size, para.block(block))
+                    } else {
+                        let block = block.title(vec![Span::from(req.get_request_title())]);
+                        let (size, para) = req.paragraph();
+                        (size, para.block(block))
+                    };
+                    req_blocks.push(para);
+                    let size = size + 2;
+                    sum += size;
+                    constrains.push(Constraint::Length(size.try_into().unwrap()));
+                }
+                sum.try_into().unwrap_or(u16::MAX)
+            };
+            (total_length, req_blocks, constrains)
+        };
 
         let width = if right_block_up.inner(area).height < total_length {
             // Make room for the scroll bar
@@ -259,19 +303,23 @@ impl UiState {
         frame.render_widget(right_block_up, area);
     }
 
-    fn render_user_input(frame: &mut Frame, area: Rect, user_input_manager: &UserInputManager) {
+    fn render_user_input(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        user_input_manager: &UserInputManager,
+    ) {
         if user_input_manager.input_empty() {
             let right_block_down = Block::bordered()
-                .border_style(Style::new().gray())
+                .border_style(self.border_style())
                 .title(vec![Span::from("User Input")])
                 .title_alignment(Alignment::Left);
 
             let mut text = Text::from(
-                Span::from("Type a command, for example: ").patch_style(Style::new().dark_gray()),
+                Span::from("Type a command, for example: ").patch_style(self.downlight()),
             );
             text.push_span(
-                Span::from(user_input_manager.command_name_list())
-                    .patch_style(Style::new().dark_gray()),
+                Span::from(user_input_manager.command_name_list()).patch_style(self.downlight()),
             );
             let paragraph = Paragraph::new(text).block(right_block_down);
             frame.set_cursor_position(Position::new(area.x + 1, area.y + 1));
@@ -284,7 +332,7 @@ impl UiState {
             InputType::Command(cmd, _, _) => &format!("User Input: {cmd}"),
         };
         let right_block_down = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from(title)])
             .title_alignment(Alignment::Left);
 
@@ -333,15 +381,13 @@ impl UiState {
 
         if remaining_space < completion_text.len() {
             text.push_span(
-                Span::from(&completion_text[..remaining_space])
-                    .patch_style(Style::new().dark_gray()),
+                Span::from(&completion_text[..remaining_space]).patch_style(self.downlight()),
             );
             text.push_line(
-                Span::from(&completion_text[remaining_space..])
-                    .patch_style(Style::new().dark_gray()),
+                Span::from(&completion_text[remaining_space..]).patch_style(self.downlight()),
             );
         } else {
-            text.push_span(Span::from(&completion_text).patch_style(Style::new().dark_gray()));
+            text.push_span(Span::from(&completion_text).patch_style(self.downlight()));
         }
 
         let paragraph = Paragraph::new(text).block(right_block_down);
@@ -355,7 +401,7 @@ impl UiState {
         diagnostic_log: &DiagnosticLog,
     ) {
         let left_block_up = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("Text Messages")])
             .title_alignment(Alignment::Left);
 
@@ -391,7 +437,7 @@ impl UiState {
         overall_log: &DiagnosticLog,
     ) {
         let left_block_up = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("Text & Commands")])
             .title_alignment(Alignment::Left);
 
@@ -419,7 +465,7 @@ impl UiState {
 
     fn render_configuration_overview(&self, frame: &mut Frame, area: Rect) {
         let left_block_down = Block::bordered()
-            .border_style(Style::new().gray())
+            .border_style(self.border_style())
             .title(vec![Span::from("Board Info")])
             .title_alignment(Alignment::Left);
 
@@ -472,7 +518,7 @@ impl UiState {
         self.render_configuration_messages(frame, configuration_log_area, configuration_log, true);
         self.render_configuration_overview(frame, device_config_overview_area);
         self.render_overall_messages(frame, overall_messages_log_area, overall_log);
-        Self::render_user_input(frame, userinput_area, user_input_manager);
+        self.render_user_input(frame, userinput_area, user_input_manager);
     }
 
     pub fn draw(
@@ -525,7 +571,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_diagnostic_messages(frame, chunk_upper, diagnostic_log);
-                Self::render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Configuration => {
                 let chunks = Layout::default()
@@ -537,7 +583,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_configuration_messages(frame, chunk_upper, configuration_log, false);
-                Self::render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Commands => {
                 let chunks = Layout::default()
@@ -549,7 +595,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_commands(frame, chunk_upper, job_log);
-                Self::render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Net => {
                 let chunks = Layout::default()
@@ -561,7 +607,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_network(frame, chunk_upper, net_log);
-                Self::render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager);
             }
             super::SelectedTab::Help => {
                 let chunks = Layout::default()
@@ -573,7 +619,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_help(frame, chunk_upper);
-                Self::render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager);
             }
         }
     }

@@ -8,12 +8,7 @@ use pnet_packet::ipv4::Ipv4Packet;
 use pnet_packet::ipv6::Ipv6Packet;
 use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
-use ratatui::prelude::Alignment;
-use ratatui::prelude::Stylize;
-use ratatui::style::Style;
 use ratatui::text::Text;
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 pub enum PacketDirection {
@@ -145,16 +140,10 @@ impl PacketDirection {
     }
 
     pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
-        let block = Block::new()
-            .borders(Borders::BOTTOM)
-            .style(Style::new().gray())
-            .title(self.get_title())
-            .title_alignment(Alignment::Left);
-
         let text = Text::from(self.get_payload()).reset_style();
 
-        let size = text.lines.len() + 2;
-        (size, Paragraph::new(text).block(block))
+        let size = text.lines.len();
+        (size, Paragraph::new(text))
     }
 }
 
