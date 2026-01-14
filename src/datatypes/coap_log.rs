@@ -10,7 +10,6 @@ use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
 use coap_lite::Packet;
 use ratatui::style::Style;
-use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
