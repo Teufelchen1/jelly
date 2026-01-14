@@ -1,3 +1,6 @@
+# Keep the style edition in sync with "edition" in Cargo.toml!
+style_edition = "2024"
+
 # https://github.com/rust-lang/rustfmt/blob/master/Configurations.md
 # == These require the nightly channel ==
 # format_code_in_doc_comments = true
