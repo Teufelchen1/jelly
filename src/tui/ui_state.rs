@@ -2,7 +2,6 @@ use std::fmt::Write;
 
 use ratatui::style::Color;
 use ratatui::style::Style;
-use ratatui::style::Stylize;
 use terminal_colorsaurus::QueryOptions;
 use terminal_colorsaurus::ThemeMode;
 use terminal_colorsaurus::theme_mode;
@@ -69,7 +68,7 @@ struct ColorPalette {
 }
 
 impl ColorPalette {
-    fn new_dark() -> Self {
+    const fn new_dark() -> Self {
         Self {
             border: Style::new().gray(),
             tab_selected: Style::new().fg(Color::Black).bg(Color::White),
