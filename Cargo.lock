@@ -18,6 +18,7 @@ dependencies = [
  "ratatui",
  "serialport",
  "slipmux",
+ "strum",
  "terminal-colorsaurus",
  "tui-widgets",
  "tun-rs",

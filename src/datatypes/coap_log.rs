@@ -122,6 +122,30 @@ impl Request {
         out
     }
 
+    pub fn display_lines(&self) -> Vec<Line> {
+        if self.res.is_empty() {
+            //(1, Paragraph::new("Awaiting response"))
+            vec![Line::from("Awaiting response")]
+        } else {
+            //let mut result = vec![];
+            let mut text = Text::default().reset_style();
+            let mut header = Line::default();
+            let timestamp = self.res[0].get_timestamp();
+            let status = self.res[0].get_status();
+            let payload = Text::from(self.res[0].get_payload());
+
+            header.push_span(timestamp);
+            header.push_span(status);
+            header.push_span(Span::default().reset_style());
+
+            //result.push(header);
+
+            text.push_line(header);
+            text.extend(payload);
+            text.lines
+        }
+    }
+
     pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
         if self.res.is_empty() {
             (1, Paragraph::new("Awaiting response"))

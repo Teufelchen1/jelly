@@ -238,69 +238,94 @@ impl UiState {
         configuration_log: &CoapLog,
         short: bool,
     ) {
-        let right_block_up = Block::bordered()
+        let block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
 
-        let (total_length, req_blocks, constrains) = {
-            let mut req_blocks = vec![];
-            let mut constrains = vec![];
-            let total_length: u16 = {
-                let mut sum = 0;
-                // temporay limitation to work around ratatui bug #1855
-                let start = usize::try_from(max(
-                    i64::try_from(configuration_log.requests.len()).unwrap() - 10,
-                    0,
-                ))
-                .unwrap();
-                for req in &configuration_log.requests[start..] {
-                    let block = Block::new()
-                        .borders(Borders::TOP | Borders::BOTTOM)
-                        .style(self.border_style())
-                        .title_alignment(Alignment::Left);
-                    let (size, para) = if short {
-                        let block = block.title(vec![Span::from(req.get_request_title_short())]);
-                        let (size, para) = req.paragraph_short();
-                        (size, para.block(block))
-                    } else {
-                        let block = block.title(vec![Span::from(req.get_request_title())]);
-                        let (size, para) = req.paragraph();
-                        (size, para.block(block))
-                    };
-                    req_blocks.push(para);
-                    let size = size + 2;
-                    sum += size;
-                    constrains.push(Constraint::Length(size.try_into().unwrap()));
-                }
-                sum.try_into().unwrap_or(u16::MAX)
-            };
-            (total_length, req_blocks, constrains)
-        };
+        // The maximum height we can display
+        let content_height = usize::from(block.inner(area).height);
 
-        let width = if right_block_up.inner(area).height < total_length {
-            // Make room for the scroll bar
-            right_block_up.inner(area).width - 1
-        } else {
-            right_block_up.inner(area).width
-        };
+        use super::logline_state;
+        use super::logline_table;
 
-        let mut scroll_view = ScrollView::new(Size::new(width, total_length));
-        let buf = scroll_view.buf_mut();
-        let scroll_view_area = buf.area;
-        let areas: Vec<Rect> = Layout::vertical(constrains)
-            .split(scroll_view_area)
-            .to_vec();
-        for (a, req_b) in zip(areas, req_blocks) {
-            req_b.render(a, buf);
-        }
+        let table = logline_table::Table::new(
+            &configuration_log.requests,
+            [Constraint::Fill(0)],
+            |_index, line| {
+                let (_num_lines, para) = line.paragraph_short();
+                let result = vec![];
+                result.push(Line::from(line.get_request_title_short()));
+                result
+            },
+        );
 
         frame.render_stateful_widget(
-            scroll_view,
-            right_block_up.inner(area),
-            self.configuration_scroll.get_state_for_rendering(),
+            table,
+            block.inner(area),
+            &mut logline_state::State::default(),
         );
-        frame.render_widget(right_block_up, area);
+        frame.render_widget(block, area);
+
+        // let (total_length, req_blocks, constrains) = {
+        //     let mut req_blocks = vec![];
+        //     let mut constrains = vec![];
+        //     req_blocks.push(Paragraph::new("End Marker"));
+        //     constrains.push(Constraint::Fill(0));
+        //     let total_length: u16 = {
+        //         let mut sum = 0;
+        //         for req in configuration_log.requests.iter().rev() {
+        //             let block = Block::new()
+        //                 .borders(Borders::BOTTOM)
+        //                 .style(self.border_style())
+        //                 .title_alignment(Alignment::Left);
+        //             let (size, para) = if short {
+        //                 let block = block.title(vec![Span::from(req.get_request_title_short())]);
+        //                 let (size, para) = req.paragraph_short();
+        //                 (size, para.block(block))
+        //             } else {
+        //                 let block = block.title(vec![Span::from(req.get_request_title())]);
+        //                 let (size, para) = req.paragraph();
+        //                 (size, para.block(block))
+        //             };
+        //             let size = size + 2;
+        //             sum += size;
+        //             if sum > content_height {
+        //                 break;
+        //             }
+        //             req_blocks.push(para);
+        //             constrains.push(Constraint::Length(size.try_into().unwrap()));
+        //         }
+        //         sum.try_into().unwrap_or(u16::MAX)
+        //     };
+        //     req_blocks.reverse();
+        //     constrains.reverse();
+        //     (total_length + 1, req_blocks, constrains)
+        // };
+
+        // let width = if block.inner(area).height < total_length {
+        //     // Make room for the scroll bar
+        //     block.inner(area).width - 1
+        // } else {
+        //     block.inner(area).width
+        // };
+
+        // let mut scroll_view = ScrollView::new(Size::new(width, total_length));
+        // let buf = scroll_view.buf_mut();
+        // let scroll_view_area = buf.area;
+        // let areas: Vec<Rect> = Layout::vertical(constrains)
+        //     .split(scroll_view_area)
+        //     .to_vec();
+        // for (a, req_b) in zip(areas, req_blocks) {
+        //     req_b.render(a, buf);
+        // }
+
+        // frame.render_stateful_widget(
+        //     scroll_view,
+        //     block.inner(area),
+        //     self.configuration_scroll.get_state_for_rendering(),
+        // );
+        // frame.render_widget(block, area);
     }
 
     fn render_user_input(

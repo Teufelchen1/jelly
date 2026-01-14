@@ -20,6 +20,9 @@ use crate::app::App;
 pub use ui_state::SelectedTab;
 pub use ui_state::UiState;
 
+mod logline_highlight;
+mod logline_state;
+mod logline_table;
 mod render;
 mod ui_state;
 
