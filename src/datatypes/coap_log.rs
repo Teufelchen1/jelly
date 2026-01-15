@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -29,19 +30,32 @@ pub fn token_to_u64(token: &[u8]) -> u64 {
 
 pub struct CoapLog {
     pub requests: Vec<Request>,
+    pub render_memo_cache: HashMap<u16, Vec<usize>>,
+    pub render_memo_dirty: bool,
+    pub render_memo_last_width: u16,
 }
 
 impl CoapLog {
-    pub const fn new() -> Self {
-        Self { requests: vec![] }
+    pub fn new() -> Self {
+        Self {
+            requests: vec![],
+            render_memo_cache: HashMap::new(),
+            render_memo_dirty: true,
+            render_memo_last_width: u16::MAX,
+        }
     }
 
     pub fn push(&mut self, request: CoapRequest<String>) {
         self.requests.push(Request::new(request));
+        self.render_memo_dirty = true;
     }
 
     pub fn get_request_by_token(&mut self, token: u64) -> Option<&mut Request> {
-        self.requests.iter_mut().find(|req| req.token == token)
+        let result = self.requests.iter_mut().find(|req| req.token == token);
+        if result.is_some() {
+            self.render_memo_dirty = true;
+        }
+        result
     }
 }
 

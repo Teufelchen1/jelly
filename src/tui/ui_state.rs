@@ -7,7 +7,6 @@ use ratatui::style::Style;
 use terminal_colorsaurus::QueryOptions;
 use terminal_colorsaurus::ThemeMode;
 use terminal_colorsaurus::theme_mode;
-use tui_widgets::scrollview::ScrollViewState;
 
 #[derive(Default, Clone, Copy)]
 pub enum SelectedTab {
@@ -21,49 +20,39 @@ pub enum SelectedTab {
 }
 
 pub struct ScrollState {
-    state: ScrollViewState,
-    position: usize,
-    follow: bool,
+    pub last_max_position: usize,
+    pub position: usize,
+    pub follow: bool,
 }
 
 impl ScrollState {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
-            state: ScrollViewState::default(),
+            last_max_position: 0,
             position: 0,
             follow: true,
         }
     }
 
     const fn scroll_down(&mut self) -> bool {
-        let value_change = self.position > 0;
-        self.position = self.position.saturating_sub(1);
+        let value_change = self.position < self.last_max_position;
+        if value_change {
+            self.position = self.position.saturating_add(1);
+        }
         // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
-        self.follow = self.position == 0;
-        self.state.scroll_down();
+        self.follow = self.position == self.last_max_position;
+
         value_change
     }
 
     const fn scroll_up(&mut self) -> bool {
         self.follow = false;
+
         // Can't scroll up when already on top
-        let value_change = self.state.offset().y != 0;
-        if value_change {
-            self.position = self.position.saturating_add(1);
-        }
-        self.state.scroll_up();
+        let value_change = self.position > 0;
+        self.position = self.position.saturating_sub(1);
+
         value_change
-    }
-
-    pub fn get_state_for_rendering(&mut self) -> &mut ScrollViewState {
-        // For the "sticky" behavior, where the view remains at the bottom
-        // Needs to be done during rendering as more content could have been added, making
-        // a jump to the bottom necessary
-        if self.follow {
-            self.state.scroll_to_bottom();
-        }
-
-        &mut self.state
     }
 }
 
