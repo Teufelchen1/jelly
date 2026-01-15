@@ -4,6 +4,7 @@ use std::env;
 use std::iter::zip;
 
 use ratatui::Frame;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -249,28 +250,97 @@ impl UiState {
             let size = size + 2;
             height_log.push(size)
         }
+        let total_height: usize = height_log.iter().sum();
 
         let mut scroll_offset = usize::from(self.configuration_scroll.position);
+        scroll_offset =
+            scroll_offset.min(total_height.saturating_sub(outer_block.inner(area).height as usize));
+        self.configuration_scroll.position = scroll_offset;
         let mut counter_offset = height_log.len();
         while scroll_offset > 0 && counter_offset > 0 {
             counter_offset -= 1;
-            scroll_offset = if let Some(sub) = scroll_offset.checked_sub(height_log[counter_offset]) {
+            scroll_offset = if let Some(sub) = scroll_offset.checked_sub(height_log[counter_offset])
+            {
                 sub
             } else {
-                counter_offset += 1;
                 break;
             };
         }
 
-        let mut outer_block_inner_height = usize::from(outer_block.inner(area).height);
+        //let mut outer_block_inner_height = usize::from(outer_block.inner(area).height);
+        let mut outer_block_inner_height =
+            usize::from(outer_block.inner(area).height) - scroll_offset;
         let mut counter_start = counter_offset;
         while outer_block_inner_height > 0 && counter_start > 0 {
             counter_start -= 1;
-            outer_block_inner_height = if let Some(sub) = outer_block_inner_height.checked_sub(height_log[counter_start]) {
-                sub
+            outer_block_inner_height =
+                if let Some(sub) = outer_block_inner_height.checked_sub(height_log[counter_start]) {
+                    sub
+                } else {
+                    counter_start += 1;
+                    break;
+                }
+        }
+
+        let area_for_fully_drawn = Rect {
+            y: outer_block.inner(area).y + scroll_offset.try_into().unwrap_or(u16::max_value()),
+            height: outer_block.inner(area).height
+                - scroll_offset.try_into().unwrap_or(u16::max_value()),
+            ..outer_block.inner(area)
+        };
+
+        let area_for_partial_draw_top = Rect {
+            height: scroll_offset.try_into().unwrap_or(u16::max_value()),
+            ..outer_block.inner(area)
+        };
+
+        if counter_start > 0 && scroll_offset > 0 {
+            let req = &configuration_log.requests[counter_start - 1];
+            //for req in &configuration_log.requests {
+            let block = Block::new()
+                .borders(Borders::TOP | Borders::BOTTOM)
+                .style(self.border_style())
+                .title_alignment(Alignment::Left);
+
+            // let para = Paragraph::From("Filler\nFiller");
+            // let height = 2;
+            let (height, para) = if short {
+                // let block = block.title(vec![Span::from(req.get_request_title_short())]);
+                let block = block.title(vec![Span::from(format!(
+                    "{:} {counter_start}..{counter_offset}",
+                    self.configuration_scroll.position
+                ))]);
+                let (height, para) = req.paragraph_short();
+                (height, para.block(block))
             } else {
-                counter_start += 1;
-                break;
+                let block = block.title(vec![Span::from(req.get_request_title())]);
+                let (height, para) = req.paragraph();
+                (height, para.block(block))
+            };
+            let height = height + 2;
+
+            let buffer_area = Rect::new(
+                0,
+                0,
+                area_for_partial_draw_top.width,
+                height.try_into().unwrap_or(u16::max_value()),
+            );
+            let mut buffer = Buffer::empty(buffer_area);
+
+            para.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer
+                .content
+                .into_iter()
+                .skip(area_for_partial_draw_top.width as usize * (height - scroll_offset))
+                .take(area_for_partial_draw_top.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area_for_partial_draw_top.width;
+                let y = i as u16 / area_for_partial_draw_top.width;
+                frame.buffer_mut()[(
+                    area_for_partial_draw_top.x + x,
+                    area_for_partial_draw_top.y + y,
+                )] = cell;
             }
         }
 
@@ -286,14 +356,17 @@ impl UiState {
                 // ))
                 // .unwrap();
                 for req in &configuration_log.requests[counter_start..counter_offset] {
-                //for req in &configuration_log.requests {
+                    //for req in &configuration_log.requests {
                     let block = Block::new()
                         .borders(Borders::TOP | Borders::BOTTOM)
                         .style(self.border_style())
                         .title_alignment(Alignment::Left);
                     let (size, para) = if short {
                         // let block = block.title(vec![Span::from(req.get_request_title_short())]);
-                        let block = block.title(vec![Span::from(format!("{:} {counter_start}..{counter_offset}", self.configuration_scroll.position))]);
+                        let block = block.title(vec![Span::from(format!(
+                            "{:} {:} {:} | {counter_start}..{counter_offset}",
+                            self.configuration_scroll.position, scroll_offset, total_height,
+                        ))]);
                         let (size, para) = req.paragraph_short();
                         (size, para.block(block))
                     } else {
@@ -321,9 +394,9 @@ impl UiState {
         //let mut scroll_view = ScrollView::new(Size::new(width, total_length));
         //let buf = scroll_view.buf_mut();
         //let scroll_view_area = buf.area;
-        let scroll_view_area = outer_block.inner(area);
+        let scroll_view_area = outer_block.inner(area_for_fully_drawn);
         let areas: Vec<Rect> = Layout::vertical(constrains)
-            .split(scroll_view_area)
+            .split(area_for_fully_drawn)
             .to_vec();
         for (a, req_b) in zip(areas, req_blocks) {
             req_b.render(a, frame.buffer_mut());
