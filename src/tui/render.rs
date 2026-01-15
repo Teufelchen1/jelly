@@ -238,29 +238,62 @@ impl UiState {
         configuration_log: &CoapLog,
         short: bool,
     ) {
-        let right_block_up = Block::bordered()
+        let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
+
+        let mut height_log = vec![];
+        for req in &configuration_log.requests {
+            let (size, _) = req.paragraph_short();
+            let size = size + 2;
+            height_log.push(size)
+        }
+
+        let mut scroll_offset = usize::from(self.configuration_scroll.position);
+        let mut counter_offset = height_log.len();
+        while scroll_offset > 0 && counter_offset > 0 {
+            counter_offset -= 1;
+            scroll_offset = if let Some(sub) = scroll_offset.checked_sub(height_log[counter_offset]) {
+                sub
+            } else {
+                counter_offset += 1;
+                break;
+            };
+        }
+
+        let mut outer_block_inner_height = usize::from(outer_block.inner(area).height);
+        let mut counter_start = counter_offset;
+        while outer_block_inner_height > 0 && counter_start > 0 {
+            counter_start -= 1;
+            outer_block_inner_height = if let Some(sub) = outer_block_inner_height.checked_sub(height_log[counter_start]) {
+                sub
+            } else {
+                counter_start += 1;
+                break;
+            }
+        }
 
         let (total_length, req_blocks, constrains) = {
             let mut req_blocks = vec![];
             let mut constrains = vec![];
             let total_length: u16 = {
                 let mut sum = 0;
-                // temporay limitation to work around ratatui bug #1855
-                let start = usize::try_from(max(
-                    i64::try_from(configuration_log.requests.len()).unwrap() - 10,
-                    0,
-                ))
-                .unwrap();
-                for req in &configuration_log.requests[start..] {
+                // // temporay limitation to work around ratatui bug #1855
+                // let start = usize::try_from(max(
+                //     i64::try_from(configuration_log.requests.len()).unwrap() - 10,
+                //     0,
+                // ))
+                // .unwrap();
+                for req in &configuration_log.requests[counter_start..counter_offset] {
+                //for req in &configuration_log.requests {
                     let block = Block::new()
                         .borders(Borders::TOP | Borders::BOTTOM)
                         .style(self.border_style())
                         .title_alignment(Alignment::Left);
                     let (size, para) = if short {
-                        let block = block.title(vec![Span::from(req.get_request_title_short())]);
+                        // let block = block.title(vec![Span::from(req.get_request_title_short())]);
+                        let block = block.title(vec![Span::from(format!("{:} {counter_start}..{counter_offset}", self.configuration_scroll.position))]);
                         let (size, para) = req.paragraph_short();
                         (size, para.block(block))
                     } else {
@@ -278,29 +311,31 @@ impl UiState {
             (total_length, req_blocks, constrains)
         };
 
-        let width = if right_block_up.inner(area).height < total_length {
+        let width = if outer_block.inner(area).height < total_length {
             // Make room for the scroll bar
-            right_block_up.inner(area).width - 1
+            outer_block.inner(area).width - 1
         } else {
-            right_block_up.inner(area).width
+            outer_block.inner(area).width
         };
 
-        let mut scroll_view = ScrollView::new(Size::new(width, total_length));
-        let buf = scroll_view.buf_mut();
-        let scroll_view_area = buf.area;
+        //let mut scroll_view = ScrollView::new(Size::new(width, total_length));
+        //let buf = scroll_view.buf_mut();
+        //let scroll_view_area = buf.area;
+        let scroll_view_area = outer_block.inner(area);
         let areas: Vec<Rect> = Layout::vertical(constrains)
             .split(scroll_view_area)
             .to_vec();
         for (a, req_b) in zip(areas, req_blocks) {
-            req_b.render(a, buf);
+            req_b.render(a, frame.buffer_mut());
+            //frame.render_widget(req_b, a);
         }
 
-        frame.render_stateful_widget(
-            scroll_view,
-            right_block_up.inner(area),
-            self.configuration_scroll.get_state_for_rendering(),
-        );
-        frame.render_widget(right_block_up, area);
+        // frame.render_stateful_widget(
+        //     scroll_view,
+        //     outer_block.inner(area),
+        //     self.configuration_scroll.get_state_for_rendering(),
+        // );
+        frame.render_widget(outer_block, area);
     }
 
     fn render_user_input(

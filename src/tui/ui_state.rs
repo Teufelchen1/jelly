@@ -20,7 +20,7 @@ pub enum SelectedTab {
 
 pub struct ScrollState {
     state: ScrollViewState,
-    position: usize,
+    pub position: usize,
     follow: bool,
 }
 
