@@ -2,14 +2,16 @@ use ratatui::layout::Rect;
 
 use std::ops::Range;
 
+type IndexInHeightLog = usize;
+
 pub fn get_areas_to_render_from_scroll_position(
     area: Rect,
     mut scroll_offset: usize,
     height_log: &[usize],
 ) -> (
-    Option<(usize, Rect)>,
-    Option<(Range<usize>, Rect)>,
-    Option<(usize, Rect)>,
+    Option<(IndexInHeightLog, Rect)>,
+    Option<(Range<IndexInHeightLog>, Rect)>,
+    Option<(IndexInHeightLog, Rect)>,
 ) {
     // These are going to be our return values
     let mut area_for_partial_draw_top = None;
@@ -22,9 +24,9 @@ pub fn get_areas_to_render_from_scroll_position(
     let mut latest_item = height_log.len();
 
     // If we need to compute the area of a partially drawn Item on the top
-    let mut has_partial_item_top: Option<usize> = None;
+    let mut has_partial_item_top: Option<IndexInHeightLog> = None;
     // .. and/or on the bottom
-    let mut has_partial_item_bottom: Option<usize> = None;
+    let mut has_partial_item_bottom: Option<IndexInHeightLog> = None;
 
     let mut middle_space_available = viewable_space;
     let mut used_middle_space = 0;
