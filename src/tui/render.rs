@@ -277,11 +277,11 @@ impl UiState {
                 req.paragraph()
             };
             let size = size + 2;
-            height_log.push(size)
+            height_log.push(size);
         }
         let total_height: usize = height_log.iter().sum();
 
-        let mut scroll_offset = usize::from(self.configuration_scroll.position);
+        let mut scroll_offset = self.configuration_scroll.position;
         scroll_offset =
             scroll_offset.min(total_height.saturating_sub(outer_block.inner(area).height as usize));
         self.configuration_scroll.position = scroll_offset;
@@ -299,12 +299,7 @@ impl UiState {
             para = para.style(Style::new().red().on_red());
             let height = height + 2;
 
-            let buffer_area = Rect::new(
-                0,
-                0,
-                area.width,
-                height.try_into().unwrap_or(u16::max_value()),
-            );
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
             let mut buffer = Buffer::empty(buffer_area);
 
             para.render(buffer_area, &mut buffer);
@@ -327,12 +322,7 @@ impl UiState {
             para = para.style(Style::new().green().on_green());
             let height = height + 2;
 
-            let buffer_area = Rect::new(
-                0,
-                0,
-                area.width,
-                height.try_into().unwrap_or(u16::max_value()),
-            );
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
             let mut buffer = Buffer::empty(buffer_area);
 
             para.render(buffer_area, &mut buffer);

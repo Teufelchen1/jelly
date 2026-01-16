@@ -3,16 +3,15 @@ use ratatui::layout::Rect;
 use std::ops::Range;
 
 type IndexInHeightLog = usize;
+type PartialTopItem = Option<(IndexInHeightLog, Rect)>;
+type FullItems = Option<(Range<IndexInHeightLog>, Rect)>;
+type PartialBottomItem = Option<(IndexInHeightLog, Rect)>;
 
 pub fn get_areas_to_render_from_scroll_position(
     area: Rect,
     mut scroll_offset: usize,
     height_log: &[usize],
-) -> (
-    Option<(IndexInHeightLog, Rect)>,
-    Option<(Range<IndexInHeightLog>, Rect)>,
-    Option<(IndexInHeightLog, Rect)>,
-) {
+) -> (PartialTopItem, FullItems, PartialBottomItem) {
     // These are going to be our return values
     let mut area_for_partial_draw_top = None;
     let mut area_for_fully_drawn = None;
@@ -83,10 +82,8 @@ pub fn get_areas_to_render_from_scroll_position(
                 y: area.y
                     + middle_space_available
                         .try_into()
-                        .unwrap_or(u16::max_value() - area.y),
-                height: partial_item_bottom_height
-                    .try_into()
-                    .unwrap_or(u16::max_value()),
+                        .unwrap_or(u16::MAX - area.y),
+                height: partial_item_bottom_height.try_into().unwrap_or(u16::MAX),
                 ..area
             },
         ));
@@ -123,9 +120,7 @@ pub fn get_areas_to_render_from_scroll_position(
 
     // How much space is covered by the top item that is only partially drawn (if any)?
     let remaining_space_top = if let Some(index) = has_partial_item_top {
-        let remaining_space_top = middle_space_available
-            .try_into()
-            .unwrap_or(u16::max_value());
+        let remaining_space_top = middle_space_available.try_into().unwrap_or(u16::MAX);
         area_for_partial_draw_top = Some((
             index,
             Rect {
@@ -146,17 +141,17 @@ pub fn get_areas_to_render_from_scroll_position(
             Rect {
                 // Offset to not overlap with the partially drawn top item (if any)
                 y: area.y + remaining_space_top,
-                height: used_middle_space.try_into().unwrap_or(u16::max_value()),
+                height: used_middle_space.try_into().unwrap_or(u16::MAX),
                 ..area
             },
-        ))
+        ));
     }
 
-    return (
+    (
         area_for_partial_draw_top,
         area_for_fully_drawn,
         area_for_partial_draw_bottom,
-    );
+    )
 }
 
 #[cfg(test)]
