@@ -2,7 +2,6 @@ use std::cmp::max;
 use std::cmp::min;
 use std::env;
 use std::iter::zip;
-use std::ops::Range;
 
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
@@ -13,6 +12,7 @@ use ratatui::layout::Layout;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
+use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -33,6 +33,7 @@ use crate::datatypes::job_log::JobLog;
 use crate::datatypes::packet_log::PacketLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
+use crate::tui::scrolling::get_areas_to_render_from_scroll_position;
 
 impl UiState {
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
@@ -263,72 +264,6 @@ impl UiState {
         configuration_log: &CoapLog,
         short: bool,
     ) {
-        fn get_areas_to_render_from_scroll_position(
-            area: Rect,
-            mut scroll_offset: usize,
-            height_log: &[usize],
-        ) -> (
-            Option<(usize, Rect)>,
-            (Range<usize>, Rect),
-            Option<(usize, Rect)>,
-        ) {
-            let mut counter_offset = height_log.len();
-            while scroll_offset > 0 && counter_offset > 0 {
-                counter_offset -= 1;
-                scroll_offset =
-                    if let Some(sub) = scroll_offset.checked_sub(height_log[counter_offset]) {
-                        sub
-                    } else {
-                        break;
-                    };
-            }
-
-            let mut inner_height = usize::from(area.height) - scroll_offset;
-            let mut counter_start = counter_offset;
-            while inner_height > 0 && counter_start > 0 {
-                counter_start -= 1;
-                inner_height =
-                    if let Some(sub) = inner_height.checked_sub(height_log[counter_start]) {
-                        sub
-                    } else {
-                        counter_start += 1;
-                        break;
-                    }
-            }
-
-            let area_for_partial_draw_top = Rect {
-                height: scroll_offset.try_into().unwrap_or(u16::max_value()),
-                ..area
-            };
-
-            let area_for_fully_drawn = Rect {
-                y: area.y + area_for_partial_draw_top.height,
-                height: area.height - area_for_partial_draw_top.height,
-                ..area
-            };
-
-            let area_for_partial_draw_bottom = Rect {
-                y: area_for_fully_drawn.y + area_for_fully_drawn.height - inner_height as u16,
-                height: inner_height as u16,
-                ..area
-            };
-
-            let partial_draw_top = if counter_start > 0 && scroll_offset > 0 {
-                Some((counter_start - 1, area_for_partial_draw_top))
-            } else {
-                None
-            };
-
-            let full_draw_middle = (counter_start..counter_offset, area_for_fully_drawn);
-
-            let partial_draw_bottom = if counter_offset < height_log.len() && scroll_offset > 0 {
-                Some((counter_offset, area_for_partial_draw_bottom))
-            } else {
-                None
-            };
-
-            return (partial_draw_top, full_draw_middle, partial_draw_bottom);
-        }
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("CoAP Req & Resp")])
@@ -336,7 +271,11 @@ impl UiState {
 
         let mut height_log = vec![];
         for req in &configuration_log.requests {
-            let (size, _) = req.paragraph_short();
+            let (size, _) = if short {
+                req.paragraph_short()
+            } else {
+                req.paragraph()
+            };
             let size = size + 2;
             height_log.push(size)
         }
@@ -356,7 +295,8 @@ impl UiState {
 
         if let Some((index, area)) = partial_draw_top {
             let req = &configuration_log.requests[index];
-            let (height, para) = self.get_representation_of_configuration_message(req, short);
+            let (height, mut para) = self.get_representation_of_configuration_message(req, short);
+            para = para.style(Style::new().red().on_red());
             let height = height + 2;
 
             let buffer_area = Rect::new(
@@ -383,7 +323,8 @@ impl UiState {
 
         if let Some((index, area)) = partial_draw_bottom {
             let req = &configuration_log.requests[index];
-            let (height, para) = self.get_representation_of_configuration_message(req, short);
+            let (height, mut para) = self.get_representation_of_configuration_message(req, short);
+            para = para.style(Style::new().green().on_green());
             let height = height + 2;
 
             let buffer_area = Rect::new(
@@ -405,7 +346,7 @@ impl UiState {
         }
 
         {
-            let (range, area) = full_draw_middle;
+            let (range, area) = full_draw_middle.unwrap();
             let mut req_blocks = vec![];
             let mut constrains = vec![];
             for req in &configuration_log.requests[range] {
@@ -421,7 +362,6 @@ impl UiState {
             //     outer_block.inner(area).width
             // };
 
-            //let scroll_view_area = outer_block.inner(area);
             let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
             for (a, req_b) in zip(areas, req_blocks) {
                 req_b.render(a, frame.buffer_mut());
@@ -429,216 +369,6 @@ impl UiState {
         }
 
         frame.render_widget(outer_block, area);
-
-        // let mut counter_offset = height_log.len();
-        // while scroll_offset > 0 && counter_offset > 0 {
-        //     counter_offset -= 1;
-        //     scroll_offset = if let Some(sub) = scroll_offset.checked_sub(height_log[counter_offset])
-        //     {
-        //         sub
-        //     } else {
-        //         break;
-        //     };
-        // }
-
-        // //let mut outer_block_inner_height = usize::from(outer_block.inner(area).height);
-        // let mut outer_block_inner_height =
-        //     usize::from(outer_block.inner(area).height) - scroll_offset;
-        // let mut counter_start = counter_offset;
-        // while outer_block_inner_height > 0 && counter_start > 0 {
-        //     counter_start -= 1;
-        //     outer_block_inner_height =
-        //         if let Some(sub) = outer_block_inner_height.checked_sub(height_log[counter_start]) {
-        //             sub
-        //         } else {
-        //             counter_start += 1;
-        //             break;
-        //         }
-        // }
-
-        // let area_for_fully_drawn = Rect {
-        //     y: outer_block.inner(area).y + scroll_offset.try_into().unwrap_or(u16::max_value()),
-        //     height: outer_block.inner(area).height
-        //         - scroll_offset.try_into().unwrap_or(u16::max_value()),
-        //     ..outer_block.inner(area)
-        // };
-
-        // let area_for_partial_draw_top = Rect {
-        //     height: scroll_offset.try_into().unwrap_or(u16::max_value()),
-        //     ..outer_block.inner(area)
-        // };
-
-        // let area_for_partial_draw_bottom = Rect {
-        //     y: area_for_fully_drawn.y + area_for_fully_drawn.height
-        //         - outer_block_inner_height as u16,
-        //     height: outer_block_inner_height as u16,
-        //     ..outer_block.inner(area)
-        // };
-
-        // if counter_start > 0 && scroll_offset > 0 {
-        //     let req = &configuration_log.requests[counter_start - 1];
-        //     //for req in &configuration_log.requests {
-        //     let block = Block::new()
-        //         .borders(Borders::TOP | Borders::BOTTOM)
-        //         .style(self.border_style())
-        //         .title_alignment(Alignment::Left);
-
-        //     // let para = Paragraph::From("Filler\nFiller");
-        //     // let height = 2;
-        //     let (height, para) = if short {
-        //         // let block = block.title(vec![Span::from(req.get_request_title_short())]);
-        //         let block = block.title(vec![Span::from(format!(
-        //             "{:} {counter_start}..{counter_offset}",
-        //             self.configuration_scroll.position
-        //         ))]);
-        //         let (height, para) = req.paragraph_short();
-        //         (height, para.block(block))
-        //     } else {
-        //         let block = block.title(vec![Span::from(req.get_request_title())]);
-        //         let (height, para) = req.paragraph();
-        //         (height, para.block(block))
-        //     };
-        //     let height = height + 2;
-
-        //     let buffer_area = Rect::new(
-        //         0,
-        //         0,
-        //         area_for_partial_draw_top.width,
-        //         height.try_into().unwrap_or(u16::max_value()),
-        //     );
-        //     let mut buffer = Buffer::empty(buffer_area);
-
-        //     para.render(buffer_area, &mut buffer);
-
-        //     let visible_content = buffer
-        //         .content
-        //         .into_iter()
-        //         .skip(area_for_partial_draw_top.width as usize * (height - scroll_offset))
-        //         .take(area_for_partial_draw_top.area() as usize);
-        //     for (i, cell) in visible_content.enumerate() {
-        //         let x = i as u16 % area_for_partial_draw_top.width;
-        //         let y = i as u16 / area_for_partial_draw_top.width;
-        //         frame.buffer_mut()[(
-        //             area_for_partial_draw_top.x + x,
-        //             area_for_partial_draw_top.y + y,
-        //         )] = cell;
-        //     }
-        // }
-
-        // if counter_offset < configuration_log.requests.len() && scroll_offset > 0 {
-        //     let req = &configuration_log.requests[counter_offset];
-        //     //for req in &configuration_log.requests {
-        //     let block = Block::new()
-        //         .borders(Borders::TOP | Borders::BOTTOM)
-        //         .style(self.border_style())
-        //         .title_alignment(Alignment::Left);
-
-        //     // let para = Paragraph::From("Filler\nFiller");
-        //     // let height = 2;
-        //     let (height, para) = if short {
-        //         // let block = block.title(vec![Span::from(req.get_request_title_short())]);
-        //         let block = block.title(vec![Span::from(format!(
-        //             "LOL {:} {counter_start}..{counter_offset}",
-        //             self.configuration_scroll.position
-        //         ))]);
-        //         let (height, para) = req.paragraph_short();
-        //         (height, para.block(block))
-        //     } else {
-        //         let block = block.title(vec![Span::from(req.get_request_title())]);
-        //         let (height, para) = req.paragraph();
-        //         (height, para.block(block))
-        //     };
-        //     let height = height + 2;
-
-        //     let buffer_area = Rect::new(
-        //         0,
-        //         0,
-        //         area_for_partial_draw_bottom.width,
-        //         height.try_into().unwrap_or(u16::max_value()),
-        //     );
-        //     let mut buffer = Buffer::empty(buffer_area);
-
-        //     para.render(buffer_area, &mut buffer);
-
-        //     let visible_content = buffer
-        //         .content
-        //         .into_iter()
-        //         .take(area_for_partial_draw_bottom.area() as usize);
-        //     for (i, cell) in visible_content.enumerate() {
-        //         let x = i as u16 % area_for_partial_draw_bottom.width;
-        //         let y = i as u16 / area_for_partial_draw_bottom.width;
-        //         frame.buffer_mut()[(
-        //             area_for_partial_draw_bottom.x + x,
-        //             area_for_partial_draw_bottom.y + y,
-        //         )] = cell;
-        //     }
-        // }
-
-        // let (total_length, req_blocks, constrains) = {
-        //     let mut req_blocks = vec![];
-        //     let mut constrains = vec![];
-        //     let total_length: u16 = {
-        //         let mut sum = 0;
-        //         // // temporay limitation to work around ratatui bug #1855
-        //         // let start = usize::try_from(max(
-        //         //     i64::try_from(configuration_log.requests.len()).unwrap() - 10,
-        //         //     0,
-        //         // ))
-        //         // .unwrap();
-        //         for req in &configuration_log.requests[counter_start..counter_offset] {
-        //             //for req in &configuration_log.requests {
-        //             let block = Block::new()
-        //                 .borders(Borders::TOP | Borders::BOTTOM)
-        //                 .style(self.border_style())
-        //                 .title_alignment(Alignment::Left);
-        //             let (size, para) = if short {
-        //                 // let block = block.title(vec![Span::from(req.get_request_title_short())]);
-        //                 let block = block.title(vec![Span::from(format!(
-        //                     "{:} {:} {:} | {counter_start}..{counter_offset}",
-        //                     self.configuration_scroll.position, scroll_offset, total_height,
-        //                 ))]);
-        //                 let (size, para) = req.paragraph_short();
-        //                 (size, para.block(block))
-        //             } else {
-        //                 let block = block.title(vec![Span::from(req.get_request_title())]);
-        //                 let (size, para) = req.paragraph();
-        //                 (size, para.block(block))
-        //             };
-        //             req_blocks.push(para);
-        //             let size = size + 2;
-        //             sum += size;
-        //             constrains.push(Constraint::Length(size.try_into().unwrap()));
-        //         }
-        //         sum.try_into().unwrap_or(u16::MAX)
-        //     };
-        //     (total_length, req_blocks, constrains)
-        // };
-
-        // let width = if outer_block.inner(area).height < total_length {
-        //     // Make room for the scroll bar
-        //     outer_block.inner(area).width - 1
-        // } else {
-        //     outer_block.inner(area).width
-        // };
-
-        //let mut scroll_view = ScrollView::new(Size::new(width, total_length));
-        //let buf = scroll_view.buf_mut();
-        //let scroll_view_area = buf.area;
-        // let scroll_view_area = outer_block.inner(area_for_fully_drawn);
-        // let areas: Vec<Rect> = Layout::vertical(constrains)
-        //     .split(area_for_fully_drawn)
-        //     .to_vec();
-        // for (a, req_b) in zip(areas, req_blocks) {
-        //     req_b.render(a, frame.buffer_mut());
-        //     //frame.render_widget(req_b, a);
-        // }
-
-        // // frame.render_stateful_widget(
-        // //     scroll_view,
-        // //     outer_block.inner(area),
-        // //     self.configuration_scroll.get_state_for_rendering(),
-        // // );
-        // frame.render_widget(outer_block, area);
     }
 
     fn render_user_input(
