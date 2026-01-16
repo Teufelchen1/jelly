@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::cmp::min;
 use std::env;
 use std::iter::zip;
@@ -13,7 +12,7 @@ use ratatui::layout::Margin;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
-use ratatui::style::Stylize;
+use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
@@ -25,21 +24,21 @@ use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
-use tui_widgets::scrollview::ScrollView;
 
 use super::UiState;
 use super::scrolling::get_areas_to_render_from_scroll_position;
 use crate::datatypes::coap_log::CoapLog;
 use crate::datatypes::coap_log::Request;
 use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobLog;
+use crate::datatypes::packet_log::PacketDirection;
 use crate::datatypes::packet_log::PacketLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 
 impl UiState {
     fn render_scrollbar(
-        &self,
         frame: &mut Frame,
         area: Rect,
         scroll_position: usize,
@@ -108,10 +107,13 @@ impl UiState {
     }
 
     fn render_help(&mut self, frame: &mut Frame, area: Rect) {
-        let border_block = Block::bordered()
+        let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Help")])
             .title_alignment(Alignment::Left);
+
+        let viewport_height = outer_block.inner(area).height as usize;
+        let content_width = outer_block.inner(area).width;
 
         // Putting this here is not ideal, todo: somewhat autogenerate command list
         let text = include_str!("help.txt");
@@ -133,129 +135,233 @@ impl UiState {
         text.extend(Text::from(self.command_help_list.clone()));
 
         let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+        let messages_height = paragraph.line_count(content_width);
 
-        // Make room for the scroll bar
-        let content_width = border_block.inner(area).width - 1;
-        let messages_hight = u16::try_from(paragraph.line_count(content_width)).unwrap_or(u16::MAX);
+        let max_scroll_offset = messages_height.saturating_sub(viewport_height);
 
-        let mut scroll_view = ScrollView::new(Size::new(content_width, messages_hight));
+        let scroll_offset = self.help_scroll.position.min(max_scroll_offset);
+        self.help_scroll.position = scroll_offset;
 
-        scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, messages_hight));
+        let paragraph = paragraph.scroll((
+            (max_scroll_offset - scroll_offset)
+                .try_into()
+                .unwrap_or(u16::MAX),
+            0,
+        ));
 
-        frame.render_stateful_widget(
-            scroll_view,
-            border_block.inner(area),
-            self.help_scroll.get_state_for_rendering(),
-        );
+        let block = paragraph.block(outer_block);
 
-        frame.render_widget(border_block, area);
+        frame.render_widget(block, area);
+
+        // More content than fits on the screen? Show scrollbar
+        if messages_height > viewport_height {
+            Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
+        }
+    }
+
+    fn get_representation_of_network<'a>(
+        &self,
+        packet: &'a PacketDirection,
+    ) -> (usize, Paragraph<'a>) {
+        let block = Block::new()
+            .borders(Borders::BOTTOM)
+            .style(self.border_style())
+            .title_alignment(Alignment::Left)
+            .title(packet.get_title());
+        let (height, para) = packet.paragraph();
+        let para = para.block(block).style(Style::reset());
+        (height + 2, para)
     }
 
     fn render_network(&mut self, frame: &mut Frame, area: Rect, net_log: &PacketLog) {
-        let right_block_up = Block::bordered()
+        let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Network packets")])
             .title_alignment(Alignment::Left);
 
-        let mut req_blocks = vec![];
-        let mut constrains = vec![];
-        let total_length: u16 = {
-            let mut sum = 0;
-            // temporay limitation to work around ratatui bug #1855
-            let start =
-                usize::try_from(max(i64::try_from(net_log.log().len()).unwrap() - 10, 0)).unwrap();
-            for req in &net_log.log()[start..] {
-                let block = Block::new()
-                    .borders(Borders::BOTTOM)
-                    .style(self.border_style())
-                    .title(req.get_title())
-                    .title_alignment(Alignment::Left);
-                let (size, para) = req.paragraph();
-                req_blocks.push(para.block(block));
-                let size = size + 2;
-                sum += size;
-                constrains.push(Constraint::Length(size.try_into().unwrap()));
-            }
-            sum.try_into().unwrap_or(u16::MAX)
-        };
+        let viewport_height = outer_block.inner(area).height as usize;
 
-        let width = if right_block_up.inner(area).height < total_length {
-            // Make room for the scroll bar
-            right_block_up.inner(area).width - 1
-        } else {
-            right_block_up.inner(area).width
-        };
-
-        let mut scroll_view = ScrollView::new(Size::new(width, total_length));
-        let buf = scroll_view.buf_mut();
-        let scroll_view_area = buf.area;
-        let areas: Vec<Rect> = Layout::vertical(constrains)
-            .split(scroll_view_area)
-            .to_vec();
-        for (a, req_b) in zip(areas, req_blocks) {
-            req_b.render(a, buf);
+        let mut height_log = vec![];
+        for packet in net_log.log() {
+            let (size, _) = packet.paragraph();
+            let size = size + 2;
+            height_log.push(size);
         }
 
-        frame.render_stateful_widget(
-            scroll_view,
-            right_block_up.inner(area),
-            self.configuration_scroll.get_state_for_rendering(),
-        );
-        frame.render_widget(right_block_up, area);
+        let total_height: usize = height_log.iter().sum();
+        let max_scroll_offset = total_height.saturating_sub(viewport_height);
+
+        let mut scroll_offset = self.net_scroll.position;
+        scroll_offset = scroll_offset.min(max_scroll_offset);
+        self.net_scroll.position = scroll_offset;
+
+        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+            get_areas_to_render_from_scroll_position(
+                outer_block.inner(area),
+                scroll_offset,
+                &height_log,
+            );
+
+        if let Some((index, area)) = partial_draw_top {
+            let packet = &net_log.log()[index];
+            let (height, para) = self.get_representation_of_network(packet);
+
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+            let mut buffer = Buffer::empty(buffer_area);
+
+            para.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer
+                .content
+                .into_iter()
+                .skip(area.width as usize * (height - area.height as usize))
+                .take(area.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area.width;
+                let y = i as u16 / area.width;
+                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+            }
+        }
+
+        if let Some((index, area)) = partial_draw_bottom {
+            let packet = &net_log.log()[index];
+            let (height, para) = self.get_representation_of_network(packet);
+
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+            let mut buffer = Buffer::empty(buffer_area);
+
+            para.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer.content.into_iter().take(area.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area.width;
+                let y = i as u16 / area.width;
+                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+            }
+        }
+
+        if let Some((range, area)) = full_draw_middle {
+            let mut job_blocks = vec![];
+            let mut constrains = vec![];
+            for packet in &net_log.log()[range] {
+                let (height, para) = self.get_representation_of_network(packet);
+                job_blocks.push(para);
+                constrains.push(Constraint::Length(height.try_into().unwrap()));
+            }
+
+            let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
+            for (a, packet) in zip(areas, job_blocks) {
+                packet.render(a, frame.buffer_mut());
+            }
+        }
+
+        frame.render_widget(&outer_block, area);
+
+        // More content than fits on the screen? Show scrollbar
+        if total_height > viewport_height {
+            Self::render_scrollbar(frame, area, self.net_scroll.position, max_scroll_offset);
+        }
+    }
+
+    fn get_representation_of_job<'a>(&self, job: &'a Job) -> (usize, Paragraph<'a>) {
+        let block = Block::new()
+            .borders(Borders::BOTTOM)
+            .style(self.border_style())
+            .title_alignment(Alignment::Left)
+            .title(job.get_title());
+        let (height, para) = job.paragraph();
+        let para = para.block(block).style(Style::reset());
+        (height + 2, para)
     }
 
     fn render_commands(&mut self, frame: &mut Frame, area: Rect, job_log: &JobLog) {
-        let right_block_up = Block::bordered()
+        let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Commands")])
             .title_alignment(Alignment::Left);
 
-        let mut req_blocks = vec![];
-        let mut constrains = vec![];
-        let total_length: u16 = {
-            let mut sum = 0;
-            // temporay limitation to work around ratatui bug #1855
-            let start =
-                usize::try_from(max(i64::try_from(job_log.jobs.len()).unwrap() - 10, 0)).unwrap();
-            for job in &job_log.jobs[start..] {
-                let block = Block::new()
-                    .borders(Borders::BOTTOM)
-                    .style(self.border_style())
-                    .title(job.get_title())
-                    .title_alignment(Alignment::Left);
-                let (size, para) = job.paragraph();
-                let size = size + 2;
-                let para = para.reset();
-                req_blocks.push(para.block(block));
-                sum += size;
-                constrains.push(Constraint::Length(size.try_into().unwrap()));
-            }
-            sum.try_into().unwrap_or(u16::MAX)
-        };
+        let viewport_height = outer_block.inner(area).height as usize;
 
-        let width = if right_block_up.inner(area).height < total_length {
-            // Make room for the scroll bar
-            right_block_up.inner(area).width - 1
-        } else {
-            right_block_up.inner(area).width
-        };
-
-        let mut scroll_view = ScrollView::new(Size::new(width, total_length));
-        let buf = scroll_view.buf_mut();
-        let scroll_view_area = buf.area;
-        let areas: Vec<Rect> = Layout::vertical(constrains)
-            .split(scroll_view_area)
-            .to_vec();
-        for (a, req_b) in zip(areas, req_blocks) {
-            req_b.render(a, buf);
+        let mut height_log = vec![];
+        for job in &job_log.jobs {
+            let (size, _) = job.paragraph();
+            let size = size + 2;
+            height_log.push(size);
         }
 
-        frame.render_stateful_widget(
-            scroll_view,
-            right_block_up.inner(area),
-            self.command_scroll.get_state_for_rendering(),
-        );
-        frame.render_widget(right_block_up, area);
+        let total_height: usize = height_log.iter().sum();
+        let max_scroll_offset = total_height.saturating_sub(viewport_height);
+
+        let mut scroll_offset = self.command_scroll.position;
+        scroll_offset = scroll_offset.min(max_scroll_offset);
+        self.command_scroll.position = scroll_offset;
+
+        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+            get_areas_to_render_from_scroll_position(
+                outer_block.inner(area),
+                scroll_offset,
+                &height_log,
+            );
+
+        if let Some((index, area)) = partial_draw_top {
+            let job = &job_log.jobs[index];
+            let (height, para) = self.get_representation_of_job(job);
+
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+            let mut buffer = Buffer::empty(buffer_area);
+
+            para.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer
+                .content
+                .into_iter()
+                .skip(area.width as usize * (height - area.height as usize))
+                .take(area.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area.width;
+                let y = i as u16 / area.width;
+                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+            }
+        }
+
+        if let Some((index, area)) = partial_draw_bottom {
+            let job = &job_log.jobs[index];
+            let (height, para) = self.get_representation_of_job(job);
+
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+            let mut buffer = Buffer::empty(buffer_area);
+
+            para.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer.content.into_iter().take(area.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area.width;
+                let y = i as u16 / area.width;
+                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+            }
+        }
+
+        if let Some((range, area)) = full_draw_middle {
+            let mut job_blocks = vec![];
+            let mut constrains = vec![];
+            for job in &job_log.jobs[range] {
+                let (height, para) = self.get_representation_of_job(job);
+                job_blocks.push(para);
+                constrains.push(Constraint::Length(height.try_into().unwrap()));
+            }
+
+            let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
+            for (a, job) in zip(areas, job_blocks) {
+                job.render(a, frame.buffer_mut());
+            }
+        }
+
+        frame.render_widget(&outer_block, area);
+
+        // More content than fits on the screen? Show scrollbar
+        if total_height > viewport_height {
+            Self::render_scrollbar(frame, area, self.command_scroll.position, max_scroll_offset);
+        }
     }
 
     fn get_representation_of_configuration_message<'a>(
@@ -277,7 +383,7 @@ impl UiState {
             let (height, para) = req.paragraph();
             (height, para.block(block))
         };
-        (height, para)
+        (height + 2, para)
     }
 
     fn render_configuration_messages(
@@ -322,7 +428,6 @@ impl UiState {
         if let Some((index, area)) = partial_draw_top {
             let req = &configuration_log.requests[index];
             let (height, para) = self.get_representation_of_configuration_message(req, short);
-            let height = height + 2;
 
             let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
             let mut buffer = Buffer::empty(buffer_area);
@@ -344,7 +449,6 @@ impl UiState {
         if let Some((index, area)) = partial_draw_bottom {
             let req = &configuration_log.requests[index];
             let (height, para) = self.get_representation_of_configuration_message(req, short);
-            let height = height + 2;
 
             let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
             let mut buffer = Buffer::empty(buffer_area);
@@ -364,7 +468,6 @@ impl UiState {
             let mut constrains = vec![];
             for req in &configuration_log.requests[range] {
                 let (height, para) = self.get_representation_of_configuration_message(req, short);
-                let height = height + 2;
                 req_blocks.push(para);
                 constrains.push(Constraint::Length(height.try_into().unwrap()));
             }
@@ -379,7 +482,7 @@ impl UiState {
 
         // More content than fits on the screen? Show scrollbar
         if total_height > viewport_height {
-            self.render_scrollbar(
+            Self::render_scrollbar(
                 frame,
                 area,
                 self.configuration_scroll.position,
@@ -514,7 +617,7 @@ impl UiState {
 
         // More content than fits on the screen? Show scrollbar
         if messages_height > viewport_height {
-            self.render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
+            Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
         }
     }
 
@@ -553,7 +656,7 @@ impl UiState {
 
         // More content than fits on the screen? Show scrollbar
         if messages_height > viewport_height {
-            self.render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
+            Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
         }
     }
 

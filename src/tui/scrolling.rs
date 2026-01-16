@@ -1,6 +1,6 @@
-use ratatui::layout::Rect;
-
 use std::ops::Range;
+
+use ratatui::layout::Rect;
 
 type IndexInHeightLog = usize;
 type PartialTopItem = Option<(IndexInHeightLog, Rect)>;
