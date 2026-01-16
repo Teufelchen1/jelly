@@ -7,6 +7,11 @@ type PartialTopItem = Option<(IndexInHeightLog, Rect)>;
 type FullItems = Option<(Range<IndexInHeightLog>, Rect)>;
 type PartialBottomItem = Option<(IndexInHeightLog, Rect)>;
 
+/// Scrolling for arbitrary sized items.
+///
+/// Given an array of your items height, a scroll postion and the area where the items
+/// will (later) be rendered into, returns which items to will be shown and where they
+/// need to be rendered.  
 pub fn get_areas_to_render_from_scroll_position(
     area: Rect,
     mut scroll_offset: usize,
