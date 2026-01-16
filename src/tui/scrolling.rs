@@ -49,8 +49,14 @@ pub fn get_areas_to_render_from_scroll_position(
     }
 
     // At which item do we need to stop drawing?
-    // When we have a partial item at the bottom, this item is the stop item.
-    let stop_item_full_drawn = if let Some(index) = has_partial_item_bottom {
+    // When we have a partial item at the bottom, that item is also the stop item.
+    // If we don't have a partial item at the bottom,
+    // the stop item is the lastest item, it's just outside our viewable space.
+    // e.g. if we have a scroll_offset of 0 (no scrolling going on), the stop item
+    // will be its [latest_item] initial value of height_log.len().
+    let stop_item_full_drawn = latest_item;
+
+    if let Some(index) = has_partial_item_bottom {
         // Calculate the amount of space of the partial item that is still
         // inside the viewable area.
         let remaining_item_bottom_height_after_scrolling = height_log[index] - scroll_offset;
@@ -66,6 +72,8 @@ pub fn get_areas_to_render_from_scroll_position(
                 middle_space_available -= remaining_item_bottom_height_after_scrolling;
                 remaining_item_bottom_height_after_scrolling
             };
+
+        // Store the return value
         area_for_partial_draw_bottom = Some((
             index,
             Rect {
@@ -80,30 +88,38 @@ pub fn get_areas_to_render_from_scroll_position(
                 ..area
             },
         ));
-        // This item is the stop item
-        index
-    } else {
-        // No we don't have a partial item at the bottom.
-        // So the stop item is the lastest item, it's just outside our viewable space.
-        // e.g. if we have a scroll_offset of 0 (no scrolling going on), the stop item
-        // will be its [latest_item] initial value of height_log.len().
-        latest_item
-    };
+    }
 
+    // Calculate how many items fit inside the remaining available space in the middle.
+    // (in the middle between Option<partially top> and Option<partially bottom>)
+    // We do that until:
+    // There are not items left
+    // or there is no space left to fit the next item
     while latest_item > 0 && middle_space_available > 0 {
         latest_item -= 1;
         let latest_item_height = height_log[latest_item];
+        // Does the item fit into the remaining space?
         if latest_item_height > middle_space_available {
+            // No it does not.
+            // This means we need to have a partially drawn item at the top
             has_partial_item_top = Some(latest_item);
+
+            // This is going to be the start item for the fully drawn items.
+            // Since the current item is already only partially drawn, we offset by 1.
             latest_item += 1;
             break;
         }
         middle_space_available -= latest_item_height;
+
+        // Track how much space we covered with fully drawn items.
         used_middle_space += latest_item_height;
     }
 
+    // Just a rename for clarity. This tells us where with which item we should start
+    // drawing the fully drawn items.
     let start_item_full_draw = latest_item;
 
+    // How much space is covered by the top item that is only partially drawn (if any)?
     let remaining_space_top = if let Some(index) = has_partial_item_top {
         let remaining_space_top = middle_space_available
             .try_into()
@@ -117,13 +133,16 @@ pub fn get_areas_to_render_from_scroll_position(
         ));
         remaining_space_top
     } else {
+        // If we don't have a partial top item, it covers no space at all
         0
     };
 
+    // Only draw full items...if we actually managed to fit any.
     if used_middle_space > 0 {
         area_for_fully_drawn = Some((
             start_item_full_draw..stop_item_full_drawn,
             Rect {
+                // Offset to not overlap with the partially drawn top item (if any)
                 y: area.y + remaining_space_top,
                 height: used_middle_space.try_into().unwrap_or(u16::max_value()),
                 ..area

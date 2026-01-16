@@ -345,8 +345,7 @@ impl UiState {
             }
         }
 
-        {
-            let (range, area) = full_draw_middle.unwrap();
+        if let Some((range, area)) = full_draw_middle {
             let mut req_blocks = vec![];
             let mut constrains = vec![];
             for req in &configuration_log.requests[range] {
