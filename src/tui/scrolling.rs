@@ -29,33 +29,47 @@ pub fn get_areas_to_render_from_scroll_position(
     let mut middle_space_available = viewable_space;
     let mut used_middle_space = 0;
 
-    // Scroll backwards through the items until there are no items left
+    // Scroll backwards through the items until:
+    // there are no items left
     // or we have no scroll offset left
-    // or we still have scroll offset but its too little for the next item
+    // or we still have scroll offset left but its too little for the next item
     while scroll_offset > 0 && latest_item > 0 {
         latest_item -= 1;
         let latest_item_height = height_log[latest_item];
+        // Do we have enough scroll_offset left to scroll past the current item?
         if latest_item_height > scroll_offset {
+            // No, we don't.
+            // So the current item will be drawn at the bottom
+            // (At the bottom because it is the most recent item)
             has_partial_item_bottom = Some(latest_item);
             break;
         }
+        // Yes we can completly scroll past this item
         scroll_offset -= latest_item_height;
     }
 
+    // At which item do we need to stop drawing?
+    // When we have a partial item at the bottom, this item is the stop item.
     let stop_item_full_drawn = if let Some(index) = has_partial_item_bottom {
-        let item_bottom_height = height_log[index];
-        let remaining_item_bottom_height_after_scrolling = item_bottom_height - scroll_offset;
+        // Calculate the amount of space of the partial item that is still
+        // inside the viewable area.
+        let remaining_item_bottom_height_after_scrolling = height_log[index] - scroll_offset;
         let partial_item_bottom_height =
+            // There is one edge case, where the item is so big, it overflows the
+            // viewable area. In that case, there is no space left for anything else,
+            // and the item is limited to the viewable space.
             if remaining_item_bottom_height_after_scrolling > viewable_space {
                 middle_space_available = 0;
                 viewable_space
             } else {
+                // Calculate how much space remains for other items
                 middle_space_available -= remaining_item_bottom_height_after_scrolling;
                 remaining_item_bottom_height_after_scrolling
             };
         area_for_partial_draw_bottom = Some((
             index,
             Rect {
+                // We add the remaining space as we start drawing from the bottom up
                 y: area.y
                     + middle_space_available
                         .try_into()
@@ -66,8 +80,13 @@ pub fn get_areas_to_render_from_scroll_position(
                 ..area
             },
         ));
+        // This item is the stop item
         index
     } else {
+        // No we don't have a partial item at the bottom.
+        // So the stop item is the lastest item, it's just outside our viewable space.
+        // e.g. if we have a scroll_offset of 0 (no scrolling going on), the stop item
+        // will be its [latest_item] initial value of height_log.len().
         latest_item
     };
 
@@ -117,73 +136,101 @@ pub fn get_areas_to_render_from_scroll_position(
         area_for_fully_drawn,
         area_for_partial_draw_bottom,
     );
-    // let mut counter_offset = height_log.len();
-    // while scroll_offset > 0 && counter_offset > 0 {
-    //     counter_offset -= 1;
-    //     scroll_offset = if let Some(sub) = scroll_offset.checked_sub(height_log[counter_offset]) {
-    //         sub
-    //     } else {
-    //         break;
-    //     };
-    // }
-
-    // let mut inner_height = usize::from(area.height) - scroll_offset;
-    // let mut used_inner_height = 0;
-    // let mut counter_start = counter_offset;
-    // while inner_height > 0 && counter_start > 0 {
-    //     counter_start -= 1;
-    //     inner_height = if let Some(sub) = inner_height.checked_sub(height_log[counter_start]) {
-    //         used_inner_height += height_log[counter_start];
-    //         sub
-    //     } else {
-    //         counter_start += 1;
-    //         break;
-    //     }
-    // }
-
-    // let mut remainder_top = 0u16;
-    // if counter_start > 0 && inner_height > 0 {
-    //     remainder_top = inner_height.try_into().unwrap_or(u16::max_value());
-    // }
-
-    // let area_for_partial_draw_top = Rect {
-    //     height: scroll_offset.try_into().unwrap_or(u16::max_value()) + remainder_top,
-    //     ..area
-    // };
-
-    // let area_for_fully_drawn = Rect {
-    //     y: area.y + area_for_partial_draw_top.height,
-    //     height: used_inner_height.try_into().unwrap_or(u16::max_value()),
-    //     ..area
-    // };
-
-    // let area_for_partial_draw_bottom = Rect {
-    //     y: area_for_fully_drawn.y + area_for_fully_drawn.height,
-    //     height: inner_height as u16,
-    //     ..area
-    // };
-
-    // println!("{counter_start}|{scroll_offset}");
-    // let partial_draw_top = if counter_start > 0 && (scroll_offset > 0 || inner_height > 0) {
-    //     Some((counter_start - 1, area_for_partial_draw_top))
-    // } else {
-    //     None
-    // };
-
-    // let full_draw_middle = (counter_start..counter_offset, area_for_fully_drawn);
-
-    // let partial_draw_bottom = if counter_offset < height_log.len() && scroll_offset > 0 {
-    //     Some((counter_offset, area_for_partial_draw_bottom))
-    // } else {
-    //     None
-    // };
-
-    //return (partial_draw_top, full_draw_middle, partial_draw_bottom);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn single_item_no_fit_no_scroll() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            height: 10,
+            width: 5,
+        };
+        let scroll_offset = 0;
+        let height_log = [14];
+
+        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+            get_areas_to_render_from_scroll_position(area, scroll_offset, &height_log);
+
+        assert!(partial_draw_top.is_some());
+        let (index, area) = partial_draw_top.unwrap();
+        assert_eq!(index, 0);
+        assert_eq!(
+            area,
+            Rect {
+                x: 0,
+                y: 0,
+                height: 10,
+                width: 5,
+            }
+        );
+        assert!(full_draw_middle.is_none());
+        assert!(partial_draw_bottom.is_none());
+    }
+
+    #[test]
+    fn single_item_no_fit_with_partial_scroll() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            height: 10,
+            width: 5,
+        };
+        let scroll_offset = 2;
+        let height_log = [14];
+
+        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+            get_areas_to_render_from_scroll_position(area, scroll_offset, &height_log);
+
+        assert!(partial_draw_top.is_none());
+        assert!(full_draw_middle.is_none());
+        assert!(partial_draw_bottom.is_some());
+        let (index, area) = partial_draw_bottom.unwrap();
+        assert_eq!(index, 0);
+        assert_eq!(
+            area,
+            Rect {
+                x: 0,
+                y: 0,
+                height: 10,
+                width: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn single_item_no_fit_full_scroll() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            height: 10,
+            width: 5,
+        };
+        let scroll_offset = 4;
+        let height_log = [14];
+
+        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+            get_areas_to_render_from_scroll_position(area, scroll_offset, &height_log);
+
+        assert!(partial_draw_top.is_none());
+        assert!(full_draw_middle.is_none());
+        assert!(partial_draw_bottom.is_some());
+        let (index, area) = partial_draw_bottom.unwrap();
+        assert_eq!(index, 0);
+        assert_eq!(
+            area,
+            Rect {
+                x: 0,
+                y: 0,
+                height: 10,
+                width: 5,
+            }
+        );
+    }
 
     #[test]
     fn single_item_fits_with_remaining_space() {
