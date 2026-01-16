@@ -11,7 +11,6 @@ use ratatui::layout::Layout;
 use ratatui::layout::Margin;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
-use ratatui::layout::Size;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
