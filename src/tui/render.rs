@@ -9,10 +9,10 @@ use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
+use ratatui::layout::Margin;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::layout::Size;
-use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -20,12 +20,15 @@ use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Scrollbar;
+use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
 use tui_widgets::scrollview::ScrollView;
 
 use super::UiState;
+use super::scrolling::get_areas_to_render_from_scroll_position;
 use crate::datatypes::coap_log::CoapLog;
 use crate::datatypes::coap_log::Request;
 use crate::datatypes::diagnostic_log::DiagnosticLog;
@@ -33,9 +36,29 @@ use crate::datatypes::job_log::JobLog;
 use crate::datatypes::packet_log::PacketLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
-use crate::tui::scrolling::get_areas_to_render_from_scroll_position;
 
 impl UiState {
+    fn render_scrollbar(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        scroll_position: usize,
+        max_scroll_offset: usize,
+    ) {
+        let scrollbar = Scrollbar::default()
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+        let mut scrollbar_state =
+            ScrollbarState::new(max_scroll_offset).position(max_scroll_offset - scroll_position);
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
         let tab_titles = [
             "Overview (F1)",
@@ -241,7 +264,7 @@ impl UiState {
         short: bool,
     ) -> (usize, Paragraph<'a>) {
         let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
+            .borders(Borders::BOTTOM)
             .style(self.border_style())
             .title_alignment(Alignment::Left);
 
@@ -269,6 +292,8 @@ impl UiState {
             .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
 
+        let viewport_height = outer_block.inner(area).height as usize;
+
         let mut height_log = vec![];
         for req in &configuration_log.requests {
             let (size, _) = if short {
@@ -279,11 +304,12 @@ impl UiState {
             let size = size + 2;
             height_log.push(size);
         }
+
         let total_height: usize = height_log.iter().sum();
+        let max_scroll_offset = total_height.saturating_sub(viewport_height);
 
         let mut scroll_offset = self.configuration_scroll.position;
-        scroll_offset =
-            scroll_offset.min(total_height.saturating_sub(outer_block.inner(area).height as usize));
+        scroll_offset = scroll_offset.min(max_scroll_offset);
         self.configuration_scroll.position = scroll_offset;
 
         let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
@@ -295,8 +321,7 @@ impl UiState {
 
         if let Some((index, area)) = partial_draw_top {
             let req = &configuration_log.requests[index];
-            let (height, mut para) = self.get_representation_of_configuration_message(req, short);
-            para = para.style(Style::new().red().on_red());
+            let (height, para) = self.get_representation_of_configuration_message(req, short);
             let height = height + 2;
 
             let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
@@ -318,8 +343,7 @@ impl UiState {
 
         if let Some((index, area)) = partial_draw_bottom {
             let req = &configuration_log.requests[index];
-            let (height, mut para) = self.get_representation_of_configuration_message(req, short);
-            para = para.style(Style::new().green().on_green());
+            let (height, para) = self.get_representation_of_configuration_message(req, short);
             let height = height + 2;
 
             let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
@@ -344,12 +368,6 @@ impl UiState {
                 req_blocks.push(para);
                 constrains.push(Constraint::Length(height.try_into().unwrap()));
             }
-            // let width = if outer_block.inner(area).height < total_length {
-            //     // Make room for the scroll bar
-            //     outer_block.inner(area).width - 1
-            // } else {
-            //     outer_block.inner(area).width
-            // };
 
             let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
             for (a, req_b) in zip(areas, req_blocks) {
@@ -357,7 +375,17 @@ impl UiState {
             }
         }
 
-        frame.render_widget(outer_block, area);
+        frame.render_widget(&outer_block, area);
+
+        // More content than fits on the screen? Show scrollbar
+        if total_height > viewport_height {
+            self.render_scrollbar(
+                frame,
+                area,
+                self.configuration_scroll.position,
+                max_scroll_offset,
+            );
+        }
     }
 
     fn render_user_input(
@@ -457,34 +485,37 @@ impl UiState {
         area: Rect,
         diagnostic_log: &DiagnosticLog,
     ) {
-        let left_block_up = Block::bordered()
+        let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Text Messages")])
             .title_alignment(Alignment::Left);
 
-        let content_width = left_block_up.inner(area).width;
+        let viewport_height = outer_block.inner(area).height as usize;
+        let content_width = outer_block.inner(area).width;
 
-        let (messages_height, paragraph) = diagnostic_log.paragraph();
+        let (_, paragraph) = diagnostic_log.paragraph();
+        let messages_height = paragraph.line_count(content_width);
 
-        let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
+        let max_scroll_offset = messages_height.saturating_sub(viewport_height);
 
-        let mut scroll_view = ScrollView::new(Size::new(
-            // Make room for the scroll bar
-            content_width - 1,
-            messages_height,
+        let scroll_offset = self.diagnostic_scroll.position.min(max_scroll_offset);
+        self.diagnostic_scroll.position = scroll_offset;
+
+        let paragraph = paragraph.scroll((
+            (max_scroll_offset - scroll_offset)
+                .try_into()
+                .unwrap_or(u16::MAX),
+            0,
         ));
 
-        scroll_view.render_widget(
-            paragraph,
-            Rect::new(0, 0, content_width - 1, messages_height),
-        );
+        let block = paragraph.block(outer_block);
 
-        frame.render_stateful_widget(
-            scroll_view,
-            left_block_up.inner(area),
-            self.diagnostic_scroll.get_state_for_rendering(),
-        );
-        frame.render_widget(left_block_up, area);
+        frame.render_widget(block, area);
+
+        // More content than fits on the screen? Show scrollbar
+        if messages_height > viewport_height {
+            self.render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
+        }
     }
 
     fn render_overall_messages(
@@ -493,31 +524,37 @@ impl UiState {
         area: Rect,
         overall_log: &DiagnosticLog,
     ) {
-        let left_block_up = Block::bordered()
+        let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Text & Commands")])
             .title_alignment(Alignment::Left);
 
-        let content_width = left_block_up.inner(area).width;
+        let viewport_height = outer_block.inner(area).height as usize;
+        let content_width = outer_block.inner(area).width;
 
-        // Make room for the scroll bar
-        let content_width = content_width - 1;
-
-        let (_messages_height, paragraph) = overall_log.paragraph_short();
+        let (_, paragraph) = overall_log.paragraph_short();
         let messages_height = paragraph.line_count(content_width);
 
-        let messages_height = messages_height.try_into().unwrap_or(u16::MAX);
+        let max_scroll_offset = messages_height.saturating_sub(viewport_height);
 
-        let mut scroll_view = ScrollView::new(Size::new(content_width, messages_height));
+        let scroll_offset = self.overview_scroll.position.min(max_scroll_offset);
+        self.overview_scroll.position = scroll_offset;
 
-        scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, messages_height));
+        let paragraph = paragraph.scroll((
+            (max_scroll_offset - scroll_offset)
+                .try_into()
+                .unwrap_or(u16::MAX),
+            0,
+        ));
 
-        frame.render_stateful_widget(
-            scroll_view,
-            left_block_up.inner(area),
-            self.overview_scroll.get_state_for_rendering(),
-        );
-        frame.render_widget(left_block_up, area);
+        let block = paragraph.block(outer_block);
+
+        frame.render_widget(block, area);
+
+        // More content than fits on the screen? Show scrollbar
+        if messages_height > viewport_height {
+            self.render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
+        }
     }
 
     fn render_configuration_overview(&self, frame: &mut Frame, area: Rect) {
