@@ -21,6 +21,7 @@ pub use ui_state::SelectedTab;
 pub use ui_state::UiState;
 
 mod render;
+mod scrolling;
 mod ui_state;
 
 fn terminal_thread(sender: &Sender<Event>) {
