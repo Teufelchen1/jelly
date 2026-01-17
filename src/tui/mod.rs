@@ -1,7 +1,7 @@
-use crate::Cli;
-use crate::EventChannel;
 use crate::create_network_thread;
 use crate::create_slipmux_thread;
+use crate::Cli;
+use crate::EventChannel;
 use std::io::Stdout;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -11,11 +11,11 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crossterm::event::MouseEventKind;
-use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 
-use crate::Event;
 use crate::app::App;
+use crate::Event;
 
 pub use ui_state::SelectedTab;
 pub use ui_state::UiState;
@@ -65,8 +65,12 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
 
     let network_event_sender = if let Some(network_name) = args.network {
-        let name = network_name.unwrap_or_else(|| "slip".to_owned());
-        Some(create_network_thread(event_sender.clone(), &name))
+        let name = network_name.unwrap_or_else(|| "slip0".to_owned());
+        if let Ok(nes) = create_network_thread(event_sender.clone(), &name) {
+            Some(nes)
+        } else {
+            return;
+        }
     } else {
         None
     };

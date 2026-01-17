@@ -1,5 +1,5 @@
-use std::io::Write;
 use std::io::stdout;
+use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
@@ -19,7 +19,7 @@ pub fn event_loop_diagnostic_network(
             Err(RecvTimeoutError::Disconnected) => panic!(),
         };
         match event {
-            Event::NetworkConnect(name) => println!("Created network interface {name}."),
+            Event::NetworkConnect(name) => println!("Using network interface {name}."),
             Event::Diagnostic(msg) => {
                 print!("{msg}");
                 stdout().flush().unwrap();
