@@ -242,9 +242,17 @@ impl Response {
                         |c| c.serialize(),
                     )
                 }
-                _ => {
-                    format!("{payload:02x?}")
+                // With nothing given (as opposed to, for example, application/octet-stream when we
+                // should not guess), we venture a guess because it is *so* prevalent, and hard to
+                // mistake.
+                None => {
+                    if let Ok(payload_str) = str::from_utf8(payload) {
+                        payload_str.to_owned()
+                    } else {
+                        format!("{payload:02x?}")
+                    }
                 }
+                _ => format!("{payload:02x?}"),
             }
         }
     }
