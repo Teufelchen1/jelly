@@ -35,20 +35,24 @@ impl ScrollState {
         }
     }
 
-    const fn scroll_down(&mut self) {
+    const fn scroll_down(&mut self) -> bool {
+        let value_change = self.position > 0;
         self.position = self.position.saturating_sub(1);
         // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
         self.follow = self.position == 0;
         self.state.scroll_down();
+        value_change
     }
 
-    const fn scroll_up(&mut self) {
+    const fn scroll_up(&mut self) -> bool {
         self.follow = false;
         // Can't scroll up when already on top
-        if self.state.offset().y != 0 {
+        let value_change = self.state.offset().y != 0;
+        if value_change {
             self.position = self.position.saturating_add(1);
         }
         self.state.scroll_up();
+        value_change
     }
 
     pub fn get_state_for_rendering(&mut self) -> &mut ScrollViewState {
@@ -108,6 +112,7 @@ pub struct UiState {
     riot_board: String,
     riot_version: String,
     theme: ColorPalette,
+    dirty: bool,
 }
 
 impl UiState {
@@ -133,6 +138,7 @@ impl UiState {
             theme: ColorPalette::from(
                 theme_mode(QueryOptions::default()).unwrap_or(ThemeMode::Dark),
             ),
+            dirty: true,
         }
     }
 
@@ -149,6 +155,7 @@ impl UiState {
     }
 
     pub fn set_command_help_list(&mut self, cmds: Vec<(String, String, String)>) {
+        self.dirty = true;
         self.command_help_list.clear();
         for (cmd, description, help) in cmds {
             if help.is_empty() {
@@ -163,22 +170,27 @@ impl UiState {
     }
 
     pub fn set_board_name(&mut self, name: String) {
+        self.dirty = true;
         self.riot_board = name;
     }
 
     pub fn set_board_version(&mut self, version: String) {
+        self.dirty = true;
         self.riot_version = version;
     }
 
     pub fn set_iface_name(&mut self, name: String) {
+        self.dirty = true;
         self.iface_name = Some(name);
     }
 
     pub fn set_device_path(&mut self, path: String) {
+        self.dirty = true;
         self.device_path = Some(path);
     }
 
     pub fn clear_device_path(&mut self) {
+        self.dirty = true;
         self.device_path = None;
     }
 
@@ -205,18 +217,19 @@ impl UiState {
     }
 
     pub const fn on_mouse(&mut self, mouse: MouseEvent) {
-        match mouse.kind {
+        self.dirty |= match mouse.kind {
             MouseEventKind::ScrollDown => self.scroll_down(),
             MouseEventKind::ScrollUp => self.scroll_up(),
-            _ => (),
+            _ => false,
         }
     }
 
-    pub const fn scroll_down(&mut self) {
+    pub const fn scroll_down(&mut self) -> bool {
         match self.current_tab {
             SelectedTab::Overview => {
-                self.overview_scroll.scroll_down();
-                self.configuration_scroll.scroll_down();
+                let a = self.overview_scroll.scroll_down();
+                let b = self.configuration_scroll.scroll_down();
+                a || b
             }
             SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_down(),
             SelectedTab::Configuration => self.configuration_scroll.scroll_down(),
@@ -226,11 +239,12 @@ impl UiState {
         }
     }
 
-    pub const fn scroll_up(&mut self) {
+    pub const fn scroll_up(&mut self) -> bool {
         match self.current_tab {
             SelectedTab::Overview => {
-                self.overview_scroll.scroll_up();
-                self.configuration_scroll.scroll_up();
+                let a = self.overview_scroll.scroll_up();
+                let b = self.configuration_scroll.scroll_up();
+                a || b
             }
             SelectedTab::Diagnostic => self.diagnostic_scroll.scroll_up(),
             SelectedTab::Configuration => self.configuration_scroll.scroll_up(),
@@ -241,26 +255,48 @@ impl UiState {
     }
 
     pub const fn select_overview_view(&mut self) {
+        self.dirty |= !matches!(self.current_tab, SelectedTab::Overview);
         self.current_tab = SelectedTab::Overview;
     }
 
     pub const fn select_diagnostic_view(&mut self) {
+        self.dirty |= !matches!(self.current_tab, SelectedTab::Diagnostic);
         self.current_tab = SelectedTab::Diagnostic;
     }
 
     pub const fn select_configuration_view(&mut self) {
+        self.dirty |= !matches!(self.current_tab, SelectedTab::Configuration);
         self.current_tab = SelectedTab::Configuration;
     }
 
     pub const fn select_commands_view(&mut self) {
+        self.dirty |= !matches!(self.current_tab, SelectedTab::Commands);
         self.current_tab = SelectedTab::Commands;
     }
 
     pub const fn select_help_view(&mut self) {
+        self.dirty |= !matches!(self.current_tab, SelectedTab::Help);
         self.current_tab = SelectedTab::Help;
     }
 
     pub const fn select_net_view(&mut self) {
+        self.dirty |= !matches!(self.current_tab, SelectedTab::Net);
         self.current_tab = SelectedTab::Net;
+    }
+
+    pub const fn get_dirty_from_tab(&mut self, _tab: SelectedTab) {
+        self.dirty |= matches!(self.current_tab, _tab);
+    }
+
+    pub const fn get_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub const fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    pub const fn wash(&mut self) {
+        self.dirty = false;
     }
 }

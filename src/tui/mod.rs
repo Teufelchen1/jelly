@@ -1,7 +1,3 @@
-use crate::Cli;
-use crate::EventChannel;
-use crate::create_network_thread;
-use crate::create_slipmux_thread;
 use std::io::Stdout;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -14,8 +10,12 @@ use crossterm::event::MouseEventKind;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 
+use crate::Cli;
 use crate::Event;
+use crate::EventChannel;
 use crate::app::App;
+use crate::create_network_thread;
+use crate::create_slipmux_thread;
 
 pub use ui_state::SelectedTab;
 pub use ui_state::UiState;
@@ -132,25 +132,40 @@ pub fn event_loop_tui(
         };
 
         match event {
-            Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
-            Event::Configuration(data) => app.on_configuration_msg(Some(&mut ui_state), &data),
+            Event::Diagnostic(msg) => {
+                app.on_diagnostic_msg(&msg);
+                ui_state.get_dirty_from_tab(SelectedTab::Diagnostic);
+                ui_state.get_dirty_from_tab(SelectedTab::Overview);
+            }
+            Event::Configuration(data) => {
+                app.on_configuration_msg(Some(&mut ui_state), &data);
+                ui_state.get_dirty_from_tab(SelectedTab::Configuration);
+                ui_state.get_dirty_from_tab(SelectedTab::Overview);
+            }
             Event::Packet(packet) => {
                 app.on_packet(&packet);
                 if let Some(n_e_sender) = network_event_sender {
                     n_e_sender.send(Event::Packet(packet)).unwrap();
                 }
+                ui_state.get_dirty_from_tab(SelectedTab::Net);
             }
             Event::SendDiagnostic(d) => hardware_event_sender
-                .send(Event::SendDiagnostic(d))
+                .send(Event::SendDiagnostic(d.to_string()))
                 .unwrap(),
-            Event::SendConfiguration(c) => hardware_event_sender
-                .send(Event::SendConfiguration(c))
-                .unwrap(),
+            Event::SendConfiguration(c) => {
+                hardware_event_sender
+                    .send(Event::SendConfiguration(c))
+                    .unwrap();
+
+                ui_state.get_dirty_from_tab(SelectedTab::Configuration);
+                ui_state.get_dirty_from_tab(SelectedTab::Overview);
+            }
             Event::SendPacket(packet) => {
                 app.off_packet(&packet);
                 hardware_event_sender
                     .send(Event::SendPacket(packet))
                     .unwrap();
+                ui_state.get_dirty_from_tab(SelectedTab::Net);
             }
             Event::SerialConnect(tty_name) => {
                 app.on_connect();
@@ -160,7 +175,7 @@ pub fn event_loop_tui(
                 app.on_disconnect();
                 ui_state.clear_device_path();
             }
-            Event::TerminalString(ref _msg) => (),
+            Event::TerminalString(_msg) => (),
             Event::TerminalKey(key) => {
                 if !app.on_key(Some(&mut ui_state), key) {
                     break;
@@ -175,8 +190,11 @@ pub fn event_loop_tui(
             }
         }
 
-        terminal
-            .draw(|frame| app.draw(&mut ui_state, frame))
-            .unwrap();
+        if ui_state.is_dirty() {
+            terminal
+                .draw(|frame| app.draw(&mut ui_state, frame))
+                .unwrap();
+            ui_state.wash();
+        }
     }
 }
