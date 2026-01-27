@@ -71,9 +71,9 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
         None
     };
 
-    // The app queries the terminal on creation for its colour theme
+    // The UiState queries the terminal on creation for its colour theme
     // So we create it here early, before messing with the terminal ourselves
-    let app = App::new(event_sender.clone());
+    let ui_state = UiState::new();
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
@@ -94,10 +94,13 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 
     terminal.clear().unwrap();
 
-    create_terminal_thread(event_sender);
+    create_terminal_thread(event_sender.clone());
+
+    let app = App::new(event_sender);
 
     event_loop_tui(
         app,
+        ui_state,
         &event_receiver,
         &slipmux_event_sender,
         network_event_sender.as_ref(),
@@ -109,12 +112,15 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 
 pub fn event_loop_tui(
     mut app: App,
+    mut ui_state: UiState,
     event_channel: &Receiver<Event>,
     hardware_event_sender: &Sender<Event>,
     network_event_sender: Option<&Sender<Event>>,
     mut terminal: Terminal<CrosstermBackend<Stdout>>,
 ) {
-    terminal.draw(|frame| app.draw(frame)).unwrap();
+    terminal
+        .draw(|frame| app.draw(&mut ui_state, frame))
+        .unwrap();
 
     loop {
         let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
@@ -124,9 +130,10 @@ pub fn event_loop_tui(
             }
             Err(RecvTimeoutError::Disconnected) => panic!(),
         };
+
         match event {
             Event::Diagnostic(msg) => app.on_diagnostic_msg(&msg),
-            Event::Configuration(data) => app.on_configuration_msg(&data),
+            Event::Configuration(data) => app.on_configuration_msg(Some(&mut ui_state), &data),
             Event::Packet(packet) => {
                 app.on_packet(&packet);
                 if let Some(n_e_sender) = network_event_sender {
@@ -145,22 +152,31 @@ pub fn event_loop_tui(
                     .send(Event::SendPacket(packet))
                     .unwrap();
             }
-            Event::SerialConnect(name) => app.on_connect(name),
-            Event::SerialDisconnect => app.on_disconnect(),
-            Event::TerminalString(_msg) => (),
+            Event::SerialConnect(tty_name) => {
+                app.on_connect();
+                ui_state.set_device_path(tty_name);
+            }
+            Event::SerialDisconnect => {
+                app.on_disconnect();
+                ui_state.clear_device_path();
+            }
+            Event::TerminalString(ref _msg) => (),
             Event::TerminalKey(key) => {
-                if !app.on_key(key) {
+                if !app.on_key(Some(&mut ui_state), key) {
                     break;
                 }
             }
             Event::TerminalMouse(mouse) => {
-                if !app.on_mouse(mouse) {
-                    break;
-                }
+                ui_state.on_mouse(mouse);
             }
             Event::TerminalResize | Event::TerminalEOF => (),
-            Event::NetworkConnect(iface) => app.on_interface_creation(iface),
+            Event::NetworkConnect(interface_name) => {
+                ui_state.set_iface_name(interface_name);
+            }
         }
-        terminal.draw(|frame| app.draw(frame)).unwrap();
+
+        terminal
+            .draw(|frame| app.draw(&mut ui_state, frame))
+            .unwrap();
     }
 }

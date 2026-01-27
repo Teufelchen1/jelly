@@ -7,8 +7,6 @@ use coap_lite::RequestType as Method;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use crossterm::event::MouseEvent;
-use crossterm::event::MouseEventKind;
 use slipmux::Slipmux;
 use slipmux::encode_buffered;
 
@@ -21,6 +19,7 @@ use crate::command::CommandType;
 use crate::datatypes::coap_log::token_to_u64;
 use crate::datatypes::job_log::SaveToFile;
 use crate::events::Event;
+use crate::tui::UiState;
 
 impl App {
     fn on_well_known_core(&mut self, response: &Packet) {
@@ -59,16 +58,10 @@ impl App {
 
         self.user_input_manager
             .check_for_new_available_commands(&eps);
-        self.populate_command_help_list();
     }
 
-    pub fn on_interface_creation(&mut self, name: String) {
-        self.ui_state.set_iface_name(name);
-    }
-
-    pub fn on_connect(&mut self, name: String) {
+    pub fn on_connect(&mut self) {
         self.connected = true;
-        self.ui_state.set_device_path(name);
 
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
         request.message.add_option(CoapOption::Block2, vec![0x05]);
@@ -84,9 +77,8 @@ impl App {
         self.configuration_log.push(request);
     }
 
-    pub fn on_disconnect(&mut self) {
+    pub const fn on_disconnect(&mut self) {
         self.connected = false;
-        self.ui_state.clear_device_path();
     }
 
     fn handle_pending_job(&mut self, mut hash_index: u64, response: &Packet) {
@@ -115,7 +107,7 @@ impl App {
         }
     }
 
-    pub fn on_configuration_msg(&mut self, data: &[u8]) {
+    pub fn on_configuration_msg(&mut self, ui_state: Option<&mut UiState>, data: &[u8]) {
         let response = Packet::from_bytes(data).unwrap();
 
         if matches!(response.header.code, coap_lite::MessageClass::Request(_)) {
@@ -154,14 +146,26 @@ impl App {
                         _ = write!(uri_path, "/{}", String::from_utf8_lossy(option));
                     }
                     match uri_path.as_str() {
-                        "/jelly/board" => self
-                            .ui_state
-                            .set_board_name(String::from_utf8_lossy(&response.payload).to_string()),
-                        "/jelly/ver" => self.ui_state.set_board_version(
-                            String::from_utf8_lossy(&response.payload).to_string(),
-                        ),
-
-                        "/.well-known/core" => self.on_well_known_core(&response),
+                        "/jelly/board" => {
+                            if let Some(ui_state) = ui_state {
+                                ui_state.set_board_name(
+                                    String::from_utf8_lossy(&response.payload).to_string(),
+                                );
+                            }
+                        }
+                        "/jelly/ver" => {
+                            if let Some(ui_state) = ui_state {
+                                ui_state.set_board_version(
+                                    String::from_utf8_lossy(&response.payload).to_string(),
+                                );
+                            }
+                        }
+                        "/.well-known/core" => {
+                            self.on_well_known_core(&response);
+                            if let Some(ui_state) = ui_state {
+                                self.populate_command_help_list(ui_state);
+                            }
+                        }
                         _ => {
                             // RIOT specific hook
                             if uri_path.starts_with("/shell/") {
@@ -215,20 +219,13 @@ impl App {
         self.packet_log.add_to_node(packet);
     }
 
-    pub const fn on_mouse(&mut self, mouse: MouseEvent) -> bool {
-        match mouse.kind {
-            MouseEventKind::ScrollDown => {
-                self.ui_state.scroll_down();
-            }
-            MouseEventKind::ScrollUp => {
-                self.ui_state.scroll_up();
-            }
-            _ => {}
-        }
-        true
-    }
-
-    fn execute_command(&mut self, cmd: &str, cmd_string: &str, file: SaveToFile) {
+    fn execute_command(
+        &mut self,
+        ui_state: Option<&mut UiState>,
+        cmd: &str,
+        cmd_string: &str,
+        file: SaveToFile,
+    ) {
         // This works around a lifetime issue
         let cmd = self
             .user_input_manager
@@ -265,10 +262,12 @@ impl App {
                 // This is kinda hacky but the alternative would be to pass &mut App
                 // into the command handler?
                 if cmd.cmd == "Help" {
-                    self.ui_state.select_help_view();
-                    self.populate_command_help_list();
+                    if let Some(ui_state) = ui_state {
+                        ui_state.select_help_view();
+                        self.populate_command_help_list(ui_state);
+                    }
                 } else if cmd.cmd == "ForceCmdsAvailable" {
-                    self.force_all_commands_availabe();
+                    self.force_all_commands_availabe(ui_state);
                 }
             }
             // Display usage info to the user
@@ -282,7 +281,7 @@ impl App {
         }
     }
 
-    fn handle_command_commit(&mut self) {
+    fn handle_command_commit(&mut self, ui_state: Option<&mut UiState>) {
         match self.user_input_manager.classify_input() {
             InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
@@ -304,23 +303,23 @@ impl App {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
             }
             InputType::Command(cmd, cmd_string, file) => {
-                self.execute_command(&cmd, &cmd_string, file);
+                self.execute_command(ui_state, &cmd, &cmd_string, file);
             }
         }
 
         self.user_input_manager.finish_current_input();
     }
 
-    pub fn on_msg_string(&mut self, msg: &str) {
+    pub fn on_msg_string(&mut self, ui_state: Option<&mut UiState>, msg: &str) {
         self.user_input_manager.insert_string(msg);
 
         // should always be the case as msg is read via read_line()
         if msg.ends_with('\n') {
-            self.handle_command_commit();
+            self.handle_command_commit(ui_state);
         }
     }
 
-    pub fn on_key(&mut self, key: KeyEvent) -> bool {
+    pub fn on_key(&mut self, ui_state: Option<&mut UiState>, key: KeyEvent) -> bool {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             return false;
         }
@@ -329,7 +328,7 @@ impl App {
             KeyCode::Enter => {
                 // Can't send anything if we don't have an active connection
                 if self.connected {
-                    self.handle_command_commit();
+                    self.handle_command_commit(ui_state);
                 }
             }
             KeyCode::Tab => {
@@ -354,23 +353,35 @@ impl App {
                 self.user_input_manager.insert_char(to_insert);
             }
             KeyCode::F(1) => {
-                self.ui_state.select_overview_view();
+                if let Some(ui_state) = ui_state {
+                    ui_state.select_overview_view();
+                }
             }
             KeyCode::F(2) => {
-                self.ui_state.select_diagnostic_view();
+                if let Some(ui_state) = ui_state {
+                    ui_state.select_diagnostic_view();
+                }
             }
             KeyCode::F(3) => {
-                self.ui_state.select_configuration_view();
+                if let Some(ui_state) = ui_state {
+                    ui_state.select_configuration_view();
+                }
             }
             KeyCode::F(4) => {
-                self.ui_state.select_commands_view();
+                if let Some(ui_state) = ui_state {
+                    ui_state.select_commands_view();
+                }
             }
             KeyCode::F(5) => {
-                self.ui_state.select_net_view();
+                if let Some(ui_state) = ui_state {
+                    ui_state.select_net_view();
+                }
             }
             KeyCode::F(12) => {
-                self.ui_state.select_help_view();
-                self.populate_command_help_list();
+                if let Some(ui_state) = ui_state {
+                    ui_state.select_help_view();
+                    self.populate_command_help_list(ui_state);
+                }
             }
             KeyCode::Esc => {
                 return false;
