@@ -30,7 +30,6 @@ pub struct App {
     diagnostic_log: DiagnosticLog,
     packet_log: PacketLog,
     user_input_manager: UserInputManager,
-    ui_state: UiState,
     token_count: u16,
     next_mid: u16,
     overall_log: DiagnosticLog,
@@ -53,8 +52,6 @@ impl App {
 
             user_input_manager,
 
-            ui_state: UiState::new(),
-
             token_count: 0,
             next_mid: rand::rng().random(),
 
@@ -64,12 +61,14 @@ impl App {
         }
     }
 
-    pub fn force_all_commands_availabe(&mut self) {
+    pub fn force_all_commands_availabe(&mut self, ui_state: Option<&mut UiState>) {
         self.user_input_manager.force_all_commands_availabe();
-        self.populate_command_help_list();
+        if let Some(ui_state) = ui_state {
+            self.populate_command_help_list(ui_state);
+        }
     }
 
-    fn populate_command_help_list(&mut self) {
+    fn populate_command_help_list(&self, ui_state: &mut UiState) {
         let cmd_list = self
             .user_input_manager
             .known_commands
@@ -85,7 +84,7 @@ impl App {
                 )
             })
             .collect::<Vec<_>>();
-        self.ui_state.set_command_help_list(err_list);
+        ui_state.set_command_help_list(err_list);
     }
 
     pub fn unfinished_jobs_count(&self) -> usize {
@@ -147,14 +146,13 @@ impl App {
             .unwrap();
     }
 
-    pub fn draw(&mut self, frame: &mut Frame) {
+    pub fn draw(&self, ui_state: &mut UiState, frame: &mut Frame) {
         let logs = (
             &self.configuration_log,
             &self.diagnostic_log,
             &self.overall_log,
             &self.packet_log,
         );
-        self.ui_state
-            .draw(frame, &self.user_input_manager, &self.job_log, logs);
+        ui_state.draw(frame, &self.user_input_manager, &self.job_log, logs);
     }
 }

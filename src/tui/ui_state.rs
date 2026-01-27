@@ -1,5 +1,7 @@
 use std::fmt::Write;
 
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ratatui::style::Color;
 use ratatui::style::Style;
 use terminal_colorsaurus::QueryOptions;
@@ -199,6 +201,14 @@ impl UiState {
                 format!("✅ connected via {device_path}{net}")
             }
             None => format!("❌ not connected, retrying..{net}"),
+        }
+    }
+
+    pub const fn on_mouse(&mut self, mouse: MouseEvent) {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => self.scroll_down(),
+            MouseEventKind::ScrollUp => self.scroll_up(),
+            _ => (),
         }
     }
 

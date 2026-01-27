@@ -15,11 +15,11 @@ pub fn event_loop_configuration(
     hardware_event_sender: &Sender<Event>,
 ) {
     let mut app = App::new(event_sender.clone());
-    app.force_all_commands_availabe();
+    app.force_all_commands_availabe(None);
 
     match await_serial_connect(event_channel) {
-        Ok(name) => {
-            app.on_connect(name);
+        Ok(_name) => {
+            app.on_connect();
             create_raw_terminal_thread(event_sender);
         }
         Err(e) => {
@@ -43,13 +43,13 @@ pub fn event_loop_configuration(
         };
         match event {
             Event::TerminalString(msg) => {
-                app.on_msg_string(&msg);
+                app.on_msg_string(None, &msg);
             }
             Event::TerminalEOF => {
                 terminal_eof = true;
             }
             Event::Configuration(data) => {
-                app.on_configuration_msg(&data);
+                app.on_configuration_msg(None, &data);
             }
             Event::SendConfiguration(c) => hardware_event_sender
                 .send(Event::SendConfiguration(c))
