@@ -333,24 +333,45 @@ impl App {
             }
             KeyCode::Tab => {
                 self.user_input_manager.set_suggest_completion();
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::Backspace => {
                 self.user_input_manager.remove_char();
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::Left => {
                 self.user_input_manager.move_cursor_left();
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::Right => {
                 self.user_input_manager.move_cursor_right();
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::Up => {
                 self.user_input_manager.set_to_previous_input();
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::Down => {
                 self.user_input_manager.set_to_next_input();
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::Char(to_insert) => {
                 self.user_input_manager.insert_char(to_insert);
+                if let Some(ui_state) = ui_state {
+                    ui_state.get_dirty();
+                }
             }
             KeyCode::F(1) => {
                 if let Some(ui_state) = ui_state {
