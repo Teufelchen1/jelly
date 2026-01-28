@@ -409,111 +409,115 @@ impl UiState {
 
         let viewport_height = outer_block.inner(area).height as usize;
         let viewport_width = outer_block.inner(area).width;
+        let mut total_height = 0;
+        let mut max_scroll_offset = 0;
+        let mut scroll_offset = 0;
 
-        if configuration_log.render_memo_dirty
-            || !configuration_log
-                .render_memo_cache
-                .contains_key(&viewport_width)
-        {
-            let mut tmp_height_log = vec![];
-            for req in &configuration_log.requests {
-                let (size, _) = if short {
-                    req.paragraph_short()
+        let mut update_needed = true;
+
+        let mut height_log = configuration_log
+            .get_render_memo_for_width(viewport_width)
+            .to_vec();
+
+        'outer: while update_needed {
+            update_needed = false;
+
+            total_height = height_log.iter().sum();
+            max_scroll_offset = total_height.saturating_sub(viewport_height);
+
+            self.configuration_scroll.last_max_position = max_scroll_offset;
+
+            if self.configuration_scroll.follow {
+                self.configuration_scroll.position = max_scroll_offset;
+            }
+            scroll_offset = max_scroll_offset - self.configuration_scroll.position;
+
+            let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+                get_areas_to_render_from_scroll_position(
+                    outer_block.inner(area),
+                    scroll_offset,
+                    &height_log,
+                );
+
+            if let Some((index, area)) = partial_draw_top {
+                let req = &configuration_log.requests[index];
+                let (height, para) = self.get_representation_of_configuration_message(&req, short);
+
+                if height != height_log[index] {
+                    height_log[index] = height;
+                    update_needed = true;
                 } else {
-                    req.paragraph()
-                };
-                let size = size + 2;
-                tmp_height_log.push(size);
+                    let buffer_area =
+                        Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+                    let mut buffer = Buffer::empty(buffer_area);
+
+                    para.render(buffer_area, &mut buffer);
+
+                    let visible_content = buffer
+                        .content
+                        .into_iter()
+                        .skip(area.width as usize * (height - area.height as usize))
+                        .take(area.area() as usize);
+                    for (i, cell) in visible_content.enumerate() {
+                        let x = i as u16 % area.width;
+                        let y = i as u16 / area.width;
+                        frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+                    }
+                }
             }
-            configuration_log
-                .render_memo_cache
-                .insert(viewport_width, tmp_height_log);
-            configuration_log.render_memo_dirty = false;
-        }
-        let height_log = configuration_log
-            .render_memo_cache
-            .get(&viewport_width)
-            .unwrap();
-        // let mut height_log = vec![];
-        // for req in &configuration_log.requests {
-        //     let (size, _) = if short {
-        //         req.paragraph_short()
-        //     } else {
-        //         req.paragraph()
-        //     };
-        //     let size = size + 2;
-        //     height_log.push(size);
-        // }
 
-        let total_height: usize = height_log.iter().sum();
-        let max_scroll_offset = total_height.saturating_sub(viewport_height);
-
-        self.configuration_scroll.last_max_position = max_scroll_offset;
-
-        if self.configuration_scroll.follow {
-            self.configuration_scroll.position = max_scroll_offset;
-        }
-        let scroll_offset = max_scroll_offset - self.configuration_scroll.position;
-
-        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
-            get_areas_to_render_from_scroll_position(
-                outer_block.inner(area),
-                scroll_offset,
-                height_log,
-            );
-
-        if let Some((index, area)) = partial_draw_top {
-            let req = &configuration_log.requests[index];
-            let (height, para) = self.get_representation_of_configuration_message(req, short);
-
-            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-            let mut buffer = Buffer::empty(buffer_area);
-
-            para.render(buffer_area, &mut buffer);
-
-            let visible_content = buffer
-                .content
-                .into_iter()
-                .skip(area.width as usize * (height - area.height as usize))
-                .take(area.area() as usize);
-            for (i, cell) in visible_content.enumerate() {
-                let x = i as u16 % area.width;
-                let y = i as u16 / area.width;
-                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-            }
-        }
-
-        if let Some((index, area)) = partial_draw_bottom {
-            let req = &configuration_log.requests[index];
-            let (height, para) = self.get_representation_of_configuration_message(req, short);
-
-            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-            let mut buffer = Buffer::empty(buffer_area);
-
-            para.render(buffer_area, &mut buffer);
-
-            let visible_content = buffer.content.into_iter().take(area.area() as usize);
-            for (i, cell) in visible_content.enumerate() {
-                let x = i as u16 % area.width;
-                let y = i as u16 / area.width;
-                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-            }
-        }
-
-        if let Some((range, area)) = full_draw_middle {
-            let mut req_blocks = vec![];
-            let mut constrains = vec![];
-            for req in &configuration_log.requests[range] {
+            if let Some((index, area)) = partial_draw_bottom {
+                let req = &configuration_log.requests[index];
                 let (height, para) = self.get_representation_of_configuration_message(req, short);
-                req_blocks.push(para);
-                constrains.push(Constraint::Length(height.try_into().unwrap()));
+
+                if height != height_log[index] {
+                    height_log[index] = height;
+                    update_needed = true;
+                } else {
+                    let buffer_area =
+                        Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+                    let mut buffer = Buffer::empty(buffer_area);
+
+                    para.render(buffer_area, &mut buffer);
+
+                    let visible_content = buffer.content.into_iter().take(area.area() as usize);
+                    for (i, cell) in visible_content.enumerate() {
+                        let x = i as u16 % area.width;
+                        let y = i as u16 / area.width;
+                        frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+                    }
+                }
             }
 
-            let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
-            for (a, req_b) in zip(areas, req_blocks) {
-                req_b.render(a, frame.buffer_mut());
+            if let Some((range, area)) = full_draw_middle {
+                let mut req_blocks = vec![];
+                let mut constrains = vec![];
+                for index in range {
+                    let req = &configuration_log.requests[index];
+                    let (height, para) =
+                        self.get_representation_of_configuration_message(req, short);
+
+                    if height != height_log[index] {
+                        height_log[index] = height;
+                        update_needed = true;
+                        continue 'outer;
+                    }
+
+                    req_blocks.push(para);
+                    constrains.push(Constraint::Length(height.try_into().unwrap()));
+                }
+
+                let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
+                for (a, req_b) in zip(areas, req_blocks) {
+                    req_b.render(a, frame.buffer_mut());
+                }
             }
         }
+
+        // Update the cache
+        configuration_log
+            .render_memo_cache
+            .insert(viewport_width, height_log);
 
         frame.render_widget(&outer_block, area);
 

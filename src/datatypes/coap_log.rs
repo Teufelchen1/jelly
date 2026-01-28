@@ -57,6 +57,18 @@ impl CoapLog {
         }
         result
     }
+
+    pub fn get_render_memo_for_width(&mut self, width: u16) -> &Vec<usize> {
+        if !self.render_memo_cache.contains_key(&width) {
+            let tmp_height_list = vec![1; self.requests.len()];
+            self.render_memo_cache.insert(width, tmp_height_list);
+        }
+        let list = self.render_memo_cache.get_mut(&width).unwrap();
+        for _ in 0..self.requests.len() - list.len() {
+            list.push(1);
+        }
+        list
+    }
 }
 
 pub struct Request {
