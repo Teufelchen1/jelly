@@ -21,6 +21,7 @@ pub use ui_state::SelectedTab;
 pub use ui_state::UiState;
 
 mod render;
+mod scrolling;
 mod ui_state;
 
 fn terminal_thread(sender: &Sender<Event>) {
@@ -156,7 +157,6 @@ pub fn event_loop_tui(
                 hardware_event_sender
                     .send(Event::SendConfiguration(c))
                     .unwrap();
-
                 ui_state.get_dirty_from_tab(SelectedTab::Configuration);
                 ui_state.get_dirty_from_tab(SelectedTab::Overview);
             }
