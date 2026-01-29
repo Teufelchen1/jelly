@@ -25,7 +25,8 @@ mod handler;
 pub struct App {
     connected: bool,
     event_sender: Sender<Event>,
-    configuration_log: CoapLog,
+    // TODO: Remove pub
+    pub configuration_log: CoapLog,
     configuration_packets: Vec<Packet>,
     diagnostic_log: DiagnosticLog,
     packet_log: PacketLog,
@@ -146,9 +147,9 @@ impl App {
             .unwrap();
     }
 
-    pub fn draw(&self, ui_state: &mut UiState, frame: &mut Frame) {
+    pub fn draw(&mut self, ui_state: &mut UiState, frame: &mut Frame) {
         let logs = (
-            &self.configuration_log,
+            &mut self.configuration_log,
             &self.diagnostic_log,
             &self.overall_log,
             &self.packet_log,

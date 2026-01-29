@@ -9,10 +9,13 @@ use coap_lite::CoapResponse;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
 use coap_lite::Packet;
+use ratatui::layout::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 pub fn token_to_u64(token: &[u8]) -> u64 {
@@ -68,7 +71,7 @@ impl Request {
             .push(Response::new(CoapResponse { message: response }));
     }
 
-    pub fn get_request_title(&self) -> String {
+    fn get_request_title(&self) -> String {
         let mut out = String::new();
         let dt: DateTime<Utc> = self.time.into();
         _ = write!(out, "[{}]", dt.format("%H:%M:%S%.3f"));
@@ -101,7 +104,7 @@ impl Request {
         out
     }
 
-    pub fn get_request_title_short(&self) -> String {
+    fn get_request_title_short(&self) -> String {
         let mut out = String::new();
         match self.req.message.header.code {
             MessageClass::Empty => _ = write!(out, "Empty"),
@@ -122,7 +125,7 @@ impl Request {
         out
     }
 
-    pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
+    fn paragraph(&self) -> (usize, Paragraph<'_>) {
         if self.res.is_empty() {
             (1, Paragraph::new("Awaiting response"))
         } else {
@@ -143,7 +146,7 @@ impl Request {
         }
     }
 
-    pub fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
+    fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
         if self.res.is_empty() {
             (1, Paragraph::new("Awaiting response"))
         } else {
@@ -160,6 +163,24 @@ impl Request {
             let height = text.lines.len();
             (height, Paragraph::new(text))
         }
+    }
+
+    pub fn render(&self, short: bool, style: Style) -> (usize, Paragraph<'_>) {
+        let block = Block::new()
+            .borders(Borders::BOTTOM)
+            .style(style)
+            .title_alignment(Alignment::Left);
+
+        let (height, para) = if short {
+            let block = block.title(vec![Span::from(self.get_request_title_short())]);
+            let (height, para) = self.paragraph_short();
+            (height, para.block(block))
+        } else {
+            let block = block.title(vec![Span::from(self.get_request_title())]);
+            let (height, para) = self.paragraph();
+            (height, para.block(block))
+        };
+        (height + 2, para)
     }
 }
 
