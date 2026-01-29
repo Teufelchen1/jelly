@@ -1,16 +1,241 @@
+use std::collections::HashMap;
+use std::iter::zip;
 use std::ops::Range;
 
+use ratatui::Frame;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Constraint;
+use ratatui::layout::Layout;
+use ratatui::layout::Margin;
 use ratatui::layout::Rect;
+use ratatui::widgets::Scrollbar;
+use ratatui::widgets::ScrollbarState;
+use ratatui::widgets::Widget;
 
 type IndexInHeightLog = usize;
 type PartialTopItem = Option<(IndexInHeightLog, Rect)>;
 type FullItems = Option<(Range<IndexInHeightLog>, Rect)>;
 type PartialBottomItem = Option<(IndexInHeightLog, Rect)>;
 
+pub struct ScrollState {
+    pub last_max_position: usize,
+    pub position: usize,
+    pub follow: bool,
+    render_memo_cache: HashMap<u16, Vec<usize>>,
+}
+
+impl ScrollState {
+    pub fn new() -> Self {
+        Self {
+            last_max_position: 0,
+            position: 0,
+            follow: true,
+            render_memo_cache: HashMap::new(),
+        }
+    }
+
+    pub const fn scroll_down(&mut self) -> bool {
+        let value_change = self.position < self.last_max_position;
+        if value_change {
+            self.position = self.position.saturating_add(1);
+        }
+        // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
+        self.follow = self.position == self.last_max_position;
+
+        value_change
+    }
+
+    pub const fn scroll_up(&mut self) -> bool {
+        self.follow = false;
+
+        // Can't scroll up when already on top
+        let value_change = self.position > 0;
+        self.position = self.position.saturating_sub(1);
+
+        value_change
+    }
+
+    fn get_render_memo_for_width(&mut self, width: u16, num_elements: usize) -> &Vec<usize> {
+        let list = self.render_memo_cache.entry(width).or_insert_with(|| {
+            let tmp_height_list = vec![1; num_elements];
+            tmp_height_list
+        });
+        for _ in 0..num_elements - list.len() {
+            list.push(1);
+        }
+        list
+    }
+
+    fn render_scrollbar(
+        frame: &mut Frame,
+        area: Rect,
+        scroll_position: usize,
+        max_scroll_offset: usize,
+    ) {
+        let scrollbar = Scrollbar::default()
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+        let mut scrollbar_state =
+            ScrollbarState::new(max_scroll_offset).position(max_scroll_offset - scroll_position);
+        frame.render_stateful_widget(
+            scrollbar,
+            area.outer(Margin {
+                vertical: 0,
+                horizontal: 1,
+            }),
+            &mut scrollbar_state,
+        );
+    }
+
+    pub fn render<'a, Element, ElementWidget, F>(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        elements: &'a [Element],
+        render_element: F,
+    ) where
+        ElementWidget: Widget,
+        F: Fn(&'a Element) -> (usize, ElementWidget),
+    {
+        let viewport_height = area.height as usize;
+        let viewport_width = area.width;
+
+        let mut height_log = self
+            .get_render_memo_for_width(viewport_width, elements.len())
+            .clone();
+
+        loop {
+            let total_height: usize = height_log.iter().sum();
+            let max_scroll_offset = total_height.saturating_sub(viewport_height);
+
+            if self.follow {
+                self.position = max_scroll_offset;
+            }
+
+            let scroll_offset = max_scroll_offset.saturating_sub(self.position);
+
+            let result = try_render_scroll_state(
+                frame,
+                area,
+                scroll_offset,
+                &mut height_log,
+                elements,
+                &render_element,
+            );
+
+            if result.is_ok() {
+                // Update the cache
+                self.render_memo_cache.insert(viewport_width, height_log);
+
+                self.last_max_position = max_scroll_offset;
+
+                // More content than fits on the screen? Show scrollbar
+                if total_height > viewport_height {
+                    Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
+                }
+                break;
+            }
+        }
+    }
+}
+
+fn try_render_scroll_state<'a, Element, ElementWidget, F>(
+    frame: &mut Frame,
+    draw_area: Rect,
+    scroll_positon: usize,
+    height_log: &mut [usize],
+    elements: &'a [Element],
+    render_element: F,
+) -> Result<(), ()>
+where
+    ElementWidget: Widget,
+    F: Fn(&'a Element) -> (usize, ElementWidget),
+{
+    let mut update_needed = false;
+    let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
+        get_areas_to_render_from_scroll_position(draw_area, scroll_positon, height_log);
+
+    if let Some((index, area)) = partial_draw_top {
+        let req = &elements[index];
+        let (height, widget) = render_element(req);
+
+        if height == height_log[index] {
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+            let mut buffer = Buffer::empty(buffer_area);
+
+            widget.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer
+                .content
+                .into_iter()
+                .skip(area.width as usize * (height - area.height as usize))
+                .take(area.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area.width;
+                let y = i as u16 / area.width;
+                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+            }
+        } else {
+            height_log[index] = height;
+            update_needed = true;
+        }
+    }
+
+    if let Some((index, area)) = partial_draw_bottom {
+        let req = &elements[index];
+        let (height, widget) = render_element(req);
+
+        if height == height_log[index] {
+            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
+            let mut buffer = Buffer::empty(buffer_area);
+
+            widget.render(buffer_area, &mut buffer);
+
+            let visible_content = buffer.content.into_iter().take(area.area() as usize);
+            for (i, cell) in visible_content.enumerate() {
+                let x = i as u16 % area.width;
+                let y = i as u16 / area.width;
+                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
+            }
+        } else {
+            height_log[index] = height;
+            update_needed = true;
+        }
+    }
+
+    if let Some((range, area)) = full_draw_middle {
+        let mut widget_blocks = vec![];
+        let mut constrains = vec![];
+        for index in range {
+            let req = &elements[index];
+            let (height, widget) = render_element(req);
+
+            if height != height_log[index] {
+                height_log[index] = height;
+                update_needed = true;
+            }
+
+            if !update_needed {
+                widget_blocks.push(widget);
+                constrains.push(Constraint::Length(height.try_into().unwrap()));
+            }
+        }
+
+        if !update_needed {
+            let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
+            for (a, widget) in zip(areas, widget_blocks) {
+                widget.render(a, frame.buffer_mut());
+            }
+        }
+    }
+
+    if update_needed { Err(()) } else { Ok(()) }
+}
+
 /// Scrolling for arbitrary sized items.
 ///
 /// Given an array of your items height, a scroll postion and the area where the items
-/// will (later) be rendered into, returns which items to will be shown and where they
+/// will (later) be rendered into, returns which items will be shown and where they
 /// need to be rendered.  
 pub fn get_areas_to_render_from_scroll_position(
     area: Rect,

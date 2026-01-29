@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -10,10 +9,13 @@ use coap_lite::CoapResponse;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
 use coap_lite::Packet;
+use ratatui::layout::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 pub fn token_to_u64(token: &[u8]) -> u64 {
@@ -30,44 +32,19 @@ pub fn token_to_u64(token: &[u8]) -> u64 {
 
 pub struct CoapLog {
     pub requests: Vec<Request>,
-    pub render_memo_cache: HashMap<u16, Vec<usize>>,
-    pub render_memo_dirty: bool,
-    pub render_memo_last_width: u16,
 }
 
 impl CoapLog {
-    pub fn new() -> Self {
-        Self {
-            requests: vec![],
-            render_memo_cache: HashMap::new(),
-            render_memo_dirty: true,
-            render_memo_last_width: u16::MAX,
-        }
+    pub const fn new() -> Self {
+        Self { requests: vec![] }
     }
 
     pub fn push(&mut self, request: CoapRequest<String>) {
         self.requests.push(Request::new(request));
-        self.render_memo_dirty = true;
     }
 
     pub fn get_request_by_token(&mut self, token: u64) -> Option<&mut Request> {
-        let result = self.requests.iter_mut().find(|req| req.token == token);
-        if result.is_some() {
-            self.render_memo_dirty = true;
-        }
-        result
-    }
-
-    pub fn get_render_memo_for_width(&mut self, width: u16) -> &Vec<usize> {
-        if !self.render_memo_cache.contains_key(&width) {
-            let tmp_height_list = vec![1; self.requests.len()];
-            self.render_memo_cache.insert(width, tmp_height_list);
-        }
-        let list = self.render_memo_cache.get_mut(&width).unwrap();
-        for _ in 0..self.requests.len() - list.len() {
-            list.push(1);
-        }
-        list
+        self.requests.iter_mut().find(|req| req.token == token)
     }
 }
 
@@ -94,7 +71,7 @@ impl Request {
             .push(Response::new(CoapResponse { message: response }));
     }
 
-    pub fn get_request_title(&self) -> String {
+    fn get_request_title(&self) -> String {
         let mut out = String::new();
         let dt: DateTime<Utc> = self.time.into();
         _ = write!(out, "[{}]", dt.format("%H:%M:%S%.3f"));
@@ -127,7 +104,7 @@ impl Request {
         out
     }
 
-    pub fn get_request_title_short(&self) -> String {
+    fn get_request_title_short(&self) -> String {
         let mut out = String::new();
         match self.req.message.header.code {
             MessageClass::Empty => _ = write!(out, "Empty"),
@@ -148,7 +125,7 @@ impl Request {
         out
     }
 
-    pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
+    fn paragraph(&self) -> (usize, Paragraph<'_>) {
         if self.res.is_empty() {
             (1, Paragraph::new("Awaiting response"))
         } else {
@@ -169,7 +146,7 @@ impl Request {
         }
     }
 
-    pub fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
+    fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
         if self.res.is_empty() {
             (1, Paragraph::new("Awaiting response"))
         } else {
@@ -186,6 +163,24 @@ impl Request {
             let height = text.lines.len();
             (height, Paragraph::new(text))
         }
+    }
+
+    pub fn render(&self, short: bool, style: Style) -> (usize, Paragraph<'_>) {
+        let block = Block::new()
+            .borders(Borders::BOTTOM)
+            .style(style)
+            .title_alignment(Alignment::Left);
+
+        let (height, para) = if short {
+            let block = block.title(vec![Span::from(self.get_request_title_short())]);
+            let (height, para) = self.paragraph_short();
+            (height, para.block(block))
+        } else {
+            let block = block.title(vec![Span::from(self.get_request_title())]);
+            let (height, para) = self.paragraph();
+            (height, para.block(block))
+        };
+        (height + 2, para)
     }
 }
 

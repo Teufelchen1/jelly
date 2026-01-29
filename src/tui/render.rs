@@ -1,9 +1,7 @@
 use std::cmp::min;
 use std::env;
-use std::iter::zip;
 
 use ratatui::Frame;
-use ratatui::buffer::Buffer;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -21,13 +19,10 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::Scrollbar;
 use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::Tabs;
-use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
 
 use super::UiState;
-use super::scrolling::get_areas_to_render_from_scroll_position;
 use crate::datatypes::coap_log::CoapLog;
-use crate::datatypes::coap_log::Request;
 use crate::datatypes::diagnostic_log::DiagnosticLog;
 use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobLog;
@@ -162,13 +157,13 @@ impl UiState {
         }
     }
 
-    fn get_representation_of_network<'a>(
-        &self,
-        packet: &'a PacketDirection,
-    ) -> (usize, Paragraph<'a>) {
+    fn get_representation_of_network(
+        style: Style,
+        packet: &PacketDirection,
+    ) -> (usize, Paragraph<'_>) {
         let block = Block::new()
             .borders(Borders::BOTTOM)
-            .style(self.border_style())
+            .style(style)
             .title_alignment(Alignment::Left)
             .title(packet.get_title());
         let (height, para) = packet.paragraph();
@@ -182,97 +177,19 @@ impl UiState {
             .title(vec![Span::from("Network packets")])
             .title_alignment(Alignment::Left);
 
-        let viewport_height = outer_block.inner(area).height as usize;
-
-        let mut height_log = vec![];
-        for packet in net_log.log() {
-            let (size, _) = packet.paragraph();
-            let size = size + 2;
-            height_log.push(size);
-        }
-
-        let total_height: usize = height_log.iter().sum();
-        let max_scroll_offset = total_height.saturating_sub(viewport_height);
-
-        self.net_scroll.last_max_position = max_scroll_offset;
-
-        if self.net_scroll.follow {
-            self.net_scroll.position = max_scroll_offset;
-        }
-        let scroll_offset = max_scroll_offset - self.net_scroll.position;
-
-        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
-            get_areas_to_render_from_scroll_position(
-                outer_block.inner(area),
-                scroll_offset,
-                &height_log,
-            );
-
-        if let Some((index, area)) = partial_draw_top {
-            let packet = &net_log.log()[index];
-            let (height, para) = self.get_representation_of_network(packet);
-
-            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-            let mut buffer = Buffer::empty(buffer_area);
-
-            para.render(buffer_area, &mut buffer);
-
-            let visible_content = buffer
-                .content
-                .into_iter()
-                .skip(area.width as usize * (height - area.height as usize))
-                .take(area.area() as usize);
-            for (i, cell) in visible_content.enumerate() {
-                let x = i as u16 % area.width;
-                let y = i as u16 / area.width;
-                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-            }
-        }
-
-        if let Some((index, area)) = partial_draw_bottom {
-            let packet = &net_log.log()[index];
-            let (height, para) = self.get_representation_of_network(packet);
-
-            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-            let mut buffer = Buffer::empty(buffer_area);
-
-            para.render(buffer_area, &mut buffer);
-
-            let visible_content = buffer.content.into_iter().take(area.area() as usize);
-            for (i, cell) in visible_content.enumerate() {
-                let x = i as u16 % area.width;
-                let y = i as u16 / area.width;
-                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-            }
-        }
-
-        if let Some((range, area)) = full_draw_middle {
-            let mut job_blocks = vec![];
-            let mut constrains = vec![];
-            for packet in &net_log.log()[range] {
-                let (height, para) = self.get_representation_of_network(packet);
-                job_blocks.push(para);
-                constrains.push(Constraint::Length(height.try_into().unwrap()));
-            }
-
-            let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
-            for (a, packet) in zip(areas, job_blocks) {
-                packet.render(a, frame.buffer_mut());
-            }
-        }
+        let border_style = self.border_style();
 
         frame.render_widget(&outer_block, area);
-
-        // More content than fits on the screen? Show scrollbar
-        if total_height > viewport_height {
-            Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
-        }
+        self.net_scroll
+            .render(frame, outer_block.inner(area), net_log.log(), |packet| {
+                Self::get_representation_of_network(border_style, packet)
+            });
     }
 
-    fn get_representation_of_job<'a>(&self, job: &'a Job) -> (usize, Paragraph<'a>) {
+    fn get_representation_of_job(style: Style, job: &Job) -> (usize, Paragraph<'_>) {
         let block = Block::new()
             .borders(Borders::BOTTOM)
-            .style(self.border_style())
+            .style(style)
             .title_alignment(Alignment::Left)
             .title(job.get_title());
         let (height, para) = job.paragraph();
@@ -286,120 +203,20 @@ impl UiState {
             .title(vec![Span::from("Commands")])
             .title_alignment(Alignment::Left);
 
-        let viewport_height = outer_block.inner(area).height as usize;
-
-        let mut height_log = vec![];
-        for job in &job_log.jobs {
-            let (size, _) = job.paragraph();
-            let size = size + 2;
-            height_log.push(size);
-        }
-
-        let total_height: usize = height_log.iter().sum();
-        let max_scroll_offset = total_height.saturating_sub(viewport_height);
-
-        self.command_scroll.last_max_position = max_scroll_offset;
-
-        if self.command_scroll.follow {
-            self.command_scroll.position = max_scroll_offset;
-        }
-        let scroll_offset = max_scroll_offset - self.command_scroll.position;
-
-        let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
-            get_areas_to_render_from_scroll_position(
-                outer_block.inner(area),
-                scroll_offset,
-                &height_log,
-            );
-
-        if let Some((index, area)) = partial_draw_top {
-            let job = &job_log.jobs[index];
-            let (height, para) = self.get_representation_of_job(job);
-
-            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-            let mut buffer = Buffer::empty(buffer_area);
-
-            para.render(buffer_area, &mut buffer);
-
-            let visible_content = buffer
-                .content
-                .into_iter()
-                .skip(area.width as usize * (height - area.height as usize))
-                .take(area.area() as usize);
-            for (i, cell) in visible_content.enumerate() {
-                let x = i as u16 % area.width;
-                let y = i as u16 / area.width;
-                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-            }
-        }
-
-        if let Some((index, area)) = partial_draw_bottom {
-            let job = &job_log.jobs[index];
-            let (height, para) = self.get_representation_of_job(job);
-
-            let buffer_area = Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-            let mut buffer = Buffer::empty(buffer_area);
-
-            para.render(buffer_area, &mut buffer);
-
-            let visible_content = buffer.content.into_iter().take(area.area() as usize);
-            for (i, cell) in visible_content.enumerate() {
-                let x = i as u16 % area.width;
-                let y = i as u16 / area.width;
-                frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-            }
-        }
-
-        if let Some((range, area)) = full_draw_middle {
-            let mut job_blocks = vec![];
-            let mut constrains = vec![];
-            for job in &job_log.jobs[range] {
-                let (height, para) = self.get_representation_of_job(job);
-                job_blocks.push(para);
-                constrains.push(Constraint::Length(height.try_into().unwrap()));
-            }
-
-            let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
-            for (a, job) in zip(areas, job_blocks) {
-                job.render(a, frame.buffer_mut());
-            }
-        }
+        let border_style = self.border_style();
 
         frame.render_widget(&outer_block, area);
-
-        // More content than fits on the screen? Show scrollbar
-        if total_height > viewport_height {
-            Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
-        }
-    }
-
-    fn get_representation_of_configuration_message<'a>(
-        &self,
-        req: &'a Request,
-        short: bool,
-    ) -> (usize, Paragraph<'a>) {
-        let block = Block::new()
-            .borders(Borders::BOTTOM)
-            .style(self.border_style())
-            .title_alignment(Alignment::Left);
-
-        let (height, para) = if short {
-            let block = block.title(vec![Span::from(req.get_request_title_short())]);
-            let (height, para) = req.paragraph_short();
-            (height, para.block(block))
-        } else {
-            let block = block.title(vec![Span::from(req.get_request_title())]);
-            let (height, para) = req.paragraph();
-            (height, para.block(block))
-        };
-        (height + 2, para)
+        self.command_scroll
+            .render(frame, outer_block.inner(area), &job_log.jobs, |job| {
+                Self::get_representation_of_job(border_style, job)
+            });
     }
 
     fn render_configuration_messages(
         &mut self,
         frame: &mut Frame,
         area: Rect,
-        configuration_log: &mut CoapLog,
+        configuration_log: &CoapLog,
         short: bool,
     ) {
         let outer_block = Block::bordered()
@@ -407,124 +224,15 @@ impl UiState {
             .title(vec![Span::from("CoAP Req & Resp")])
             .title_alignment(Alignment::Left);
 
-        let viewport_height = outer_block.inner(area).height as usize;
-        let viewport_width = outer_block.inner(area).width;
-        let mut total_height = 0;
-        let mut max_scroll_offset = 0;
-        let mut scroll_offset = 0;
-
-        let mut update_needed = true;
-
-        let mut height_log = configuration_log
-            .get_render_memo_for_width(viewport_width)
-            .to_vec();
-
-        'outer: while update_needed {
-            update_needed = false;
-
-            total_height = height_log.iter().sum();
-            max_scroll_offset = total_height.saturating_sub(viewport_height);
-
-            self.configuration_scroll.last_max_position = max_scroll_offset;
-
-            if self.configuration_scroll.follow {
-                self.configuration_scroll.position = max_scroll_offset;
-            }
-            scroll_offset = max_scroll_offset - self.configuration_scroll.position;
-
-            let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
-                get_areas_to_render_from_scroll_position(
-                    outer_block.inner(area),
-                    scroll_offset,
-                    &height_log,
-                );
-
-            if let Some((index, area)) = partial_draw_top {
-                let req = &configuration_log.requests[index];
-                let (height, para) = self.get_representation_of_configuration_message(&req, short);
-
-                if height != height_log[index] {
-                    height_log[index] = height;
-                    update_needed = true;
-                } else {
-                    let buffer_area =
-                        Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-                    let mut buffer = Buffer::empty(buffer_area);
-
-                    para.render(buffer_area, &mut buffer);
-
-                    let visible_content = buffer
-                        .content
-                        .into_iter()
-                        .skip(area.width as usize * (height - area.height as usize))
-                        .take(area.area() as usize);
-                    for (i, cell) in visible_content.enumerate() {
-                        let x = i as u16 % area.width;
-                        let y = i as u16 / area.width;
-                        frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-                    }
-                }
-            }
-
-            if let Some((index, area)) = partial_draw_bottom {
-                let req = &configuration_log.requests[index];
-                let (height, para) = self.get_representation_of_configuration_message(req, short);
-
-                if height != height_log[index] {
-                    height_log[index] = height;
-                    update_needed = true;
-                } else {
-                    let buffer_area =
-                        Rect::new(0, 0, area.width, height.try_into().unwrap_or(u16::MAX));
-                    let mut buffer = Buffer::empty(buffer_area);
-
-                    para.render(buffer_area, &mut buffer);
-
-                    let visible_content = buffer.content.into_iter().take(area.area() as usize);
-                    for (i, cell) in visible_content.enumerate() {
-                        let x = i as u16 % area.width;
-                        let y = i as u16 / area.width;
-                        frame.buffer_mut()[(area.x + x, area.y + y)] = cell;
-                    }
-                }
-            }
-
-            if let Some((range, area)) = full_draw_middle {
-                let mut req_blocks = vec![];
-                let mut constrains = vec![];
-                for index in range {
-                    let req = &configuration_log.requests[index];
-                    let (height, para) =
-                        self.get_representation_of_configuration_message(req, short);
-
-                    if height != height_log[index] {
-                        height_log[index] = height;
-                        update_needed = true;
-                        continue 'outer;
-                    }
-
-                    req_blocks.push(para);
-                    constrains.push(Constraint::Length(height.try_into().unwrap()));
-                }
-
-                let areas: Vec<Rect> = Layout::vertical(constrains).split(area).to_vec();
-                for (a, req_b) in zip(areas, req_blocks) {
-                    req_b.render(a, frame.buffer_mut());
-                }
-            }
-        }
-
-        // Update the cache
-        configuration_log
-            .render_memo_cache
-            .insert(viewport_width, height_log);
+        let border_style = self.border_style();
 
         frame.render_widget(&outer_block, area);
-
-        // More content than fits on the screen? Show scrollbar
-        if total_height > viewport_height {
-            Self::render_scrollbar(frame, area, scroll_offset, max_scroll_offset);
-        }
+        self.configuration_scroll.render(
+            frame,
+            outer_block.inner(area),
+            &configuration_log.requests,
+            |req| req.render(short, border_style),
+        );
     }
 
     fn render_user_input(
@@ -722,7 +430,7 @@ impl UiState {
         frame: &mut Frame,
         main_area: Rect,
         user_input_manager: &UserInputManager,
-        configuration_log: &mut CoapLog,
+        configuration_log: &CoapLog,
         overall_log: &DiagnosticLog,
     ) {
         let main_chunks = Layout::default()

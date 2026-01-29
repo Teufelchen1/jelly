@@ -8,6 +8,8 @@ use terminal_colorsaurus::QueryOptions;
 use terminal_colorsaurus::ThemeMode;
 use terminal_colorsaurus::theme_mode;
 
+use super::scrolling::ScrollState;
+
 #[derive(Default, Clone, Copy)]
 pub enum SelectedTab {
     #[default]
@@ -17,43 +19,6 @@ pub enum SelectedTab {
     Commands,
     Net,
     Help,
-}
-
-pub struct ScrollState {
-    pub last_max_position: usize,
-    pub position: usize,
-    pub follow: bool,
-}
-
-impl ScrollState {
-    const fn new() -> Self {
-        Self {
-            last_max_position: 0,
-            position: 0,
-            follow: true,
-        }
-    }
-
-    const fn scroll_down(&mut self) -> bool {
-        let value_change = self.position < self.last_max_position;
-        if value_change {
-            self.position = self.position.saturating_add(1);
-        }
-        // When scrolled all the way to the bottom, auto follow the feed ("sticky behavior")
-        self.follow = self.position == self.last_max_position;
-
-        value_change
-    }
-
-    const fn scroll_up(&mut self) -> bool {
-        self.follow = false;
-
-        // Can't scroll up when already on top
-        let value_change = self.position > 0;
-        self.position = self.position.saturating_sub(1);
-
-        value_change
-    }
 }
 
 struct ColorPalette {
