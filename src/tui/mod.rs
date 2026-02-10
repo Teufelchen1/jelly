@@ -1,4 +1,3 @@
-use std::io::Stdout;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
@@ -75,7 +74,7 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 
     // The UiState queries the terminal on creation for its colour theme
     // So we create it here early, before messing with the terminal ourselves
-    let ui_state = UiState::new(&args.color_theme);
+    let mut ui_state = UiState::new(&args.color_theme);
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
@@ -98,104 +97,114 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 
     create_terminal_thread(event_sender.clone());
 
-    let app = App::new(event_sender);
+    let mut app = App::new(event_sender);
 
-    event_loop_tui(
-        app,
-        ui_state,
-        &event_receiver,
-        &slipmux_event_sender,
-        network_event_sender.as_ref(),
-        terminal,
-    );
+    terminal
+        .draw(|frame| app.draw(&mut ui_state, frame))
+        .unwrap();
+    loop {
+        match process_next_event(
+            &mut app,
+            &mut ui_state,
+            &event_receiver,
+            &slipmux_event_sender,
+            network_event_sender.as_ref(),
+        ) {
+            ProcessEventResult::NothingToDo => continue,
+            ProcessEventResult::Ok => {
+                if ui_state.is_dirty() {
+                    terminal
+                        .draw(|frame| app.draw(&mut ui_state, frame))
+                        .unwrap();
+                    ui_state.wash();
+                }
+            }
+            ProcessEventResult::Terminate => break,
+        }
+    }
 
     reset_terminal();
 }
 
-pub fn event_loop_tui(
-    mut app: App,
-    mut ui_state: UiState,
+pub enum ProcessEventResult {
+    NothingToDo,
+    Ok,
+    Terminate,
+}
+
+pub fn process_next_event(
+    app: &mut App,
+    ui_state: &mut UiState,
     event_channel: &Receiver<Event>,
     hardware_event_sender: &Sender<Event>,
     network_event_sender: Option<&Sender<Event>>,
-    mut terminal: Terminal<CrosstermBackend<Stdout>>,
-) {
-    terminal
-        .draw(|frame| app.draw(&mut ui_state, frame))
-        .unwrap();
+) -> ProcessEventResult
+{
+    let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
+        Ok(event) => event,
+        Err(RecvTimeoutError::Timeout) => {
+            return ProcessEventResult::NothingToDo;
+        }
+        Err(RecvTimeoutError::Disconnected) => panic!(),
+    };
 
-    loop {
-        let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
-            Ok(event) => event,
-            Err(RecvTimeoutError::Timeout) => {
-                continue;
+    match event {
+        Event::Diagnostic(msg) => {
+            app.on_diagnostic_msg(&msg);
+            ui_state.get_dirty_from_tab(SelectedTab::Diagnostic);
+            ui_state.get_dirty_from_tab(SelectedTab::Overview);
+        }
+        Event::Configuration(data) => {
+            app.on_configuration_msg(Some(ui_state), &data);
+            ui_state.get_dirty_from_tab(SelectedTab::Configuration);
+            ui_state.get_dirty_from_tab(SelectedTab::Overview);
+        }
+        Event::Packet(packet) => {
+            app.on_packet(&packet);
+            if let Some(n_e_sender) = network_event_sender {
+                n_e_sender.send(Event::Packet(packet)).unwrap();
             }
-            Err(RecvTimeoutError::Disconnected) => panic!(),
-        };
-
-        match event {
-            Event::Diagnostic(msg) => {
-                app.on_diagnostic_msg(&msg);
-                ui_state.get_dirty_from_tab(SelectedTab::Diagnostic);
-                ui_state.get_dirty_from_tab(SelectedTab::Overview);
-            }
-            Event::Configuration(data) => {
-                app.on_configuration_msg(Some(&mut ui_state), &data);
-                ui_state.get_dirty_from_tab(SelectedTab::Configuration);
-                ui_state.get_dirty_from_tab(SelectedTab::Overview);
-            }
-            Event::Packet(packet) => {
-                app.on_packet(&packet);
-                if let Some(n_e_sender) = network_event_sender {
-                    n_e_sender.send(Event::Packet(packet)).unwrap();
-                }
-                ui_state.get_dirty_from_tab(SelectedTab::Net);
-            }
-            Event::SendDiagnostic(d) => hardware_event_sender
-                .send(Event::SendDiagnostic(d.to_string()))
-                .unwrap(),
-            Event::SendConfiguration(c) => {
-                hardware_event_sender
-                    .send(Event::SendConfiguration(c))
-                    .unwrap();
-                ui_state.get_dirty_from_tab(SelectedTab::Configuration);
-                ui_state.get_dirty_from_tab(SelectedTab::Overview);
-            }
-            Event::SendPacket(packet) => {
-                app.off_packet(&packet);
-                hardware_event_sender
-                    .send(Event::SendPacket(packet))
-                    .unwrap();
-                ui_state.get_dirty_from_tab(SelectedTab::Net);
-            }
-            Event::SerialConnect(tty_name) => {
-                app.on_connect();
-                ui_state.set_device_path(tty_name);
-            }
-            Event::SerialDisconnect => {
-                app.on_disconnect();
-                ui_state.clear_device_path();
-            }
-            Event::TerminalString(_msg) => (),
-            Event::TerminalKey(key) => {
-                if !app.on_key(Some(&mut ui_state), key) {
-                    break;
-                }
-            }
-            Event::TerminalMouse(mouse) => {
-                ui_state.on_mouse(mouse);
-            }
-            Event::TerminalResize | Event::TerminalEOF => ui_state.get_dirty(),
-            Event::NetworkConnect(interface_name) => {
-                ui_state.set_iface_name(interface_name);
+            ui_state.get_dirty_from_tab(SelectedTab::Net);
+        }
+        Event::SendDiagnostic(d) => hardware_event_sender
+            .send(Event::SendDiagnostic(d.to_string()))
+            .unwrap(),
+        Event::SendConfiguration(c) => {
+            hardware_event_sender
+                .send(Event::SendConfiguration(c))
+                .unwrap();
+            ui_state.get_dirty_from_tab(SelectedTab::Configuration);
+            ui_state.get_dirty_from_tab(SelectedTab::Overview);
+        }
+        Event::SendPacket(packet) => {
+            app.off_packet(&packet);
+            hardware_event_sender
+                .send(Event::SendPacket(packet))
+                .unwrap();
+            ui_state.get_dirty_from_tab(SelectedTab::Net);
+        }
+        Event::SerialConnect(tty_name) => {
+            app.on_connect();
+            ui_state.set_device_path(tty_name);
+        }
+        Event::SerialDisconnect => {
+            app.on_disconnect();
+            ui_state.clear_device_path();
+        }
+        Event::TerminalString(_msg) => (),
+        Event::TerminalKey(key) => {
+            if !app.on_key(Some(ui_state), key) {
+                return ProcessEventResult::Terminate;
             }
         }
-
-        if ui_state.is_dirty() {
-            terminal
-                .draw(|frame| app.draw(&mut ui_state, frame))
-                .unwrap();
-            ui_state.wash();
+        Event::TerminalMouse(mouse) => {
+            ui_state.on_mouse(mouse);
+        }
+        Event::TerminalResize | Event::TerminalEOF => ui_state.get_dirty(),
+        Event::NetworkConnect(interface_name) => {
+            ui_state.set_iface_name(interface_name);
         }
     }
+
+    ProcessEventResult::Ok
 }
