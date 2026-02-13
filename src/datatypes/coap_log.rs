@@ -9,10 +9,13 @@ use coap_lite::CoapResponse;
 use coap_lite::ContentFormat;
 use coap_lite::MessageClass;
 use coap_lite::Packet;
+use ratatui::layout::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 pub fn token_to_u64(token: &[u8]) -> u64 {
@@ -68,7 +71,7 @@ impl Request {
             .push(Response::new(CoapResponse { message: response }));
     }
 
-    pub fn get_request_title(&self) -> String {
+    fn get_request_title(&self) -> String {
         let mut out = String::new();
         let dt: DateTime<Utc> = self.time.into();
         _ = write!(out, "[{}]", dt.format("%H:%M:%S%.3f"));
@@ -101,7 +104,7 @@ impl Request {
         out
     }
 
-    pub fn get_request_title_short(&self) -> String {
+    fn get_request_title_short(&self) -> String {
         let mut out = String::new();
         match self.req.message.header.code {
             MessageClass::Empty => _ = write!(out, "Empty"),
@@ -122,44 +125,53 @@ impl Request {
         out
     }
 
-    pub fn paragraph(&self) -> (usize, Paragraph<'_>) {
+    fn get_content(&self, short: bool) -> Text<'_> {
         if self.res.is_empty() {
-            (1, Paragraph::new("Awaiting response"))
+            Text::from("Awaiting response")
         } else {
             let mut text = Text::default().reset_style();
             let mut header = Line::default();
-            let timestamp = self.res[0].get_timestamp();
-            let status = self.res[0].get_status();
+
             let payload = Text::from(self.res[0].get_payload());
 
-            header.push_span(timestamp);
-            header.push_span(status);
+            if short {
+                let status = self.res[0].get_status_short();
+                header.push_span(status);
+            } else {
+                let timestamp = self.res[0].get_timestamp();
+                header.push_span(timestamp);
+
+                let status = self.res[0].get_status();
+                header.push_span(status);
+            }
+
             header.push_span(Span::default().reset_style());
 
             text.push_line(header);
             text.extend(payload);
-            let height = text.lines.len();
-            (height, Paragraph::new(text))
+            text
         }
     }
 
-    pub fn paragraph_short(&self) -> (usize, Paragraph<'_>) {
-        if self.res.is_empty() {
-            (1, Paragraph::new("Awaiting response"))
+    pub fn render(&self, short: bool, style: Style) -> (usize, Paragraph<'_>) {
+        let block = Block::new()
+            .borders(Borders::BOTTOM)
+            .style(style)
+            .title_alignment(Alignment::Left);
+
+        let title = if short {
+            self.get_request_title_short()
         } else {
-            let mut text = Text::default().reset_style();
-            let mut header = Line::default();
-            let status = self.res[0].get_status_short();
-            let payload = Text::from(self.res[0].get_payload());
+            self.get_request_title()
+        };
 
-            header.push_span(status);
-            header.push_span(Span::default().reset_style());
+        let content = self.get_content(short);
 
-            text.push_line(header);
-            text.extend(payload);
-            let height = text.lines.len();
-            (height, Paragraph::new(text))
-        }
+        let block = block.title(title);
+        let height = content.lines.len();
+        let para = Paragraph::new(content).block(block);
+
+        (height + 2, para)
     }
 }
 

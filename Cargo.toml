@@ -13,6 +13,9 @@ repository = "https://github.com/teufelchen1/jelly"
 rust-version = "1.89"
 version = "0.1.1"
 
+[workspace]
+members = ["widget_scrolling"]
+
 [lints.rust]
 unsafe_code = "forbid"
 [lints.clippy]
@@ -44,6 +47,6 @@ minicbor = "2"
 serialport = { version = "4", default-features = false }
 slipmux = "0.3.2"
 terminal-colorsaurus = { version = "1.0.3", default-features = false }
-tui-widgets = { version = "0.7", default-features = false, features = ["scrollview"] }
 tun-rs = { version = "2.7.7", features = ["interruptible"] }
 pnet_packet = { version = "0.35", default-features = false }
+widget_scrolling = { path = "widget_scrolling/" }

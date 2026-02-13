@@ -156,7 +156,6 @@ pub fn event_loop_tui(
                 hardware_event_sender
                     .send(Event::SendConfiguration(c))
                     .unwrap();
-
                 ui_state.get_dirty_from_tab(SelectedTab::Configuration);
                 ui_state.get_dirty_from_tab(SelectedTab::Overview);
             }
@@ -184,7 +183,7 @@ pub fn event_loop_tui(
             Event::TerminalMouse(mouse) => {
                 ui_state.on_mouse(mouse);
             }
-            Event::TerminalResize | Event::TerminalEOF => (),
+            Event::TerminalResize | Event::TerminalEOF => ui_state.get_dirty(),
             Event::NetworkConnect(interface_name) => {
                 ui_state.set_iface_name(interface_name);
             }
