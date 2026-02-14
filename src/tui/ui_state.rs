@@ -2,12 +2,12 @@ use std::fmt::Write;
 
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
-use ratatui::style::Color;
 use ratatui::style::Style;
-use terminal_colorsaurus::QueryOptions;
-use terminal_colorsaurus::ThemeMode;
-use terminal_colorsaurus::theme_mode;
+
 use widget_scrolling::ScrollState;
+
+use super::ColorTheme;
+use super::color::ColorPalette;
 
 #[derive(Default, Clone, Copy)]
 pub enum SelectedTab {
@@ -18,37 +18,6 @@ pub enum SelectedTab {
     Commands,
     Net,
     Help,
-}
-
-struct ColorPalette {
-    border: Style,
-    tab_selected: Style,
-    downlight: Style,
-}
-
-impl ColorPalette {
-    const fn new_dark() -> Self {
-        Self {
-            border: Style::new().gray(),
-            tab_selected: Style::new().fg(Color::Black).bg(Color::White),
-            downlight: Style::new().dark_gray(),
-        }
-    }
-
-    fn new_light() -> Self {
-        Self {
-            border: Style::new().dark_gray(),
-            tab_selected: Style::new().fg(Color::White).bg(Color::Black),
-            downlight: Color::Indexed(240).into(),
-        }
-    }
-
-    fn from(theme: ThemeMode) -> Self {
-        match theme {
-            ThemeMode::Dark => Self::new_dark(),
-            ThemeMode::Light => Self::new_light(),
-        }
-    }
 }
 
 pub struct UiState {
@@ -69,7 +38,7 @@ pub struct UiState {
 }
 
 impl UiState {
-    pub fn new() -> Self {
+    pub fn new(color_theme: &ColorTheme) -> Self {
         Self {
             device_path: None,
             iface_name: None,
@@ -88,23 +57,26 @@ impl UiState {
             riot_board: "Unknown".to_owned(),
             riot_version: "Unknown".to_owned(),
 
-            theme: ColorPalette::from(
-                theme_mode(QueryOptions::default()).unwrap_or(ThemeMode::Dark),
-            ),
+            theme: ColorPalette::from(color_theme),
+
             dirty: true,
         }
     }
 
     pub const fn border_style(&self) -> Style {
-        self.theme.border
+        self.theme.border()
     }
 
     pub const fn selected_style(&self) -> Style {
-        self.theme.tab_selected
+        self.theme.tab_selected()
     }
 
     pub const fn downlight(&self) -> Style {
-        self.theme.downlight
+        self.theme.downlight()
+    }
+
+    pub const fn title_style(&self) -> Style {
+        self.theme.title()
     }
 
     pub fn set_command_help_list(&mut self, cmds: Vec<(String, String, String)>) {
