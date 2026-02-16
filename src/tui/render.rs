@@ -76,6 +76,7 @@ impl UiState {
 
         frame.render_widget(
             Tabs::new(tab_titles)
+                .style(self.title_style())
                 .highlight_style(self.selected_style())
                 .select(self.current_tab as usize)
                 .padding("", "")
@@ -85,7 +86,9 @@ impl UiState {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
+                .style(self.border_style())
                 .title(title)
+                .title_style(self.title_style())
                 .title_alignment(Alignment::Center),
             title_area[1],
         );
@@ -94,7 +97,9 @@ impl UiState {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
+                .style(self.border_style())
                 .title(footer_title)
+                .title_style(self.title_style())
                 .title_alignment(Alignment::Right),
             footer_area,
         );
@@ -104,6 +109,7 @@ impl UiState {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Help")])
+            .title_style(self.title_style())
             .title_alignment(Alignment::Left);
 
         let viewport_height = outer_block.inner(area).height as usize;
@@ -158,14 +164,16 @@ impl UiState {
     }
 
     fn get_representation_of_network(
-        style: Style,
+        border_style: Style,
+        title_style: Style,
         packet: &PacketDirection,
     ) -> (usize, Paragraph<'_>) {
         let block = Block::new()
             .borders(Borders::BOTTOM)
-            .style(style)
+            .style(border_style)
             .title_alignment(Alignment::Left)
-            .title(packet.get_title());
+            .title(packet.get_title())
+            .title_style(title_style);
         let (height, para) = packet.paragraph();
         let para = para.block(block).style(Style::reset());
         (height + 2, para)
@@ -175,23 +183,31 @@ impl UiState {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Network packets")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(self.title_style());
 
         let border_style = self.border_style();
+        let title_style = self.title_style();
 
         frame.render_widget(&outer_block, area);
         self.net_scroll
             .render(frame, outer_block.inner(area), net_log.log(), |packet| {
-                Self::get_representation_of_network(border_style, packet)
+                Self::get_representation_of_network(border_style, title_style, packet)
             });
     }
 
-    fn get_representation_of_job(style: Style, job: &Job) -> (usize, Paragraph<'_>) {
+    fn get_representation_of_job(
+        border_style: Style,
+        title_style: Style,
+        job: &Job,
+    ) -> (usize, Paragraph<'_>) {
         let block = Block::new()
             .borders(Borders::BOTTOM)
-            .style(style)
+            .style(border_style)
             .title_alignment(Alignment::Left)
-            .title(job.get_title());
+            .title(job.get_title())
+            .title_style(title_style);
+
         let (height, para) = job.paragraph();
         let para = para.block(block).style(Style::reset());
         (height + 2, para)
@@ -204,11 +220,12 @@ impl UiState {
             .title_alignment(Alignment::Left);
 
         let border_style = self.border_style();
+        let title_style = self.title_style();
 
         frame.render_widget(&outer_block, area);
         self.command_scroll
             .render(frame, outer_block.inner(area), &job_log.jobs, |job| {
-                Self::get_representation_of_job(border_style, job)
+                Self::get_representation_of_job(border_style, title_style, job)
             });
     }
 
@@ -222,7 +239,8 @@ impl UiState {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("CoAP Req & Resp")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(self.title_style());
 
         let border_style = self.border_style();
 
@@ -245,7 +263,8 @@ impl UiState {
             let right_block_down = Block::bordered()
                 .border_style(self.border_style())
                 .title(vec![Span::from("User Input")])
-                .title_alignment(Alignment::Left);
+                .title_alignment(Alignment::Left)
+                .title_style(self.title_style());
 
             let mut text = Text::from(
                 Span::from("Type a command, for example: ").patch_style(self.downlight()),
@@ -266,7 +285,8 @@ impl UiState {
         let right_block_down = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from(title)])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(self.title_style());
 
         let box_size: usize = usize::from(area.width.checked_sub(2).unwrap_or(1));
         let input_len = user_input_manager.user_input.len();
@@ -335,7 +355,8 @@ impl UiState {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Text Messages")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(self.title_style());
 
         let viewport_height = outer_block.inner(area).height as usize;
         let content_width = outer_block.inner(area).width;
@@ -377,7 +398,8 @@ impl UiState {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Text & Commands")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(self.title_style());
 
         let viewport_height = outer_block.inner(area).height as usize;
         let content_width = outer_block.inner(area).width;
@@ -415,7 +437,8 @@ impl UiState {
         let left_block_down = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Board Info")])
-            .title_alignment(Alignment::Left);
+            .title_alignment(Alignment::Left)
+            .title_style(self.title_style());
 
         let text = self.get_config();
         let text = Text::from(text);

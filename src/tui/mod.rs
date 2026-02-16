@@ -17,9 +17,11 @@ use crate::app::App;
 use crate::create_network_thread;
 use crate::create_slipmux_thread;
 
+pub use color::ColorTheme;
 pub use ui_state::SelectedTab;
 pub use ui_state::UiState;
 
+mod color;
 mod render;
 mod ui_state;
 
@@ -73,7 +75,7 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
 
     // The UiState queries the terminal on creation for its colour theme
     // So we create it here early, before messing with the terminal ourselves
-    let ui_state = UiState::new();
+    let ui_state = UiState::new(&args.color_theme);
 
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {

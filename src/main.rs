@@ -9,9 +9,10 @@ use crate::headless::start_headless_configuration;
 use crate::headless::start_headless_diagnostic;
 use crate::headless::start_headless_diagnostic_network;
 use crate::headless::start_headless_network;
+use crate::network::create_network_thread;
 use crate::slipmux::create_slipmux_thread;
+use crate::tui::ColorTheme;
 use crate::tui::start_tui;
-use network::create_network_thread;
 
 mod app;
 mod command;
@@ -84,6 +85,17 @@ struct Cli {
         conflicts_with = "headless_configuration"
     )]
     headless_network: bool,
+
+    /// Sets the color theme of the Jelly TUI
+    ///
+    /// This setting has no effect when not using the TUI.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ColorTheme::Auto,
+        verbatim_doc_comment,
+    )]
+    color_theme: ColorTheme,
 }
 
 fn main() {
