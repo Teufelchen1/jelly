@@ -110,7 +110,7 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
             &slipmux_event_sender,
             network_event_sender.as_ref(),
         ) {
-            ProcessEventResult::NothingToDo => continue,
+            ProcessEventResult::NothingToDo => (),
             ProcessEventResult::Ok => {
                 if ui_state.is_dirty() {
                     terminal
@@ -138,8 +138,7 @@ pub fn process_next_event(
     event_channel: &Receiver<Event>,
     hardware_event_sender: &Sender<Event>,
     network_event_sender: Option<&Sender<Event>>,
-) -> ProcessEventResult
-{
+) -> ProcessEventResult {
     let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
         Ok(event) => event,
         Err(RecvTimeoutError::Timeout) => {
@@ -167,7 +166,7 @@ pub fn process_next_event(
             ui_state.get_dirty_from_tab(SelectedTab::Net);
         }
         Event::SendDiagnostic(d) => hardware_event_sender
-            .send(Event::SendDiagnostic(d.to_string()))
+            .send(Event::SendDiagnostic(d))
             .unwrap(),
         Event::SendConfiguration(c) => {
             hardware_event_sender

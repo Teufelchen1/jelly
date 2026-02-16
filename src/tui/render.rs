@@ -141,9 +141,6 @@ impl UiState {
 
         self.help_scroll.last_max_position = max_scroll_offset;
 
-        if self.help_scroll.follow {
-            self.help_scroll.position = max_scroll_offset;
-        }
         let scroll_offset = self.help_scroll.position;
 
         let paragraph = paragraph.scroll((scroll_offset.try_into().unwrap_or(u16::MAX), 0));

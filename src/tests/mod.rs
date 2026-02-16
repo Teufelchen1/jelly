@@ -15,6 +15,8 @@ use crate::{
     tui::{ProcessEventResult, UiState, process_next_event},
 };
 
+mod basic;
+
 fn start_tui_for_testing(event_sender: Sender<Event>) -> (App, UiState, Terminal<TestBackend>) {
     let mut ui_state = UiState::new(&crate::tui::ColorTheme::None);
 
@@ -56,7 +58,7 @@ fn run_events_in_app(events: Vec<Event>) -> Terminal<TestBackend> {
                 }
             }
             ProcessEventResult::Terminate => panic!(),
-        };
+        }
     }
 
     terminal
@@ -67,10 +69,7 @@ fn example_how_to_test_widgets() {
     let backend = TestBackend::new(8, 2);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let expected = Buffer::with_lines([
-        "Hello  │",
-        &format!("World! {}", symbols::line::VERTICAL),
-    ]);
+    let expected = Buffer::with_lines(["Hello  │", &format!("World! {}", symbols::line::VERTICAL)]);
 
     terminal
         .draw(|f| {
