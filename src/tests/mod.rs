@@ -1,4 +1,4 @@
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 use ratatui::{
     Terminal,
@@ -15,53 +15,105 @@ use crate::{
     tui::{ProcessEventResult, UiState, process_next_event},
 };
 
-mod basic;
+mod tab_handling;
+mod user_input;
 
-fn start_tui_for_testing(event_sender: Sender<Event>) -> (App, UiState, Terminal<TestBackend>) {
-    let mut ui_state = UiState::new(&crate::tui::ColorTheme::None);
-
-    let mut terminal = Terminal::new(TestBackend::new(90, 30)).unwrap();
-
-    terminal.clear().unwrap();
-
-    let app = App::new(event_sender);
-
-    terminal
-        .draw(|frame| app.draw(&mut ui_state, frame))
-        .unwrap();
-
-    (app, ui_state, terminal)
+struct AppTest {
+    app: App,
+    ui_state: UiState,
+    terminal: Terminal<TestBackend>,
+    slipmux_event_sender: Sender<Event>,
+    _slipmux_event_receiver: Receiver<Event>,
+    event_sender: Sender<Event>,
+    event_receiver: Receiver<Event>,
 }
 
-fn run_events_in_app(events: Vec<Event>) -> Terminal<TestBackend> {
-    let (event_sender, event_receiver) = mpsc::channel();
-    let (slipmux_event_sender, _slipmux_event_receiver) = mpsc::channel();
+impl AppTest {
+    pub fn new() -> Self {
+        let mut ui_state = UiState::new(&crate::tui::ColorTheme::None);
+        let mut terminal = Terminal::new(TestBackend::new(90, 30)).unwrap();
 
-    let (mut app, mut ui_state, mut terminal) = start_tui_for_testing(event_sender.clone());
+        let (event_sender, event_receiver) = mpsc::channel();
+        let (slipmux_event_sender, slipmux_event_receiver) = mpsc::channel();
 
-    for event in events {
-        event_sender.send(event).unwrap();
+        terminal.clear().unwrap();
 
-        match process_next_event(
-            &mut app,
-            &mut ui_state,
-            &event_receiver,
-            &slipmux_event_sender,
-            None,
-        ) {
-            ProcessEventResult::NothingToDo => panic!(),
-            ProcessEventResult::Ok => {
-                if ui_state.is_dirty() {
-                    terminal
-                        .draw(|frame| app.draw(&mut ui_state, frame))
-                        .unwrap();
-                }
-            }
-            ProcessEventResult::Terminate => panic!(),
+        let app = App::new(event_sender.clone());
+
+        terminal
+            .draw(|frame| app.draw(&mut ui_state, frame))
+            .unwrap();
+
+        Self {
+            app,
+            ui_state,
+            terminal,
+            slipmux_event_sender,
+            _slipmux_event_receiver: slipmux_event_receiver,
+            event_sender,
+            event_receiver,
         }
     }
 
-    terminal
+    pub fn send_event(&self, event: Event) {
+        self.event_sender.send(event).unwrap();
+    }
+
+    pub fn process_all_events(&mut self, events: Vec<Event>) {
+        for event in events {
+            self.send_event(event);
+            while let Ok(event) = self.event_receiver.try_recv() {
+                match process_next_event(
+                    &mut self.app,
+                    &mut self.ui_state,
+                    event,
+                    &self.slipmux_event_sender,
+                    None,
+                ) {
+                    ProcessEventResult::NothingToDo => panic!(),
+                    ProcessEventResult::Ok => {
+                        if self.ui_state.is_dirty() {
+                            self.terminal
+                                .draw(|frame| self.app.draw(&mut self.ui_state, frame))
+                                .unwrap();
+                            self.ui_state.wash();
+                        }
+                    }
+                    ProcessEventResult::Terminate => panic!(),
+                }
+            }
+        }
+    }
+
+    pub fn assert_eq(&self, expected: &Buffer) {
+        let actual = self.terminal.backend().buffer();
+
+        // Adopted from ratatui-core/src/buffer/assert.rs, thanks!
+        assert!(
+            actual.area == expected.area,
+            "buffer areas not equal\nexpected: {expected:?}\nactual:   {actual:?}",
+        );
+        let nice_diff = expected
+            .diff(actual)
+            .into_iter()
+            .enumerate()
+            .map(|(i, (x, y, cell))| {
+                let expected_cell = &expected[(x, y)];
+                format!("{i}: at ({x}, {y})\n  expected: {expected_cell:?}\n  actual:   {cell:?}")
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(
+            nice_diff.is_empty(),
+            "buffer contents not equal\nexpected: {expected:?}\nactual:   {actual:?}\ndiff:\n{nice_diff}",
+        );
+    }
+}
+
+fn run_events_in_app(events: Vec<Event>) -> Terminal<TestBackend> {
+    let mut test_app = AppTest::new();
+    test_app.process_all_events(events);
+    test_app.terminal
 }
 
 #[test]

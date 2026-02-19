@@ -103,7 +103,7 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
         .draw(|frame| app.draw(&mut ui_state, frame))
         .unwrap();
     loop {
-        match process_next_event(
+        match wait_for_and_process_next_event(
             &mut app,
             &mut ui_state,
             &event_receiver,
@@ -132,7 +132,7 @@ pub enum ProcessEventResult {
     Terminate,
 }
 
-pub fn process_next_event(
+pub fn wait_for_and_process_next_event(
     app: &mut App,
     ui_state: &mut UiState,
     event_channel: &Receiver<Event>,
@@ -147,6 +147,22 @@ pub fn process_next_event(
         Err(RecvTimeoutError::Disconnected) => panic!(),
     };
 
+    process_next_event(
+        app,
+        ui_state,
+        event,
+        hardware_event_sender,
+        network_event_sender,
+    )
+}
+
+pub fn process_next_event(
+    app: &mut App,
+    ui_state: &mut UiState,
+    event: Event,
+    hardware_event_sender: &Sender<Event>,
+    network_event_sender: Option<&Sender<Event>>,
+) -> ProcessEventResult {
     match event {
         Event::Diagnostic(msg) => {
             app.on_diagnostic_msg(&msg);
