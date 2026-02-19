@@ -15,7 +15,7 @@ pub fn event_loop_configuration(
     hardware_event_sender: &Sender<Event>,
 ) {
     let mut app = App::new(event_sender.clone());
-    app.force_all_commands_availabe(None);
+    app.force_all_commands_availabe(&mut None);
 
     match await_serial_connect(event_channel) {
         Ok(_name) => {
