@@ -19,8 +19,8 @@ dependencies = [
  "serialport",
  "slipmux",
  "terminal-colorsaurus",
- "tui-widgets",
  "tun-rs",
+ "widget_scrolling",
 ]
 
 [[package]]
@@ -1600,28 +1600,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b36ee98fd31ec7426d599183e8fe26932a8dc1fb76ddb6214d05493377d34ca"
 
 [[package]]
-name = "tui-scrollview"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8ada5290cf63e5e718a13111020398979975d4df556a55ae88014aa8850f171"
-dependencies = [
- "indoc",
- "ratatui-core",
- "ratatui-widgets",
-]
-
-[[package]]
-name = "tui-widgets"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6111a7837540d6b76b81fb8f507c57457fc654400ca24bd73910f939318ec4c4"
-dependencies = [
- "document-features",
- "ratatui-core",
- "tui-scrollview",
-]
-
-[[package]]
 name = "tun-rs"
 version = "2.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1755,6 +1733,13 @@ name = "widestring"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471"
+
+[[package]]
+name = "widget_scrolling"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+]
 
 [[package]]
 name = "winapi"

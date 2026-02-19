@@ -24,6 +24,9 @@ mod slipmux;
 mod transport;
 mod tui;
 
+#[cfg(test)]
+mod tests;
+
 type EventChannel = (Sender<Event>, Receiver<Event>);
 
 #[derive(Parser)]
