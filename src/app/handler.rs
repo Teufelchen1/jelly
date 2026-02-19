@@ -221,7 +221,7 @@ impl App {
 
     fn execute_command(
         &mut self,
-        ui_state: Option<&mut UiState>,
+        ui_state: &mut Option<&mut UiState>,
         cmd: &str,
         cmd_string: &str,
         file: SaveToFile,
@@ -281,7 +281,7 @@ impl App {
         }
     }
 
-    fn handle_command_commit(&mut self, ui_state: Option<&mut UiState>) {
+    fn handle_command_commit(&mut self, ui_state: &mut Option<&mut UiState>) {
         match self.user_input_manager.classify_input() {
             InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
@@ -310,16 +310,16 @@ impl App {
         self.user_input_manager.finish_current_input();
     }
 
-    pub fn on_msg_string(&mut self, ui_state: Option<&mut UiState>, msg: &str) {
+    pub fn on_msg_string(&mut self, mut ui_state: Option<&mut UiState>, msg: &str) {
         self.user_input_manager.insert_string(msg);
 
         // should always be the case as msg is read via read_line()
         if msg.ends_with('\n') {
-            self.handle_command_commit(ui_state);
+            self.handle_command_commit(&mut ui_state);
         }
     }
 
-    pub fn on_key(&mut self, ui_state: Option<&mut UiState>, key: KeyEvent) -> bool {
+    pub fn on_key(&mut self, mut ui_state: Option<&mut UiState>, key: KeyEvent) -> bool {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             return false;
         }
@@ -328,7 +328,10 @@ impl App {
             KeyCode::Enter => {
                 // Can't send anything if we don't have an active connection
                 if self.connected {
-                    self.handle_command_commit(ui_state);
+                    self.handle_command_commit(&mut ui_state);
+                    if let Some(ui_state) = ui_state {
+                        ui_state.get_dirty();
+                    }
                 }
             }
             KeyCode::Tab => {
