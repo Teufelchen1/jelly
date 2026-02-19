@@ -78,7 +78,7 @@ impl Command {
             cmd: cmd.to_owned(),
             description: description.to_owned(),
             required_endpoints: vec![],
-            parse: |c, _a| Ok(CommandType::Text(c.cmd.clone())),
+            parse: |_c, cmd_str| Ok(CommandType::Text(cmd_str.to_owned())),
         }
     }
 
