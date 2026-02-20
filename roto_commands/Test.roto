@@ -1,0 +1,24 @@
+fn init() -> CoapRequest {
+	new_request()
+}
+
+fn handle(packet: Packet) -> CoapRequest? {
+	if packet.is_error() {
+			let req = new_request();
+			let req2 = req.set_path("/.well-known/core");
+			return Option.Some(req2);
+	}
+	Option.None
+}
+
+fn want_display() -> bool {
+	true
+}
+
+fn is_finished() -> bool {
+	true
+}
+
+fn display() -> String {
+	"A second Hello to the world!\n"
+}
