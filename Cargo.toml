@@ -50,3 +50,4 @@ terminal-colorsaurus = { version = "1.0.3", default-features = false }
 tun-rs = { version = "2.7.7", features = ["interruptible"] }
 pnet_packet = { version = "0.35", default-features = false }
 widget_scrolling = { path = "widget_scrolling/" }
+roto = { path = "../roto", default-features = false } #"0.10.0"
