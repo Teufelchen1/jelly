@@ -4,7 +4,7 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use crate::Event;
-use crate::datatypes::packet_log::PacketLog;
+use crate::datatypes::packet_log::PacketDirection;
 
 pub fn event_loop_network(
     event_receiver: &Receiver<Event>,
@@ -25,7 +25,7 @@ pub fn event_loop_network(
                 return;
             }
             Event::Packet(packet) => {
-                if let Ok(packet_direction) = PacketLog::packet_to_host(&packet) {
+                if let Ok(packet_direction) = PacketDirection::packet_to_host(&packet) {
                     println!(
                         "{:} | {:}",
                         packet_direction.get_title(),
@@ -35,7 +35,7 @@ pub fn event_loop_network(
                 network_event_sender.send(Event::Packet(packet)).unwrap();
             }
             Event::SendPacket(packet) => {
-                if let Ok(packet_direction) = PacketLog::packet_to_node(&packet) {
+                if let Ok(packet_direction) = PacketDirection::packet_to_node(&packet) {
                     println!(
                         "{:} | {:}",
                         packet_direction.get_title(),

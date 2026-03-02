@@ -1,8 +1,5 @@
 use std::fmt::Write;
-use std::time::SystemTime;
 
-use chrono::prelude::DateTime;
-use chrono::prelude::Utc;
 use coap_lite::CoapOption;
 use coap_lite::CoapRequest;
 use coap_lite::CoapResponse;
@@ -18,6 +15,9 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
+use super::log::Log;
+use super::log::LogEntry;
+
 pub fn token_to_u64(token: &[u8]) -> u64 {
     if token.len() > 8 {
         u64::MAX
@@ -30,56 +30,45 @@ pub fn token_to_u64(token: &[u8]) -> u64 {
     }
 }
 
-pub struct CoapLog {
-    pub requests: Vec<Request>,
-}
-
-impl CoapLog {
-    pub const fn new() -> Self {
-        Self { requests: vec![] }
-    }
-
-    pub fn push(&mut self, request: CoapRequest<String>) {
-        self.requests.push(Request::new(request));
-    }
-
-    pub fn get_request_by_token(&mut self, token: u64) -> Option<&mut Request> {
-        self.requests.iter_mut().find(|req| req.token == token)
+impl Log<Request> {
+    pub fn get_request_by_token_mut(&mut self, token: u64) -> Option<&mut Request> {
+        if let Some(log_entry) = self.iter_mut().find(|req| req.data.token == token) {
+            Some(&mut log_entry.data)
+        } else {
+            None
+        }
     }
 }
 
 pub struct Request {
-    pub time: SystemTime,
     pub req: CoapRequest<String>,
     pub token: u64,
-    pub res: Vec<Response>,
+    pub res: Log<CoapResponse>,
 }
 
 impl Request {
     pub fn new(req: CoapRequest<String>) -> Self {
         let token = token_to_u64(req.message.get_token());
         Self {
-            time: SystemTime::now(),
             req,
             token,
-            res: vec![],
+            res: Log::new(),
         }
     }
 
     pub fn add_response(&mut self, response: Packet) {
-        self.res
-            .push(Response::new(CoapResponse { message: response }));
+        self.res.add_new(CoapResponse { message: response });
     }
+}
 
+impl LogEntry<Request> {
     fn get_request_title(&self) -> String {
-        let mut out = String::new();
-        let dt: DateTime<Utc> = self.time.into();
-        _ = write!(out, "[{}]", dt.format("%H:%M:%S%.3f"));
-        match self.req.message.header.code {
+        let mut out = self.get_timestamp();
+        match self.data.req.message.header.code {
             MessageClass::Empty => _ = write!(out, "Empty"),
             MessageClass::Request(rtype) => {
                 _ = write!(out, " ← Req({rtype:?} ");
-                if let Some(option_list) = self.req.message.get_option(CoapOption::UriPath) {
+                if let Some(option_list) = self.data.req.message.get_option(CoapOption::UriPath) {
                     for option in option_list {
                         _ = write!(out, "/{}", String::from_utf8_lossy(option));
                     }
@@ -90,7 +79,8 @@ impl Request {
                     out,
                     ")[0x{:04x}]",
                     u16::from_le_bytes(
-                        self.req
+                        self.data
+                            .req
                             .message
                             .get_token()
                             .try_into()
@@ -106,11 +96,11 @@ impl Request {
 
     fn get_request_title_short(&self) -> String {
         let mut out = String::new();
-        match self.req.message.header.code {
+        match self.data.req.message.header.code {
             MessageClass::Empty => _ = write!(out, "Empty"),
             MessageClass::Request(rtype) => {
                 _ = write!(out, " ← Req({rtype:?} ");
-                if let Some(option_list) = self.req.message.get_option(CoapOption::UriPath) {
+                if let Some(option_list) = self.data.req.message.get_option(CoapOption::UriPath) {
                     for option in option_list {
                         _ = write!(out, "/{}", String::from_utf8_lossy(option));
                     }
@@ -126,22 +116,22 @@ impl Request {
     }
 
     fn get_content(&self, short: bool) -> Text<'_> {
-        if self.res.is_empty() {
+        if self.data.res.is_empty() {
             Text::from("Awaiting response")
         } else {
             let mut text = Text::default().reset_style();
             let mut header = Line::default();
 
-            let payload = Text::from(self.res[0].get_payload());
+            let payload = Text::from(self.data.res[0].get_payload());
 
             if short {
-                let status = self.res[0].get_status_short();
+                let status = self.data.res[0].get_status_short();
                 header.push_span(status);
             } else {
-                let timestamp = self.res[0].get_timestamp();
+                let timestamp = self.data.res[0].get_timestamp();
                 header.push_span(timestamp);
 
-                let status = self.res[0].get_status();
+                let status = self.data.res[0].get_status();
                 header.push_span(status);
             }
 
@@ -175,30 +165,13 @@ impl Request {
     }
 }
 
-pub struct Response {
-    time: SystemTime,
-    coap: CoapResponse,
-}
-
-impl Response {
-    pub fn new(coap: CoapResponse) -> Self {
-        Self {
-            time: SystemTime::now(),
-            coap,
-        }
-    }
-
-    fn get_timestamp(&self) -> String {
-        let dt: DateTime<Utc> = self.time.into();
-        format!("[{}]", dt.format("%H:%M:%S%.3f"))
-    }
-
+impl LogEntry<CoapResponse> {
     fn get_status(&self) -> Span<'_> {
-        let status = self.coap.get_status();
-        let token = token_to_u64(self.coap.message.get_token());
-        let bytes = self.coap.message.payload.len();
+        let status = self.data.get_status();
+        let token = token_to_u64(self.data.message.get_token());
+        let bytes = self.data.message.payload.len();
 
-        let response_summary = self.coap.message.get_content_format().map_or_else(
+        let response_summary = self.data.message.get_content_format().map_or_else(
             || format!(" → Res({status:?})[0x{token:03X}]: {bytes} bytes"),
             |c| format!(" → Res({status:?}/{c:?})[0x{token:03X}]: {bytes} bytes"),
         );
@@ -211,9 +184,9 @@ impl Response {
     }
 
     fn get_status_short(&self) -> Span<'_> {
-        let status = self.coap.get_status();
+        let status = self.data.get_status();
 
-        let response_summary = self.coap.message.get_content_format().map_or_else(
+        let response_summary = self.data.message.get_content_format().map_or_else(
             || format!(" → Res({status:?})"),
             |c| format!(" → Res({status:?}/{c:?})"),
         );
@@ -226,19 +199,19 @@ impl Response {
     }
 
     pub fn get_payload(&self) -> String {
-        let is_error = match self.coap.message.header.code {
+        let is_error = match self.data.message.header.code {
             MessageClass::Response(response_type) => response_type.is_error(),
             // There is *definitely* an error if this happens, but for our purposes, we can't apply
             // the handling of diagnostic messages.
             _ => false,
         };
 
-        let payload = &self.coap.message.payload;
+        let payload = &self.data.message.payload;
 
         if payload.is_empty() {
             "Empty payload".to_owned()
         } else {
-            match self.coap.message.get_content_format() {
+            match self.data.message.get_content_format() {
                 Some(ContentFormat::ApplicationLinkFormat) => {
                     String::from_utf8_lossy(payload).replace(",<", ",\n<")
                 }

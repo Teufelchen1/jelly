@@ -9,12 +9,12 @@ use ratatui::Frame;
 use slipmux::Slipmux;
 use slipmux::encode_buffered;
 
-use crate::datatypes::coap_log::CoapLog;
-use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::coap_log::Request;
 use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobId;
 use crate::datatypes::job_log::JobLog;
-use crate::datatypes::packet_log::PacketLog;
+use crate::datatypes::log::Log;
+use crate::datatypes::packet_log::PacketDirection;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 use crate::events::Event;
@@ -25,14 +25,14 @@ mod handler;
 pub struct App {
     connected: bool,
     event_sender: Sender<Event>,
-    configuration_log: CoapLog,
+    configuration_log: Log<Request>,
     configuration_packets: Vec<Packet>,
-    diagnostic_log: DiagnosticLog,
-    packet_log: PacketLog,
+    diagnostic_log: Log<String>,
+    packet_log: Log<PacketDirection>,
     user_input_manager: UserInputManager,
     token_count: u16,
     next_mid: u16,
-    overall_log: DiagnosticLog,
+    overall_log: Log<String>,
     ongoing_jobs: HashMap<u64, JobId>,
     job_log: JobLog,
 }
@@ -45,17 +45,17 @@ impl App {
             connected: false,
             event_sender,
 
-            configuration_log: CoapLog::new(),
+            configuration_log: Log::new(),
             configuration_packets: vec![],
-            diagnostic_log: DiagnosticLog::new(),
-            packet_log: PacketLog::new(),
+            diagnostic_log: Log::new(),
+            packet_log: Log::new(),
 
             user_input_manager,
 
             token_count: 0,
             next_mid: rand::rng().random(),
 
-            overall_log: DiagnosticLog::new(),
+            overall_log: Log::new(),
             ongoing_jobs: HashMap::new(),
             job_log: JobLog::new(),
         }

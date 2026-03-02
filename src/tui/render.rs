@@ -21,15 +21,16 @@ use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Wrap;
 
-use super::UiState;
-use crate::datatypes::coap_log::CoapLog;
-use crate::datatypes::diagnostic_log::DiagnosticLog;
+use crate::datatypes::coap_log::Request;
 use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobLog;
+use crate::datatypes::log::Log;
+use crate::datatypes::log::LogEntry;
 use crate::datatypes::packet_log::PacketDirection;
-use crate::datatypes::packet_log::PacketLog;
 use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
+
+use super::UiState;
 
 impl UiState {
     fn render_scrollbar(
@@ -160,36 +161,26 @@ impl UiState {
         }
     }
 
-    fn get_representation_of_network(
-        border_style: Style,
-        title_style: Style,
-        packet: &PacketDirection,
-    ) -> (usize, Paragraph<'_>) {
-        let block = Block::new()
-            .borders(Borders::BOTTOM)
-            .style(border_style)
-            .title_alignment(Alignment::Left)
-            .title(packet.get_title())
-            .title_style(title_style);
-        let (height, para) = packet.paragraph();
-        let para = para.block(block).style(Style::reset());
-        (height + 2, para)
+    fn get_representation_of_network(packet: &LogEntry<PacketDirection>) -> (usize, Paragraph<'_>) {
+        let ts = packet.get_timestamp();
+        let title = packet.data.get_title();
+        let payload = packet.data.get_payload();
+        let content = format!("{ts:} {title:} {payload:}");
+        let para = Paragraph::new(content);
+        (1, para.style(Style::reset()))
     }
 
-    fn render_network(&mut self, frame: &mut Frame, area: Rect, net_log: &PacketLog) {
+    fn render_network(&mut self, frame: &mut Frame, area: Rect, net_log: &Log<PacketDirection>) {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
             .title(vec![Span::from("Network packets")])
             .title_alignment(Alignment::Left)
             .title_style(self.title_style());
 
-        let border_style = self.border_style();
-        let title_style = self.title_style();
-
         frame.render_widget(&outer_block, area);
         self.net_scroll
-            .render(frame, outer_block.inner(area), net_log.log(), |packet| {
-                Self::get_representation_of_network(border_style, title_style, packet)
+            .render(frame, outer_block.inner(area), net_log, |packet| {
+                Self::get_representation_of_network(packet)
             });
     }
 
@@ -230,7 +221,7 @@ impl UiState {
         &mut self,
         frame: &mut Frame,
         area: Rect,
-        configuration_log: &CoapLog,
+        configuration_log: &Log<Request>,
         short: bool,
     ) {
         let outer_block = Block::bordered()
@@ -245,7 +236,7 @@ impl UiState {
         self.configuration_scroll.render(
             frame,
             outer_block.inner(area),
-            &configuration_log.requests,
+            configuration_log,
             |req| req.render(short, border_style),
         );
     }
@@ -347,7 +338,7 @@ impl UiState {
         &mut self,
         frame: &mut Frame,
         area: Rect,
-        diagnostic_log: &DiagnosticLog,
+        diagnostic_log: &Log<String>,
     ) {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
@@ -390,7 +381,7 @@ impl UiState {
         &mut self,
         frame: &mut Frame,
         area: Rect,
-        overall_log: &DiagnosticLog,
+        overall_log: &Log<String>,
     ) {
         let outer_block = Block::bordered()
             .border_style(self.border_style())
@@ -450,8 +441,8 @@ impl UiState {
         frame: &mut Frame,
         main_area: Rect,
         user_input_manager: &UserInputManager,
-        configuration_log: &CoapLog,
-        overall_log: &DiagnosticLog,
+        configuration_log: &Log<Request>,
+        overall_log: &Log<String>,
     ) {
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -494,7 +485,12 @@ impl UiState {
         frame: &mut Frame,
         user_input_manager: &UserInputManager,
         job_log: &JobLog,
-        logs: (&CoapLog, &DiagnosticLog, &DiagnosticLog, &PacketLog),
+        logs: (
+            &Log<Request>,
+            &Log<String>,
+            &Log<String>,
+            &Log<PacketDirection>,
+        ),
     ) {
         let (configuration_log, diagnostic_log, overall_log, net_log) = logs;
 
