@@ -78,3 +78,34 @@ impl Log<String> {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn append_message_does_collect_snippets_into_lines() {
+        let mut log: Log<String> = Log::new();
+
+        assert!(log.is_empty());
+
+        log.append_message("Hello World!\n");
+        assert_eq!(log.len(), 2);
+
+        log.append_message("Moin");
+        assert_eq!(log.len(), 2);
+
+        log.append_message(" ");
+        log.append_message("Moin!");
+        log.append_message("\n");
+        assert_eq!(log.len(), 3);
+
+        log.append_message("Beim\r\nKlabauter\tmann!\n");
+        assert_eq!(log.len(), 5);
+
+        assert_eq!(log[0].data, "Hello World!");
+        assert_eq!(log[1].data, "Moin Moin!");
+        assert_eq!(log[2].data, "Beim");
+        assert_eq!(log[3].data, "Klabautermann!");
+    }
+}

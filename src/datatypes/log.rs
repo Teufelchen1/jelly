@@ -1,10 +1,14 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::slice;
+#[cfg(not(test))]
 use std::time::SystemTime;
 
 use chrono::prelude::DateTime;
 use chrono::prelude::Utc;
+
+#[cfg(test)]
+use crate::tests::SystemTime;
 
 pub struct LogEntry<T> {
     pub time: SystemTime,
