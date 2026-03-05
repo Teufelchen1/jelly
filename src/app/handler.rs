@@ -16,6 +16,7 @@ use super::Job;
 
 use crate::command::Command;
 use crate::command::CommandType;
+use crate::datatypes::coap_log::Request;
 use crate::datatypes::coap_log::token_to_u64;
 use crate::datatypes::job_log::SaveToFile;
 use crate::events::Event;
@@ -48,7 +49,7 @@ impl App {
                     // Fetch description
                     let mut request: CoapRequest<String> = Self::build_get_request(s);
                     self.send_configuration_request(&mut request.message);
-                    self.configuration_log.push(request);
+                    self.configuration_log.add_new(Request::new(request));
                 } else {
                     let new_command = Command::new_coap_get(s, "A CoAP resource");
                     self.user_input_manager.known_commands.add(new_command);
@@ -66,15 +67,15 @@ impl App {
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
         request.message.add_option(CoapOption::Block2, vec![0x05]);
         self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(request);
+        self.configuration_log.add_new(Request::new(request));
 
         let mut request: CoapRequest<String> = Self::build_get_request("/jelly/board");
         self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(request);
+        self.configuration_log.add_new(Request::new(request));
 
         let mut request: CoapRequest<String> = Self::build_get_request("/jelly/ver");
         self.send_configuration_request(&mut request.message);
-        self.configuration_log.push(request);
+        self.configuration_log.add_new(Request::new(request));
     }
 
     pub const fn on_disconnect(&mut self) {
@@ -88,14 +89,14 @@ impl App {
             let maybe_request = self.job_log.job_handle_response(job_id, response);
             if self.job_log.job_wants_display(job_id) {
                 let buffer = self.job_log.job_display(job_id);
-                self.overall_log.add(&buffer);
+                self.overall_log.append_message(&buffer);
             }
             // If we issue a new request, the token will change.
             // The token is our key for the hashmap, so we need to recalculate
             if let Some(mut next_request) = maybe_request {
                 self.send_configuration_request(&mut next_request.message);
                 hash_index = token_to_u64(next_request.message.get_token());
-                self.configuration_log.push(next_request);
+                self.configuration_log.add_new(Request::new(next_request));
             }
             // Not finished? Re-add it to the job list
             if self.job_log.job_is_finished(job_id) {
@@ -136,7 +137,7 @@ impl App {
         self.handle_pending_job(hash_index, &response);
 
         let expected =
-            if let Some(request) = self.configuration_log.get_request_by_token(hash_index) {
+            if let Some(request) = self.configuration_log.get_request_by_token_mut(hash_index) {
                 request.add_response(response.clone());
 
                 let option_list_ = request.req.message.get_option(CoapOption::UriPath);
@@ -205,8 +206,8 @@ impl App {
     }
 
     pub fn on_diagnostic_msg(&mut self, msg: &str) {
-        self.diagnostic_log.add(msg);
-        self.overall_log.add(msg);
+        self.diagnostic_log.append_message(msg);
+        self.overall_log.append_message(msg);
     }
 
     // Packet from the node to the host
@@ -240,15 +241,15 @@ impl App {
                 let mut request = handler.init();
                 self.send_configuration_request(&mut request.message);
                 let hash_index: u64 = token_to_u64(request.message.get_token());
-                self.configuration_log.push(request);
+                self.configuration_log.add_new(Request::new(request));
                 let job_id = self
                     .job_log
                     .start(Job::new(handler, file, cmd_string.to_owned()));
                 self.ongoing_jobs.insert(hash_index, job_id);
 
                 // Mimiking RIOTs shell behavior for UX
-                self.overall_log.add(cmd_string);
-                self.overall_log.add("\n> ");
+                self.overall_log.append_message(cmd_string);
+                self.overall_log.append_message("\n> ");
             }
             Ok(CommandType::Text(mut cmd_str)) => {
                 if !cmd_str.ends_with('\n') {
@@ -272,11 +273,11 @@ impl App {
             }
             // Display usage info to the user
             Err(e) => {
-                self.overall_log.add(cmd_string);
-                self.overall_log.add("\n");
+                self.overall_log.append_message(cmd_string);
+                self.overall_log.append_message("\n");
                 self.job_log
                     .start(Job::new_failed(cmd_string.to_owned(), &e));
-                self.overall_log.add(&e);
+                self.overall_log.append_message(&e);
             }
         }
     }
@@ -297,7 +298,7 @@ impl App {
                 self.event_sender
                     .send(Event::SendConfiguration(data))
                     .unwrap();
-                self.configuration_log.push(request);
+                self.configuration_log.add_new(Request::new(request));
             }
             InputType::RawCommand(cmd) => {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();

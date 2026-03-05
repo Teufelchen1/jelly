@@ -15,8 +15,23 @@ use crate::{
     tui::{ProcessEventResult, UiState, process_next_event},
 };
 
+mod logs;
 mod tab_handling;
 mod user_input;
+
+#[derive(Clone, Copy)]
+pub struct SystemTime;
+
+impl SystemTime {
+    pub fn now() -> Self {
+        Self
+    }
+
+    #[allow(clippy::unused_self)]
+    pub fn into(self) -> chrono::prelude::DateTime<chrono::prelude::Utc> {
+        chrono::prelude::DateTime::from_timestamp_nanos(0)
+    }
+}
 
 struct AppTest {
     app: App,
@@ -101,6 +116,7 @@ impl AppTest {
                 let expected_cell = &expected[(x, y)];
                 format!("{i}: at ({x}, {y})\n  expected: {expected_cell:?}\n  actual:   {cell:?}")
             })
+            .take(10)
             .collect::<Vec<String>>()
             .join("\n");
         assert!(

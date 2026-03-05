@@ -11,6 +11,8 @@ use pnet_packet::udp::UdpPacket;
 use ratatui::text::Text;
 use ratatui::widgets::Paragraph;
 
+use super::log::Log;
+
 pub enum PacketDirection {
     ToNode6(Ipv6Packet<'static>),
     ToHost6(Ipv6Packet<'static>),
@@ -19,11 +21,31 @@ pub enum PacketDirection {
 }
 
 impl PacketDirection {
+    pub fn packet_to_host(packet: &[u8]) -> Result<Self, ()> {
+        match packet[0] >> 4 {
+            // IPv4
+            4 => Ok(Self::ToHost4(Ipv4Packet::owned(packet.to_vec()).ok_or(())?)),
+            // IPv6
+            6 => Ok(Self::ToHost6(Ipv6Packet::owned(packet.to_vec()).ok_or(())?)),
+            _ => Err(()),
+        }
+    }
+
+    pub fn packet_to_node(packet: &[u8]) -> Result<Self, ()> {
+        match packet[0] >> 4 {
+            // IPv4
+            4 => Ok(Self::ToNode4(Ipv4Packet::owned(packet.to_vec()).ok_or(())?)),
+            // IPv6
+            6 => Ok(Self::ToNode6(Ipv6Packet::owned(packet.to_vec()).ok_or(())?)),
+            _ => Err(()),
+        }
+    }
+
     pub fn get_title(&self) -> String {
         match self {
             Self::ToNode6(packet) => {
                 format!(
-                    "Host [{:}] -> Node [{:}] {:} bytes",
+                    "[{:}] -> [{:}] {:} bytes",
                     packet.get_source(),
                     packet.get_destination(),
                     packet.packet().len()
@@ -31,7 +53,7 @@ impl PacketDirection {
             }
             Self::ToHost6(packet) => {
                 format!(
-                    "Host [{:}] <- Node [{:}] {:} bytes",
+                    "[{:}] <- [{:}] {:} bytes",
                     packet.get_destination(),
                     packet.get_source(),
                     packet.packet().len(),
@@ -39,7 +61,7 @@ impl PacketDirection {
             }
             Self::ToNode4(packet) => {
                 format!(
-                    "Host [{:}] -> Node [{:}] {:} bytes",
+                    "[{:}] -> [{:}] {:} bytes",
                     packet.get_source(),
                     packet.get_destination(),
                     packet.packet().len()
@@ -47,7 +69,7 @@ impl PacketDirection {
             }
             Self::ToHost4(packet) => {
                 format!(
-                    "Host [{:}] <- Node [{:}] {:} bytes",
+                    "[{:}] <- [{:}] {:} bytes",
                     packet.get_destination(),
                     packet.get_source(),
                     packet.packet().len(),
@@ -147,52 +169,15 @@ impl PacketDirection {
     }
 }
 
-pub struct PacketLog {
-    log: Vec<PacketDirection>,
-}
-
-impl PacketLog {
-    pub fn packet_to_host(packet: &[u8]) -> Result<PacketDirection, ()> {
-        match packet[0] >> 4 {
-            // IPv4
-            4 => Ok(PacketDirection::ToHost4(
-                Ipv4Packet::owned(packet.to_vec()).ok_or(())?,
-            )),
-            // IPv6
-            6 => Ok(PacketDirection::ToHost6(
-                Ipv6Packet::owned(packet.to_vec()).ok_or(())?,
-            )),
-            _ => Err(()),
-        }
-    }
-    pub fn packet_to_node(packet: &[u8]) -> Result<PacketDirection, ()> {
-        match packet[0] >> 4 {
-            // IPv4
-            4 => Ok(PacketDirection::ToNode4(
-                Ipv4Packet::owned(packet.to_vec()).ok_or(())?,
-            )),
-            // IPv6
-            6 => Ok(PacketDirection::ToNode6(
-                Ipv6Packet::owned(packet.to_vec()).ok_or(())?,
-            )),
-            _ => Err(()),
-        }
-    }
-
-    pub const fn new() -> Self {
-        Self { log: vec![] }
-    }
+impl Log<PacketDirection> {
     pub fn add_to_host(&mut self, packet: &[u8]) {
-        if let Ok(packet) = Self::packet_to_host(packet) {
-            self.log.push(packet);
+        if let Ok(packet) = PacketDirection::packet_to_host(packet) {
+            self.add_new(packet);
         }
     }
     pub fn add_to_node(&mut self, packet: &[u8]) {
-        if let Ok(packet) = Self::packet_to_node(packet) {
-            self.log.push(packet);
+        if let Ok(packet) = PacketDirection::packet_to_node(packet) {
+            self.add_new(packet);
         }
-    }
-    pub fn log(&self) -> &[PacketDirection] {
-        &self.log
     }
 }
