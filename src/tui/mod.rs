@@ -98,6 +98,7 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
     create_terminal_thread(event_sender.clone());
 
     let mut app = App::new(event_sender);
+    let mut timeout_ms = 1000;
 
     terminal
         .draw(|frame| app.draw(&mut ui_state, frame))
@@ -109,15 +110,19 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
             &event_receiver,
             &slipmux_event_sender,
             network_event_sender.as_ref(),
+            timeout_ms,
         ) {
-            ProcessEventResult::NothingToDo => (),
-            ProcessEventResult::Ok => {
+            ProcessEventResult::NothingToDo => {
                 if ui_state.is_dirty() {
                     terminal
                         .draw(|frame| app.draw(&mut ui_state, frame))
                         .unwrap();
                     ui_state.wash();
                 }
+                timeout_ms = 5000;
+            }
+            ProcessEventResult::Ok => {
+                timeout_ms = 20;
             }
             ProcessEventResult::Terminate => break,
         }
@@ -138,8 +143,9 @@ pub fn wait_for_and_process_next_event(
     event_channel: &Receiver<Event>,
     hardware_event_sender: &Sender<Event>,
     network_event_sender: Option<&Sender<Event>>,
+    timeout_ms: u64,
 ) -> ProcessEventResult {
-    let event = match event_channel.recv_timeout(Duration::from_millis(1000)) {
+    let event = match event_channel.recv_timeout(Duration::from_millis(timeout_ms)) {
         Ok(event) => event,
         Err(RecvTimeoutError::Timeout) => {
             return ProcessEventResult::NothingToDo;
