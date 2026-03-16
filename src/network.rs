@@ -30,29 +30,55 @@ fn get_addr_as_string(addrs: std::io::Result<Vec<std::net::IpAddr>>) -> Option<S
     None
 }
 
-pub fn create_network_thread(event_sender: Sender<Event>, name: &str) -> Sender<Event> {
+pub fn open_network_device(name: &str) -> Result<SyncDevice, String> {
+    fn match_err(err: &std::io::Error, name: &str) -> String {
+        match err.kind() {
+            ErrorKind::ResourceBusy => {
+                format!(
+                    "Network interface {name} is used by another program (possibly another Jelly instance); each running instance needs a dedicated interface."
+                )
+            }
+            ErrorKind::PermissionDenied => {
+                format!(
+                    "Not enough permissions to open network interface {name} or the device might not exist.\n"
+                ) + "On Linux you can create a suitable interface with either of these commands:\n"
+                    + "  Using NetworkManager:\n\t"
+                    + &format!(
+                        "sudo nmcli connection add type tun mode tun owner $(id -u) ifname {name} con-name {name} ipv6.method shared\n"
+                    )
+                    + "  Using ip tools:\n\t"
+                    + &format!(
+                        "sudo ip tuntap add {name} mode tun user $(id -u) && sudo ip link set up {name}"
+                    )
+            }
+            ErrorKind::InvalidInput => {
+                format!("Network interface {name} does not appear to be a TUN interface.")
+            }
+            _ => {
+                format!("Error creating tun interface: {:}", err.kind())
+            }
+        }
+    }
+    let dev = DeviceBuilder::new()
+        .name(name)
+        .inherit_enable_state()
+        .build_sync()
+        .map_err(|err| match_err(&err, name))?;
+
+    dev.set_nonblocking(true)
+        .map_err(|err| match_err(&err, name))?;
+    Ok(dev)
+}
+
+pub fn create_network_thread(
+    event_sender: Sender<Event>,
+    dev: SyncDevice,
+    name: &str,
+) -> Sender<Event> {
     let (jelly_packet_sender, jelly_packet_receiver): (Sender<Event>, Receiver<Event>) =
         mpsc::channel();
     let (internal_packet_sender, internal_packet_receiver): (Sender<Vec<u8>>, Receiver<Vec<u8>>) =
         mpsc::channel();
-
-    let Ok(dev) = DeviceBuilder::new()
-        .name(name)
-        .inherit_enable_state()
-        .build_sync()
-        .map_err(|err| match err.kind() {
-            ErrorKind::ResourceBusy => {
-                panic!("Network interface {name} is used by another program (possibly another Jelly instance); each running instance needs a dedicated interface.");
-            }
-            ErrorKind::PermissionDenied => {
-                panic!("Not enough permissions to open network interface {name}. On Linux using NetworkManager, can create an interface with this command:\nsudo nmcli connection add type tun mode tun owner $(id -u) ifname {name} con-name {name} ipv6.method shared");
-            }
-            _ => {
-                panic!("Error creating tun interface: {:}", err.kind());
-            }
-        });
-
-    dev.set_nonblocking(true).unwrap();
 
     let addr = get_addr_as_string(dev.addresses());
 

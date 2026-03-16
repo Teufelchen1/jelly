@@ -11,6 +11,7 @@ use crate::EventChannel;
 use crate::create_network_thread;
 use crate::create_slipmux_thread;
 use crate::mpsc::RecvTimeoutError;
+use crate::open_network_device;
 
 use configuration::event_loop_configuration;
 use diagnostic::event_loop_diagnostic;
@@ -94,8 +95,14 @@ pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
         }
     }
 
-    let name = args.network.flatten().unwrap_or_else(|| "slip".to_owned());
-    let network_event_sender = create_network_thread(event_sender, &name);
+    let name = args.network.unwrap();
+    let network_event_sender = match open_network_device(&name) {
+        Ok(dev) => create_network_thread(event_sender, dev, &name),
+        Err(err) => {
+            println!("{err}");
+            return;
+        }
+    };
 
     event_loop_network(
         &event_receiver,
@@ -119,8 +126,14 @@ pub fn start_headless_diagnostic_network(args: Cli, main_channel: EventChannel) 
         }
     }
 
-    let name = args.network.flatten().unwrap_or_else(|| "slip".to_owned());
-    let network_event_sender = create_network_thread(event_sender, &name);
+    let name = args.network.unwrap();
+    let network_event_sender = match open_network_device(&name) {
+        Ok(dev) => create_network_thread(event_sender, dev, &name),
+        Err(err) => {
+            println!("{err}");
+            return;
+        }
+    };
 
     event_loop_diagnostic_network(
         &event_receiver,

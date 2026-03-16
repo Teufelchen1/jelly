@@ -10,6 +10,7 @@ use crate::headless::start_headless_diagnostic;
 use crate::headless::start_headless_diagnostic_network;
 use crate::headless::start_headless_network;
 use crate::network::create_network_thread;
+use crate::network::open_network_device;
 use crate::slipmux::create_slipmux_thread;
 use crate::tui::ColorTheme;
 use crate::tui::start_tui;
@@ -34,33 +35,39 @@ struct Cli {
     /// The path to the UART TTY interface
     tty_path: std::path::PathBuf,
 
-    /// If enabled, creates a SLIP network interface
-    /// Optionally specifies the base name of the interface
+    /// If enabled, attaches the SLIP network to the given host TUN interface
     ///
-    /// Requires higher privileges to create the TUN interface.
-    #[arg(short = 't', long, verbatim_doc_comment)]
-    #[allow(clippy::option_option)]
-    network: Option<Option<String>>,
+    /// Default interface name is slip0
+    #[arg(
+        short = 't',
+        long,
+        num_args = 0..=1,
+        default_missing_value = "slip0",
+        verbatim_doc_comment,
+        required_if_eq("headless_network", "true")
+    )]
+    network: Option<String>,
 
     /// If true, disables the TUI and passes diagnostic messages via stdio
     ///
-    /// This is interactive. Jelly will await input and output indefinitely.
-    /// Configuration messages are ignored.
-    /// This means that any pre-known or configuration-based commands are not
-    /// available.
+    /// This is intended for interactive, shell-like usage.
+    /// Jelly will await input and output indefinitely.
+    /// Configuration messages are ignored. This means that any pre-known or
+    /// configuration-based commands are not available.
+    /// May be used with `--network`.
     #[arg(
         short = 'd',
         long,
         default_value_t = false,
         verbatim_doc_comment,
-        conflicts_with = "headless_configuration"
+        conflicts_with_all = ["headless_configuration", "headless_network"]
     )]
     headless_diagnostic: bool,
 
     /// If true, disables the TUI and passes configuration messages via stdio
     ///
     /// Use this mode inside scripts and pipe commands into Jelly.
-    /// This may be used interactive.
+    /// This may be used interactively.
     /// Jelly will await input unitl EOF.
     /// Jelly will wait for output until all commands are finished or
     /// the time-out is reached. The output will only be displayed once EOF is
@@ -68,6 +75,7 @@ struct Cli {
     /// the commands run time.
     /// Diagnostic messages are ignored.
     /// Pre-known, configuration-based commands are available.
+    /// May be used with `--network`.
     #[arg(
         short = 'c',
         long,
@@ -77,15 +85,17 @@ struct Cli {
     )]
     headless_configuration: bool,
 
-    /// If true, disables the TUI and acts as a network interface only
+    /// If true, disables the TUI and shows the in-/out-going packets.
     ///
+    /// Diagnostic messages are ignored.
     /// Configuration messages are ignored.
+    /// Must be used with `--network`.
     #[arg(
         short = 'n',
         long,
         default_value_t = false,
         verbatim_doc_comment,
-        conflicts_with = "headless_configuration"
+        conflicts_with_all = ["headless_diagnostic", "headless_configuration"]
     )]
     headless_network: bool,
 
@@ -105,12 +115,12 @@ fn main() {
     let args = Cli::parse();
     if !args.tty_path.exists() {
         println!("{} could not be found.", args.tty_path.display());
-        return;
+        std::process::exit(1);
     }
 
     let main_channel: EventChannel = mpsc::channel();
 
-    if args.headless_diagnostic && (args.headless_network || args.network.is_some()) {
+    if args.headless_diagnostic && args.network.is_some() {
         start_headless_diagnostic_network(args, main_channel);
     } else if args.headless_diagnostic {
         start_headless_diagnostic(args, main_channel);
