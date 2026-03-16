@@ -31,7 +31,7 @@ fn get_addr_as_string(addrs: std::io::Result<Vec<std::net::IpAddr>>) -> Option<S
 }
 
 pub fn open_network_device(name: &str) -> Result<SyncDevice, String> {
-    fn match_err(err: std::io::Error, name: &str) -> String {
+    fn match_err(err: &std::io::Error, name: &str) -> String {
         match err.kind() {
             ErrorKind::ResourceBusy => {
                 format!(
@@ -63,10 +63,10 @@ pub fn open_network_device(name: &str) -> Result<SyncDevice, String> {
         .name(name)
         .inherit_enable_state()
         .build_sync()
-        .map_err(|err| match_err(err, name))?;
+        .map_err(|err| match_err(&err, name))?;
 
     dev.set_nonblocking(true)
-        .map_err(|err| match_err(err, name))?;
+        .map_err(|err| match_err(&err, name))?;
     Ok(dev)
 }
 

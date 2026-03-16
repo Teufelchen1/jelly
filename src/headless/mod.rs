@@ -97,9 +97,9 @@ pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
 
     let name = args.network.unwrap();
     let network_event_sender = match open_network_device(&name) {
-        Ok(dev) => create_network_thread(event_sender.clone(), dev, &name),
+        Ok(dev) => create_network_thread(event_sender, dev, &name),
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return;
         }
     };
@@ -128,9 +128,9 @@ pub fn start_headless_diagnostic_network(args: Cli, main_channel: EventChannel) 
 
     let name = args.network.unwrap();
     let network_event_sender = match open_network_device(&name) {
-        Ok(dev) => create_network_thread(event_sender.clone(), dev, &name),
+        Ok(dev) => create_network_thread(event_sender, dev, &name),
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return;
         }
     };

@@ -74,7 +74,7 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
                 &network_name,
             )),
             Err(err) => {
-                println!("{}", err);
+                println!("{err}");
                 return;
             }
         }
