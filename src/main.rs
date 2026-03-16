@@ -10,6 +10,7 @@ use crate::headless::start_headless_diagnostic;
 use crate::headless::start_headless_diagnostic_network;
 use crate::headless::start_headless_network;
 use crate::network::create_network_thread;
+use crate::network::open_network_device;
 use crate::slipmux::create_slipmux_thread;
 use crate::tui::ColorTheme;
 use crate::tui::start_tui;
@@ -34,13 +35,18 @@ struct Cli {
     /// The path to the UART TTY interface
     tty_path: std::path::PathBuf,
 
-    /// If enabled, creates a SLIP network interface
-    /// Optionally specifies the base name of the interface
+    /// If enabled, attaches the SLIP network to the given host TUN interface
     ///
-    /// Requires higher privileges to create the TUN interface.
-    #[arg(short = 't', long, verbatim_doc_comment)]
-    #[allow(clippy::option_option)]
-    network: Option<Option<String>>,
+    /// Default interface name is slip0
+    #[arg(
+        short = 't',
+        long,
+        num_args = 0..=1,
+        default_missing_value = "slip0",
+        verbatim_doc_comment,
+        required_if_eq("headless_network", "true")
+    )]
+    network: Option<String>,
 
     /// If true, disables the TUI and passes diagnostic messages via stdio
     ///

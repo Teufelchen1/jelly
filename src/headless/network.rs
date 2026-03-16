@@ -18,7 +18,7 @@ pub fn event_loop_network(
             Err(RecvTimeoutError::Disconnected) => panic!(),
         };
         match event {
-            Event::NetworkConnect(name) => println!("Created network interface {name}."),
+            Event::NetworkConnect(name) => println!("Using network interface {name}."),
 
             Event::SerialDisconnect => {
                 println!("\nSerial disconnect :(");

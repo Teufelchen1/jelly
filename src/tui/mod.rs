@@ -15,6 +15,7 @@ use crate::EventChannel;
 use crate::app::App;
 use crate::create_network_thread;
 use crate::create_slipmux_thread;
+use crate::open_network_device;
 
 pub use color::ColorTheme;
 pub use ui_state::SelectedTab;
@@ -66,8 +67,17 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
 
     let network_event_sender = if let Some(network_name) = args.network {
-        let name = network_name.unwrap_or_else(|| "slip".to_owned());
-        Some(create_network_thread(event_sender.clone(), &name))
+        match open_network_device(&network_name) {
+            Ok(dev) => Some(create_network_thread(
+                event_sender.clone(),
+                dev,
+                &network_name,
+            )),
+            Err(err) => {
+                println!("{}", err);
+                return;
+            }
+        }
     } else {
         None
     };
