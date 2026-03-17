@@ -3,9 +3,30 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project largely adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-03-17
+
+### Added
+
+- CLI/TUI: Let users specify the color theme of the TUI
+- TUI: Allow infinte backlog with smooth scrolling
+- Tests: Added simple TUI rendering tests, including behaviour based on user input
+- UX: Concretize user instructions when working with TUN interfaces
+
+### Fixed
+
+- Fix: Pass known diagnostic commands with their arguments
+- Fix: Clear user input after commiting (request TUI re-rendering)
+
+### Changed
+
+- Chore: Internal refactoring, depenendy updates, major performance improvements
+- CLI: Clarify usage & descriptions of headless modes
+- CoAP: Try to display undeclared payloads as UTF-8, fall back to hex dump
+- TUI: Prettify packet log display
 
 ## [0.1.1] - 2026-01-13
 
