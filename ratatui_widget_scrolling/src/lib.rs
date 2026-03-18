@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::iter::zip;
 
-use ratatui::Frame;
-use ratatui::layout::Rect;
-use ratatui::widgets::Widget;
+use ratatui_core::layout::Rect;
+use ratatui_core::terminal::Frame;
+use ratatui_core::widgets::Widget;
 
 pub type ElementHeight = usize;
 pub type IndexInHeightLog = usize;
@@ -76,14 +76,17 @@ impl ScrollState {
         scroll_position: usize,
         max_scroll_offset: usize,
     ) {
-        let scrollbar = ratatui::widgets::Scrollbar::default()
+        use ratatui_core::layout::Margin;
+        use ratatui_widgets::scrollbar::{Scrollbar, ScrollbarState};
+
+        let scrollbar = Scrollbar::default()
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
-        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(max_scroll_offset)
-            .position(max_scroll_offset - scroll_position);
+        let mut scrollbar_state =
+            ScrollbarState::new(max_scroll_offset).position(max_scroll_offset - scroll_position);
         frame.render_stateful_widget(
             scrollbar,
-            area.outer(ratatui::layout::Margin {
+            area.outer(Margin {
                 vertical: 0,
                 horizontal: 1,
             }),
@@ -219,7 +222,7 @@ where
     ElementWidget: Widget,
     F: Fn(&'a Element) -> (ElementHeight, ElementWidget),
 {
-    use ratatui::buffer::Buffer;
+    use ratatui_core::buffer::Buffer;
 
     fn copy_partial_top_widget_to_frame(
         frame: &mut Frame,
@@ -299,7 +302,7 @@ where
     }
 
     if let Some((range, area)) = full_draw_middle {
-        use ratatui::layout::{Constraint, Layout};
+        use ratatui_core::layout::{Constraint, Layout};
         let mut widget_blocks = vec![];
         let mut constrains = vec![];
         for index in range {

@@ -19,10 +19,10 @@ jobs:
       - name: Clippy Debug
         run: cargo clippy -V
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all --all-targets -- -D warnings
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Build
         run: cargo build --verbose
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --all --verbose
