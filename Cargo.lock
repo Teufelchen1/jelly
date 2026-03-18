@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Jelly"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "cbor-edn",
  "chrono",
@@ -16,11 +16,11 @@ dependencies = [
  "pnet_packet",
  "rand",
  "ratatui",
+ "ratatui_widget_scrolling",
  "serialport",
  "slipmux",
  "terminal-colorsaurus",
  "tun-rs",
- "widget_scrolling",
 ]
 
 [[package]]
@@ -1253,6 +1253,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratatui_widget_scrolling"
+version = "0.1.0"
+dependencies = [
+ "ratatui-core",
+ "ratatui-widgets",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1730,13 +1738,6 @@ name = "widestring"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471"
-
-[[package]]
-name = "widget_scrolling"
-version = "0.1.0"
-dependencies = [
- "ratatui",
-]
 
 [[package]]
 name = "winapi"

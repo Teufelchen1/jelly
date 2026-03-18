@@ -1,0 +1,18 @@
+[package]
+authors = ["Bennet Hattesen <bennet.hattesen@haw-hamburg.de>"]
+categories = ["command-line-interface"]
+description = "Flexible log rendering widget for ratatui that can scroll other widgets"
+edition = "2024"
+homepage = "https://github.com/Teufelchen1/jelly/tree/main/widget_scrolling"
+keywords = ["tui", "terminal", "log", "widget"]
+
+license = "MIT OR Apache-2.0"
+name = "ratatui_widget_scrolling"
+readme = "README.md"
+repository = "https://github.com/Teufelchen1/jelly/tree/main/widget_scrolling"
+rust-version = "1.89"
+version = "0.1.0"
+
+[dependencies]
+ratatui-core = { version = "0.1.0", default-features = false, features = ["layout-cache"] }
+ratatui-widgets =  { version = "0.3.0", default-features = false }

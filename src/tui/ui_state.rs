@@ -4,7 +4,7 @@ use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 use ratatui::style::Style;
 
-use widget_scrolling::ScrollState;
+use ratatui_widget_scrolling::ScrollState;
 
 use super::ColorTheme;
 use super::color::ColorPalette;
