@@ -7,12 +7,6 @@ and this project largely adheres to [Semantic Versioning](https://semver.org/spe
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-03-18
-
-### Changed
-
-- Published the sub-crate `rataui_widget_scrolling` to crates.io, as Jellys latest release can not be published if the sub-crate is not published as well.
-
 ## [0.2.0] - 2026-03-17
 
 ### Added
