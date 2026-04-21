@@ -220,13 +220,7 @@ impl App {
         self.packet_log.add_to_node(packet);
     }
 
-    fn execute_command(
-        &mut self,
-        ui_state: &mut Option<&mut UiState>,
-        cmd: &str,
-        cmd_string: &str,
-        file: SaveToFile,
-    ) {
+    fn execute_command(&mut self, cmd: &str, cmd_string: &str, file: SaveToFile) {
         // This works around a lifetime issue
         let cmd = self
             .user_input_manager
@@ -259,17 +253,8 @@ impl App {
                     .send(Event::SendDiagnostic(cmd_str))
                     .unwrap();
             }
-            Ok(CommandType::Jelly) => {
-                // This is kinda hacky but the alternative would be to pass &mut App
-                // into the command handler?
-                if cmd.cmd == "Help" {
-                    if let Some(ui_state) = ui_state {
-                        ui_state.select_help_view();
-                        self.populate_command_help_list(ui_state);
-                    }
-                } else if cmd.cmd == "ForceCmdsAvailable" {
-                    self.force_all_commands_availabe(ui_state);
-                }
+            Ok(CommandType::Jelly(handler)) => {
+                self.event_sender.send(Event::AppCommand(handler)).unwrap();
             }
             // Display usage info to the user
             Err(e) => {
@@ -282,7 +267,7 @@ impl App {
         }
     }
 
-    fn handle_command_commit(&mut self, ui_state: &mut Option<&mut UiState>) {
+    fn handle_command_commit(&mut self) {
         match self.user_input_manager.classify_input() {
             InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
@@ -304,23 +289,23 @@ impl App {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();
             }
             InputType::Command(cmd, cmd_string, file) => {
-                self.execute_command(ui_state, &cmd, &cmd_string, file);
+                self.execute_command(&cmd, &cmd_string, file);
             }
         }
 
         self.user_input_manager.finish_current_input();
     }
 
-    pub fn on_msg_string(&mut self, mut ui_state: Option<&mut UiState>, msg: &str) {
+    pub fn on_msg_string(&mut self, msg: &str) {
         self.user_input_manager.insert_string(msg);
 
         // should always be the case as msg is read via read_line()
         if msg.ends_with('\n') {
-            self.handle_command_commit(&mut ui_state);
+            self.handle_command_commit();
         }
     }
 
-    pub fn on_key(&mut self, mut ui_state: Option<&mut UiState>, key: KeyEvent) -> bool {
+    pub fn on_key(&mut self, ui_state: Option<&mut UiState>, key: KeyEvent) -> bool {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             return false;
         }
@@ -329,7 +314,7 @@ impl App {
             KeyCode::Enter => {
                 // Can't send anything if we don't have an active connection
                 if self.connected {
-                    self.handle_command_commit(&mut ui_state);
+                    self.handle_command_commit();
                     if let Some(ui_state) = ui_state {
                         ui_state.get_dirty();
                     }

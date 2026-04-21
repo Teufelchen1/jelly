@@ -1,8 +1,11 @@
 use crossterm::event::KeyEvent;
 use crossterm::event::MouseEvent;
 
+use crate::command::InternalCommand;
+
 #[derive(Debug)]
 pub enum Event {
+    AppCommand(InternalCommand),
     Diagnostic(String),
     Configuration(Vec<u8>),
     NetworkConnect(String),
