@@ -15,7 +15,7 @@ pub fn event_loop_configuration(
     hardware_event_sender: &Sender<Event>,
 ) {
     let mut app = App::new(event_sender.clone());
-    app.force_all_commands_availabe(&mut None);
+    app.force_all_commands_availabe(None);
 
     match await_serial_connect(event_channel) {
         Ok(_name) => {
@@ -43,7 +43,7 @@ pub fn event_loop_configuration(
         };
         match event {
             Event::TerminalString(msg) => {
-                app.on_msg_string(None, &msg);
+                app.on_msg_string(&msg);
             }
             Event::TerminalEOF => {
                 terminal_eof = true;

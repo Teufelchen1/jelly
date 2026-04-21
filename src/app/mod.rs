@@ -61,14 +61,14 @@ impl App {
         }
     }
 
-    pub fn force_all_commands_availabe(&mut self, ui_state: &mut Option<&mut UiState>) {
+    pub fn force_all_commands_availabe(&mut self, ui_state: Option<&mut UiState>) {
         self.user_input_manager.force_all_commands_availabe();
         if let Some(ui_state) = ui_state {
             self.populate_command_help_list(ui_state);
         }
     }
 
-    fn populate_command_help_list(&self, ui_state: &mut UiState) {
+    pub fn populate_command_help_list(&self, ui_state: &mut UiState) {
         let cmd_list = self
             .user_input_manager
             .known_commands

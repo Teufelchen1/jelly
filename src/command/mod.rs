@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use coap_lite::{CoapRequest, Packet};
 
 use commands::CoapGet;
+pub use commands::InternalCommand;
 pub use library::CommandLibrary;
 
 mod commands;
@@ -17,7 +18,7 @@ pub enum CommandType {
     /// A command that does CoAP interactions
     CoAP(BoxedCommandHandler),
     /// A Jelly internal command, e.g. Help
-    Jelly,
+    Jelly(InternalCommand),
 }
 
 /// Callback API for handling a command.
@@ -79,16 +80,6 @@ impl Command {
             description: description.to_owned(),
             required_endpoints: vec![],
             parse: |_c, cmd_str| Ok(CommandType::Text(cmd_str.to_owned())),
-        }
-    }
-
-    /// Creates a new command for Jelly internal usage
-    pub fn new_jelly_type(cmd: &str, description: &str) -> Self {
-        Self {
-            cmd: cmd.to_owned(),
-            description: description.to_owned(),
-            required_endpoints: vec![],
-            parse: |_c, _a| Ok(CommandType::Jelly),
         }
     }
 

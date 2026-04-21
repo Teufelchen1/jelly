@@ -11,6 +11,15 @@ mod ps;
 mod saul;
 mod wkc;
 
+mod force_cmds_available;
+mod help;
+
+#[derive(Debug)]
+pub enum InternalCommand {
+    Help(help::Help),
+    ForceCmdsAvailable(force_cmds_available::ForceCmdsAvailable),
+}
+
 pub fn all_commands() -> Vec<Command> {
     vec![
         saul::cmd(),
@@ -20,10 +29,7 @@ pub fn all_commands() -> Vec<Command> {
         wkc::cmd(),
         Command::new_text_type("help", "Prints all available commands"),
         Command::new_coap_get("/.well-known/core", "Query the wkc"),
-        Command::new_jelly_type("Help", "Jelly Help"),
-        Command::new_jelly_type(
-            "ForceCmdsAvailable",
-            "Enables all implemented commands disregarding their requirements",
-        ),
+        help::cmd(),
+        force_cmds_available::cmd(),
     ]
 }

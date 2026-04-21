@@ -180,6 +180,13 @@ pub fn process_next_event(
     network_event_sender: Option<&Sender<Event>>,
 ) -> ProcessEventResult {
     match event {
+        Event::AppCommand(cmd) => {
+            use crate::command::InternalCommand;
+            match cmd {
+                InternalCommand::Help(help) => help(app, Some(ui_state)),
+                InternalCommand::ForceCmdsAvailable(fca) => fca(app, Some(ui_state)),
+            }
+        }
         Event::Diagnostic(msg) => {
             app.on_diagnostic_msg(&msg);
             ui_state.get_dirty_from_tab(SelectedTab::Diagnostic);
