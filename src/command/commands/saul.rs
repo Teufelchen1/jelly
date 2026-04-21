@@ -7,6 +7,7 @@ use coap_lite::{CoapRequest, Packet};
 use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
+use senml;
 
 use super::Command;
 use super::CommandHandler;
@@ -27,8 +28,11 @@ pub struct SaulCli {
 enum SaulOperation {
     /// Lists all attached sensors and actuators (this is the default)
     List,
-    /// Read a value from a sensor
-    Read { id: u8 },
+    /// Read the values from the specified sensors/ids
+    Read {
+        #[arg(required = true, num_args = 1.., value_parser = clap::value_parser!(u8), value_delimiter = ' ')]
+        sensor_ids: Vec<u8>,
+    },
     /// Write a 8 bit value into an actuator
     Write { id: u8, data: u8 },
 }
@@ -68,89 +72,84 @@ impl CommandHandler for Saul {
         let mut buffer: [u8; 12] = [0; 12];
         let mut encoder = Encoder::new(&mut buffer[..]);
 
-        let _subcommand = {
-            match self.cli.operation {
-                None | Some(SaulOperation::List) => encoder.array(1).unwrap().u8(0).unwrap().end(),
-                Some(SaulOperation::Read { id }) => encoder
+        let request = match &self.cli.operation {
+            None | Some(SaulOperation::List) => {
+                let mut request: CoapRequest<String> = CoapRequest::new();
+                request.set_method(Method::Get);
+                request.set_path(&self.location);
+                request
+            }
+            Some(SaulOperation::Read { sensor_ids }) => {
+                encoder.array(sensor_ids.len().try_into().unwrap()).unwrap();
+                for id in sensor_ids {
+                    encoder.u8(*id).unwrap();
+                }
+
+                encoder.end().unwrap();
+                let mut request: CoapRequest<String> = CoapRequest::new();
+                request.set_method(Method::Get);
+                request.set_path(&self.location);
+                request
+                    .message
+                    .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                request.message.set_payload(&buffer).unwrap();
+                request
+            }
+            Some(SaulOperation::Write { id, data }) => {
+                encoder
                     .array(2)
                     .unwrap()
-                    .u8(1)
+                    .u8(*id)
                     .unwrap()
-                    .u8(id)
+                    .u8(*data)
                     .unwrap()
-                    .end(),
-                Some(SaulOperation::Write { id, data }) => encoder
-                    .array(3)
-                    .unwrap()
-                    .u8(2)
-                    .unwrap()
-                    .u8(id)
-                    .unwrap()
-                    .u8(data)
-                    .unwrap()
-                    .end(),
+                    .end()
+                    .unwrap();
+                let mut request: CoapRequest<String> = CoapRequest::new();
+                request.set_method(Method::Post);
+                request.set_path(&self.location);
+                request
+                    .message
+                    .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                request.message.set_payload(&buffer).unwrap();
+                request
             }
         };
 
-        let mut request: CoapRequest<String> = CoapRequest::new();
-        request.set_method(Method::Post);
-        request.set_path(&self.location);
-        request
-            .message
-            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-        request.message.set_payload(&buffer).unwrap();
         request
     }
 
     fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
         self.payload.clone_from(&response.payload);
         let mut out = String::new();
-        let mut decoder = Decoder::new(&self.payload);
+        //let mut decoder = Decoder::new(&self.payload);
 
         match self.cli.operation {
             None | Some(SaulOperation::List) => {
                 out = decode_sensor_list_into_string(&self.payload);
             }
-            Some(SaulOperation::Read { id }) => {
-                let data = decoder.map();
-                match data {
-                    // Dirty: assuming name, unit, value
-                    Ok(Some(3)) => {
-                        let _name_id = decoder.u8(); // Should be 0, see rfc8428#section-6
-                        let name = decoder.str().unwrap();
-                        let _unit_id = decoder.u8(); // 1
-                        let unit = decoder.str().unwrap();
-                        let _value_id = decoder.u8(); // 2
-                        let _value_tag = decoder.tag().unwrap(); // decimal fractions (CBOR Tag 4)
-                        let _value_array = decoder.array();
-                        let e = decoder.i32().unwrap();
-                        let m = f32::from(decoder.i16().unwrap());
-                        let value: f32 = m * 10f32.powi(e);
-                        let _ = writeln!(out, "{name}: {value:?} °{unit}");
+            Some(SaulOperation::Read { sensor_ids: _ }) => {
+                match senml::pack::Pack::from_cbor(&self.payload) {
+                    Ok(parsed) => {
+                        for record in parsed {
+                            let _ = writeln!(out, "{record}");
+                        }
                     }
-                    // Dirty: assuming name, value
-                    Ok(Some(2)) => {
-                        let _name_id = decoder.u8(); // Should be 0, see rfc8428#section-6
-                        let name = decoder.str().unwrap();
-                        let _value_id = decoder.u8(); // 4, bool
-                        let value = decoder.bool().unwrap();
-                        let _ = writeln!(out, "{name}: {value}");
-                    }
-                    Ok(Some(_)) => {
-                        let _ = writeln!(out, "SenML response type not implemented.");
-                    }
-                    Ok(None) => {
-                        let _ = writeln!(
-                            out,
-                            "Malformed CBOR response, expected Map with exactly three elements."
-                        );
-                    }
-                    Err(_) => {
-                        let _ = writeln!(out, "No device with this id({id}) found.");
+                    Err(e) => {
+                        let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
                     }
                 }
             }
-            Some(SaulOperation::Write { id: _, data: _ }) => {}
+            Some(SaulOperation::Write { id: _, data: _ }) => {
+                match senml::record::RawRecord::from_cbor(&self.payload) {
+                    Ok(parsed) => {
+                        let _ = writeln!(out, "Koens SenML Says:\n{parsed:?}");
+                    }
+                    Err(e) => {
+                        let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
+                    }
+                }
+            }
         }
         self.buffer = out;
         self.finished = true;

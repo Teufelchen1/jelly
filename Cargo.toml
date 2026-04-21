@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 name = "Jelly"
 readme = "README.md"
 repository = "https://github.com/teufelchen1/jelly"
-rust-version = "1.89"
+rust-version = "1.90"
 version = "0.2.1"
 
 [workspace]
@@ -43,6 +43,7 @@ crossterm = { version = "0.29", default-features = false, features = ["events"] 
 rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
 minicbor = "2"
 # This disables the libudev-sys dependencies, making auto enumeration unavailable
+senml = { path = "../senml" }
 serialport = { version = "4", default-features = false }
 slipmux = "0.3.2"
 terminal-colorsaurus = { version = "1.0.3", default-features = false }
