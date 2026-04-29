@@ -221,12 +221,14 @@ impl LogEntry<CoapResponse> {
                 None if is_error => String::from_utf8_lossy(payload).to_string(),
                 // this is a cheap-in-terms-of-dependencies hex formatting; `aa bb cc` would be
                 // prettier than `[aa, bb, cc]`, but needs extra dependencies.
-                Some(ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq) => {
-                    cbor_edn::Sequence::from_cbor(payload).map_or_else(
-                        |e| format!("Parsing error {e}, content {payload:02x?}"),
-                        |c| c.serialize(),
-                    )
-                }
+                Some(
+                    ContentFormat::ApplicationCBOR
+                    | ContentFormat::ApplicationCborSeq
+                    | ContentFormat::ApplicationSenmlCBOR,
+                ) => cbor_edn::Sequence::from_cbor(payload).map_or_else(
+                    |e| format!("Parsing error {e}, content {payload:02x?}"),
+                    |c| c.serialize(),
+                ),
                 // With nothing given (as opposed to, for example, application/octet-stream when we
                 // should not guess), we venture a guess because it is *so* prevalent, and hard to
                 // mistake.
