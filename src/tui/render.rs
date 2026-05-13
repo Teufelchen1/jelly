@@ -21,6 +21,7 @@ use ratatui::widgets::ScrollbarState;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Wrap;
 
+use crate::command::CommandLibrary;
 use crate::datatypes::coap_log::Request;
 use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobLog;
@@ -53,6 +54,7 @@ impl UiState {
             &mut scrollbar_state,
         );
     }
+
     fn render_header_footer(&self, frame: &mut Frame, header_area: Rect, footer_area: Rect) {
         let tab_titles = [
             "Overview (F1)",
@@ -246,6 +248,7 @@ impl UiState {
         frame: &mut Frame,
         area: Rect,
         user_input_manager: &UserInputManager,
+        command_library: &CommandLibrary,
     ) {
         if user_input_manager.input_empty() {
             let right_block_down = Block::bordered()
@@ -258,17 +261,23 @@ impl UiState {
                 Span::from("Type a command, for example: ").patch_style(self.downlight()),
             );
             text.push_span(
-                Span::from(user_input_manager.command_name_list()).patch_style(self.downlight()),
+                Span::from(command_library.command_name_list()).patch_style(self.downlight()),
             );
             let paragraph = Paragraph::new(text).block(right_block_down);
             frame.set_cursor_position(Position::new(area.x + 1, area.y + 1));
             frame.render_widget(paragraph, area);
             return;
         }
-        let title = match user_input_manager.classify_input() {
+        let title = match user_input_manager.classify_input(command_library) {
             InputType::RawCoap(_) => "User Input: Raw CoAP request",
             InputType::RawCommand(_) => "User Input: Raw diagnostic command",
-            InputType::Command(cmd, _, _) => &format!("User Input: {cmd}"),
+            InputType::Command(cmd_str, _, _) => {
+                if let Some(cmd) = command_library.find_by_cmd(&cmd_str) {
+                    &format!("User Input: {cmd_str}: {:}", &cmd.description)
+                } else {
+                    &format!("User Input: {cmd_str}")
+                }
+            }
         };
         let right_block_down = Block::bordered()
             .border_style(self.border_style())
@@ -295,7 +304,7 @@ impl UiState {
 
         frame.set_cursor_position(Position::new(x_pos, y_pos));
 
-        let (suggestion, cmds) = user_input_manager.suggestion();
+        let (suggestion, cmds) = user_input_manager.suggestion(command_library);
 
         let mut completion_text = String::from(
             suggestion
@@ -305,13 +314,16 @@ impl UiState {
         if !cmds.is_empty() {
             completion_text.push_str(" | ");
             if cmds.len() == 1 {
-                completion_text.push_str(&cmds[0].description);
+                completion_text.push_str(cmds[0]);
+                // if let Some(cmd) = command_library.find_by_cmd(cmds[0]) {
+                //     completion_text.push_str(&cmd.description);
+                // }
             } else {
                 let possible_commands = cmds
                     .iter()
-                    .map(|x| x.cmd.clone())
-                    .collect::<Vec<String>>()
-                    .join(" ");
+                    .map(|x| x.as_str())
+                    .collect::<Vec<&str>>()
+                    .join(", ");
                 completion_text.push_str(&possible_commands);
             }
         }
@@ -441,6 +453,7 @@ impl UiState {
         frame: &mut Frame,
         main_area: Rect,
         user_input_manager: &UserInputManager,
+        command_library: &CommandLibrary,
         configuration_log: &Log<Request>,
         overall_log: &Log<String>,
     ) {
@@ -477,13 +490,14 @@ impl UiState {
         self.render_configuration_messages(frame, configuration_log_area, configuration_log, true);
         self.render_configuration_overview(frame, device_config_overview_area);
         self.render_overall_messages(frame, overall_messages_log_area, overall_log);
-        self.render_user_input(frame, userinput_area, user_input_manager);
+        self.render_user_input(frame, userinput_area, user_input_manager, command_library);
     }
 
     pub fn draw(
         &mut self,
         frame: &mut Frame,
         user_input_manager: &UserInputManager,
+        command_library: &CommandLibrary,
         job_log: &JobLog,
         logs: (
             &Log<Request>,
@@ -521,6 +535,7 @@ impl UiState {
                     frame,
                     main_area,
                     user_input_manager,
+                    command_library,
                     configuration_log,
                     overall_log,
                 );
@@ -535,7 +550,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_diagnostic_messages(frame, chunk_upper, diagnostic_log);
-                self.render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager, command_library);
             }
             super::SelectedTab::Configuration => {
                 let chunks = Layout::default()
@@ -547,7 +562,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_configuration_messages(frame, chunk_upper, configuration_log, false);
-                self.render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager, command_library);
             }
             super::SelectedTab::Commands => {
                 let chunks = Layout::default()
@@ -559,7 +574,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_commands(frame, chunk_upper, job_log);
-                self.render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager, command_library);
             }
             super::SelectedTab::Net => {
                 let chunks = Layout::default()
@@ -571,7 +586,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_network(frame, chunk_upper, net_log);
-                self.render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager, command_library);
             }
             super::SelectedTab::Help => {
                 let chunks = Layout::default()
@@ -583,7 +598,7 @@ impl UiState {
                 let chunk_lower = chunks[1];
 
                 self.render_help(frame, chunk_upper);
-                self.render_user_input(frame, chunk_lower, user_input_manager);
+                self.render_user_input(frame, chunk_lower, user_input_manager, command_library);
             }
         }
     }

@@ -14,7 +14,7 @@ impl CommandLibrary {
     /// - /.well-known/core: Query the wkc
     pub fn default() -> Self {
         Self {
-            cmds: vec![],
+            cmds: vec![], // Todo: Auto available cmds without requirements
             stored_cmds: all_commands(),
         }
     }
@@ -132,7 +132,7 @@ impl CommandLibrary {
         })
     }
 
-    /// Checks is a given `Command` is already in the library
+    /// Checks if a given `Command` is already in the library
     pub fn _contains(&self, cmd: &Command) -> bool {
         for known_cmd in &self.cmds {
             if known_cmd == cmd {
@@ -140,5 +140,31 @@ impl CommandLibrary {
             }
         }
         false
+    }
+
+    pub fn command_name_list(&self) -> String {
+        self.list_by_cmd().join(", ")
+    }
+
+    pub fn command_exists_by_location(&self, location: &str) -> bool {
+        self.find_by_first_location(location).is_some()
+    }
+
+    pub fn check_for_new_available_commands(&mut self, eps: &[String]) {
+        self.update_available_cmds_based_on_endpoints(eps);
+    }
+
+    pub fn update_command_description_by_location(&mut self, location: &str, description: &str) {
+        // If we already know this command, update it's description
+        if let Some(cmd) = self.find_by_first_location_mut(location) {
+            cmd.update_description(description);
+        }
+    }
+
+    pub fn update_command_description_by_name(&mut self, name: &str, description: &str) {
+        // If we already know this command, update it's description
+        if let Some(cmd) = self.find_by_cmd_mut(name) {
+            cmd.update_description(description);
+        }
     }
 }

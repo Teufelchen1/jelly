@@ -4,7 +4,6 @@ use crate::command::Command;
 use crate::command::CommandLibrary;
 
 pub struct UserInputManager {
-    pub known_commands: CommandLibrary,
     pub user_input: String,
     user_command_history: Vec<String>,
     user_command_history_index: usize,
@@ -26,16 +25,11 @@ pub enum InputType {
 impl UserInputManager {
     pub fn new() -> Self {
         Self {
-            known_commands: CommandLibrary::default(),
             user_input: String::new(),
             user_command_history: vec![],
             user_command_history_index: 0,
             cursor_position: 0,
         }
-    }
-
-    pub fn force_all_commands_availabe(&mut self) {
-        self.known_commands.force_all_cmds_available();
     }
 
     pub fn insert_string(&mut self, string: &str) {
@@ -65,15 +59,58 @@ impl UserInputManager {
         }
     }
 
-    pub fn suggestion(&self) -> (String, Vec<&Command>) {
-        self.known_commands
-            .longest_common_prefixed_by_cmd(&self.user_input)
+    /// Takes a prefix and a list of Strings, computes the longest common prefix.
+    /// For example if the given prefix `F` matches `FooBar`, `FooBaz` and `FooBizz`, this
+    /// function would return `FooB`.
+    /// On empty input, prefix is returened as is
+    fn longest_common_prefix(&self, prefix: &str, cmds: &[&String]) -> String {
+        // Ideally we would use a tree here and also cache results
+        let actual_prefix = match cmds.len() {
+            0 => prefix.to_owned(),
+            1 => cmds[0].clone(),
+            _ => {
+                let mut common_prefix = prefix.to_owned();
+                let first_cmd = &cmds[0];
+                'outer: for (i, character) in first_cmd.chars().enumerate().skip(prefix.len()) {
+                    for othercmd in cmds.iter().skip(1) {
+                        if i >= othercmd.len() || othercmd.chars().nth(i) != Some(character) {
+                            break 'outer;
+                        }
+                    }
+                    common_prefix.push(character);
+                }
+                common_prefix
+            }
+        };
+        actual_prefix
     }
 
-    pub fn set_suggest_completion(&mut self) {
-        let (suggestion, _) = self
-            .known_commands
-            .longest_common_prefixed_by_cmd(&self.user_input);
+    pub fn suggestion<'a>(
+        &'a self,
+        command_library: &'a CommandLibrary,
+    ) -> (String, Vec<&'a String>) {
+        let prefix = &self.user_input;
+
+        let matching_from_history = self
+            .user_command_history
+            .iter()
+            .filter(|cmd| cmd.starts_with(prefix));
+
+        let matching_from_library = command_library.matching_prefix_by_cmd(prefix);
+        let mut matching_both: Vec<&String> = matching_from_history
+            .chain(matching_from_library.iter().map(|c| &c.cmd))
+            .collect();
+        matching_both.sort();
+        matching_both.dedup();
+        matching_both.retain(|cmd| **cmd != *prefix);
+
+        let common_prefix = self.longest_common_prefix(prefix, &matching_both);
+
+        (common_prefix, matching_both)
+    }
+
+    pub fn set_suggest_completion(&mut self, command_library: &CommandLibrary) {
+        let (suggestion, _) = self.suggestion(command_library);
 
         self.user_input.clear();
         self.user_input.push_str(&suggestion);
@@ -126,7 +163,7 @@ impl UserInputManager {
         self.user_input.is_empty()
     }
 
-    pub fn classify_input(&self) -> InputType {
+    pub fn classify_input(&self, command_library: &CommandLibrary) -> InputType {
         let (cmd_string, file) = if let Some((cmd_string, path)) = self.user_input.split_once("%>")
         {
             let path = path.trim();
@@ -141,9 +178,7 @@ impl UserInputManager {
         } else {
             (self.user_input.as_str(), SaveToFile::No)
         };
-        let maybe_cmd = self
-            .known_commands
-            .find_by_cmd(cmd_string.split(' ').next().unwrap());
+        let maybe_cmd = command_library.find_by_cmd(cmd_string.split(' ').next().unwrap());
         match maybe_cmd {
             Some(cmd) => InputType::Command(cmd.cmd.clone(), cmd_string.to_owned(), file),
             None => {
@@ -157,35 +192,6 @@ impl UserInputManager {
                     InputType::RawCommand(cmd)
                 }
             }
-        }
-    }
-
-    pub fn command_name_list(&self) -> String {
-        self.known_commands.list_by_cmd().join(", ")
-    }
-
-    pub fn command_exists_by_location(&self, location: &str) -> bool {
-        self.known_commands
-            .find_by_first_location(location)
-            .is_some()
-    }
-
-    pub fn check_for_new_available_commands(&mut self, eps: &[String]) {
-        self.known_commands
-            .update_available_cmds_based_on_endpoints(eps);
-    }
-
-    pub fn update_command_description_by_location(&mut self, location: &str, description: &str) {
-        // If we already know this command, update it's description
-        if let Some(cmd) = self.known_commands.find_by_first_location_mut(location) {
-            cmd.update_description(description);
-        }
-    }
-
-    pub fn update_command_description_by_name(&mut self, name: &str, description: &str) {
-        // If we already know this command, update it's description
-        if let Some(cmd) = self.known_commands.find_by_cmd_mut(name) {
-            cmd.update_description(description);
         }
     }
 }
