@@ -12,14 +12,9 @@ use ratatui::widgets::Wrap;
 
 use crate::command::CommandHandler;
 
-pub type JobId = usize;
+use super::user_input::SaveToFile;
 
-pub enum SaveToFile {
-    No,
-    AsBin(String),
-    AsText(String),
-    ToStdout,
-}
+pub type JobId = usize;
 
 pub struct Job {
     handler: Option<Box<dyn CommandHandler>>,

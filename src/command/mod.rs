@@ -110,7 +110,7 @@ impl Command {
     }
 
     /// Checks if the name of this command matches a prefix
-    fn starts_with(&self, prefix: &str) -> bool {
+    fn _starts_with(&self, prefix: &str) -> bool {
         self.cmd.starts_with(prefix)
     }
 }

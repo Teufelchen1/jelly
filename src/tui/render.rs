@@ -28,7 +28,7 @@ use crate::datatypes::job_log::JobLog;
 use crate::datatypes::log::Log;
 use crate::datatypes::log::LogEntry;
 use crate::datatypes::packet_log::PacketDirection;
-use crate::datatypes::user_input_manager::InputType;
+use crate::datatypes::user_input::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 
 use super::UiState;
@@ -268,7 +268,8 @@ impl UiState {
             frame.render_widget(paragraph, area);
             return;
         }
-        let title = match user_input_manager.classify_input(command_library) {
+
+        let title = match InputType::from_raw(&user_input_manager.user_input, command_library) {
             InputType::RawCoap(_) => "User Input: Raw CoAP request",
             InputType::RawCommand(_) => "User Input: Raw diagnostic command",
             InputType::Command(cmd_str, _, _) => {
@@ -304,7 +305,8 @@ impl UiState {
 
         frame.set_cursor_position(Position::new(x_pos, y_pos));
 
-        let (suggestion, cmds) = user_input_manager.suggestion(command_library);
+        let cmd_list = command_library.list_by_cmd_ref();
+        let (suggestion, cmds) = user_input_manager.suggestion(&cmd_list);
 
         let mut completion_text = String::from(
             suggestion

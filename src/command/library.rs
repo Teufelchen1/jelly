@@ -51,6 +51,10 @@ impl CommandLibrary {
         self.cmds.iter().map(|x| x.cmd.clone()).collect()
     }
 
+    pub fn list_by_cmd_ref(&self) -> Vec<&String> {
+        self.cmds.iter().map(|x| &x.cmd).collect()
+    }
+
     pub fn list_available_commands(&self) -> Vec<&Command> {
         self.cmds.iter().collect()
     }
@@ -61,10 +65,10 @@ impl CommandLibrary {
     }
 
     /// Returns all `Command`s whos `.cmd` matches the given prefix
-    pub fn matching_prefix_by_cmd(&self, prefix: &str) -> Vec<&Command> {
+    pub fn _matching_prefix_by_cmd(&self, prefix: &str) -> Vec<&Command> {
         self.cmds
             .iter()
-            .filter(|known_cmd| known_cmd.starts_with(prefix))
+            .filter(|known_cmd| known_cmd._starts_with(prefix))
             .collect()
     }
 
@@ -72,8 +76,8 @@ impl CommandLibrary {
     /// The prefix is then prolonged as long as the list of matching `Command`s stays identical
     /// For example if the given prefix `F` matches `FooBar`, `FooBaz` and `FooBizz`, this
     /// function would return '`(FooB, [FooBar, FooBaz, FooBizz])`'
-    pub fn longest_common_prefixed_by_cmd(&self, prefix: &str) -> (String, Vec<&Command>) {
-        let cmds = self.matching_prefix_by_cmd(prefix);
+    pub fn _longest_common_prefixed_by_cmd(&self, prefix: &str) -> (String, Vec<&Command>) {
+        let cmds = self._matching_prefix_by_cmd(prefix);
 
         let actual_prefix = match cmds.len() {
             0 => prefix.to_owned(),

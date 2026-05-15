@@ -1,8 +1,3 @@
-use super::job_log::SaveToFile;
-
-use crate::command::Command;
-use crate::command::CommandLibrary;
-
 pub struct UserInputManager {
     pub user_input: String,
     user_command_history: Vec<String>,
@@ -10,20 +5,8 @@ pub struct UserInputManager {
     pub cursor_position: usize,
 }
 
-pub enum InputType {
-    /// The user input something that is not known to Jelly but it
-    /// starts with a `/` so it likely is a coap endpoint
-    /// Treated as configuration message
-    RawCoap(String),
-    /// The user input something that is not known to Jelly
-    /// Treated as diagnostic message
-    RawCommand(String),
-    /// This input is a known command
-    Command(String, String, SaveToFile),
-}
-
 impl UserInputManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             user_input: String::new(),
             user_command_history: vec![],
@@ -63,9 +46,9 @@ impl UserInputManager {
     /// For example if the given prefix `F` matches `FooBar`, `FooBaz` and `FooBizz`, this
     /// function would return `FooB`.
     /// On empty input, prefix is returened as is
-    fn longest_common_prefix(&self, prefix: &str, cmds: &[&String]) -> String {
+    fn longest_common_prefix(prefix: &str, cmds: &[&String]) -> String {
         // Ideally we would use a tree here and also cache results
-        let actual_prefix = match cmds.len() {
+        match cmds.len() {
             0 => prefix.to_owned(),
             1 => cmds[0].clone(),
             _ => {
@@ -81,14 +64,10 @@ impl UserInputManager {
                 }
                 common_prefix
             }
-        };
-        actual_prefix
+        }
     }
 
-    pub fn suggestion<'a>(
-        &'a self,
-        command_library: &'a CommandLibrary,
-    ) -> (String, Vec<&'a String>) {
+    pub fn suggestion<'a>(&'a self, command_library: &'a [&String]) -> (String, Vec<&'a String>) {
         let prefix = &self.user_input;
 
         let matching_from_history = self
@@ -96,20 +75,22 @@ impl UserInputManager {
             .iter()
             .filter(|cmd| cmd.starts_with(prefix));
 
-        let matching_from_library = command_library.matching_prefix_by_cmd(prefix);
-        let mut matching_both: Vec<&String> = matching_from_history
-            .chain(matching_from_library.iter().map(|c| &c.cmd))
-            .collect();
+        let matching_from_library = command_library
+            .iter()
+            .filter(|cmd| cmd.starts_with(prefix))
+            .copied();
+        let mut matching_both: Vec<&String> =
+            matching_from_history.chain(matching_from_library).collect();
         matching_both.sort();
         matching_both.dedup();
         matching_both.retain(|cmd| **cmd != *prefix);
 
-        let common_prefix = self.longest_common_prefix(prefix, &matching_both);
+        let common_prefix = Self::longest_common_prefix(prefix, &matching_both);
 
         (common_prefix, matching_both)
     }
 
-    pub fn set_suggest_completion(&mut self, command_library: &CommandLibrary) {
+    pub fn set_suggest_completion(&mut self, command_library: &[&String]) {
         let (suggestion, _) = self.suggestion(command_library);
 
         self.user_input.clear();
@@ -161,37 +142,5 @@ impl UserInputManager {
 
     pub const fn input_empty(&self) -> bool {
         self.user_input.is_empty()
-    }
-
-    pub fn classify_input(&self, command_library: &CommandLibrary) -> InputType {
-        let (cmd_string, file) = if let Some((cmd_string, path)) = self.user_input.split_once("%>")
-        {
-            let path = path.trim();
-            // To Stdout
-            if path == "-" {
-                (cmd_string, SaveToFile::ToStdout)
-            } else {
-                (cmd_string, SaveToFile::AsBin(path.to_owned()))
-            }
-        } else if let Some((cmd_string, path)) = self.user_input.split_once('>') {
-            (cmd_string, SaveToFile::AsText(path.trim().to_owned()))
-        } else {
-            (self.user_input.as_str(), SaveToFile::No)
-        };
-        let maybe_cmd = command_library.find_by_cmd(cmd_string.split(' ').next().unwrap());
-        match maybe_cmd {
-            Some(cmd) => InputType::Command(cmd.cmd.clone(), cmd_string.to_owned(), file),
-            None => {
-                if self.user_input.starts_with('/') {
-                    InputType::RawCoap(self.user_input.clone())
-                } else {
-                    let mut cmd = self.user_input.clone();
-                    if !cmd.ends_with('\n') {
-                        cmd.push('\n');
-                    }
-                    InputType::RawCommand(cmd)
-                }
-            }
-        }
     }
 }

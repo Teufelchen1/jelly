@@ -11,14 +11,14 @@ use slipmux::Slipmux;
 use slipmux::encode_buffered;
 
 use super::App;
-use super::InputType;
-use super::Job;
 
 use crate::command::Command;
 use crate::command::CommandType;
 use crate::datatypes::coap_log::Request;
 use crate::datatypes::coap_log::token_to_u64;
-use crate::datatypes::job_log::SaveToFile;
+use crate::datatypes::job_log::Job;
+use crate::datatypes::user_input::InputType;
+use crate::datatypes::user_input::SaveToFile;
 use crate::events::Event;
 use crate::tui::UiState;
 
@@ -263,10 +263,7 @@ impl App {
     }
 
     fn handle_command_commit(&mut self) {
-        match self
-            .user_input_manager
-            .classify_input(&self.command_library)
-        {
+        match InputType::from_raw(&self.user_input_manager.user_input, &self.command_library) {
             InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
                 request.set_method(Method::Get);
@@ -320,7 +317,7 @@ impl App {
             }
             KeyCode::Tab => {
                 self.user_input_manager
-                    .set_suggest_completion(&self.command_library);
+                    .set_suggest_completion(&self.command_library.list_by_cmd_ref());
                 if let Some(ui_state) = ui_state {
                     ui_state.get_dirty();
                 }

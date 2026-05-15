@@ -11,12 +11,10 @@ use slipmux::encode_buffered;
 
 use crate::command::CommandLibrary;
 use crate::datatypes::coap_log::Request;
-use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobId;
 use crate::datatypes::job_log::JobLog;
 use crate::datatypes::log::Log;
 use crate::datatypes::packet_log::PacketDirection;
-use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 use crate::events::Event;
 use crate::tui::UiState;
