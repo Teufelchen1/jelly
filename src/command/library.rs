@@ -13,10 +13,13 @@ impl CommandLibrary {
     /// - help: Prints all available commands
     /// - /.well-known/core: Query the wkc
     pub fn default() -> Self {
-        Self {
+        let mut me = Self {
             cmds: vec![],
             stored_cmds: all_commands(),
-        }
+        };
+        // Automagically make cmds available that don't have ep requirements
+        me.update_available_cmds_based_on_endpoints(&[]);
+        me
     }
 
     /// Takes a list of endpoints that are available, this is typically the list received
@@ -51,6 +54,10 @@ impl CommandLibrary {
         self.cmds.iter().map(|x| x.cmd.clone()).collect()
     }
 
+    pub fn list_by_cmd_ref(&self) -> Vec<&String> {
+        self.cmds.iter().map(|x| &x.cmd).collect()
+    }
+
     pub fn list_available_commands(&self) -> Vec<&Command> {
         self.cmds.iter().collect()
     }
@@ -58,42 +65,6 @@ impl CommandLibrary {
     /// Adds a `Command`
     pub fn add(&mut self, cmd: Command) {
         self.cmds.push(cmd);
-    }
-
-    /// Returns all `Command`s whos `.cmd` matches the given prefix
-    pub fn matching_prefix_by_cmd(&self, prefix: &str) -> Vec<&Command> {
-        self.cmds
-            .iter()
-            .filter(|known_cmd| known_cmd.starts_with(prefix))
-            .collect()
-    }
-
-    /// Takes a given prefix, computes all `Command`s that match it.
-    /// The prefix is then prolonged as long as the list of matching `Command`s stays identical
-    /// For example if the given prefix `F` matches `FooBar`, `FooBaz` and `FooBizz`, this
-    /// function would return '`(FooB, [FooBar, FooBaz, FooBizz])`'
-    pub fn longest_common_prefixed_by_cmd(&self, prefix: &str) -> (String, Vec<&Command>) {
-        let cmds = self.matching_prefix_by_cmd(prefix);
-
-        let actual_prefix = match cmds.len() {
-            0 => prefix.to_owned(),
-            1 => cmds[0].cmd.clone(),
-            _ => {
-                let mut common_prefix = prefix.to_owned();
-                let first_cmd = &cmds[0].cmd;
-                'outer: for (i, character) in first_cmd.chars().enumerate().skip(prefix.len()) {
-                    for othercmd in cmds.iter().skip(1) {
-                        if i >= othercmd.cmd.len() || othercmd.cmd.chars().nth(i) != Some(character)
-                        {
-                            break 'outer;
-                        }
-                    }
-                    common_prefix.push(character);
-                }
-                common_prefix
-            }
-        };
-        (actual_prefix, cmds)
     }
 
     /// Finds the `Command` whose `cmd` matches exactly the input
@@ -132,7 +103,7 @@ impl CommandLibrary {
         })
     }
 
-    /// Checks is a given `Command` is already in the library
+    /// Checks if a given `Command` is already in the library
     pub fn _contains(&self, cmd: &Command) -> bool {
         for known_cmd in &self.cmds {
             if known_cmd == cmd {
@@ -140,5 +111,31 @@ impl CommandLibrary {
             }
         }
         false
+    }
+
+    pub fn command_name_list(&self) -> String {
+        self.list_by_cmd().join(", ")
+    }
+
+    pub fn command_exists_by_location(&self, location: &str) -> bool {
+        self.find_by_first_location(location).is_some()
+    }
+
+    pub fn check_for_new_available_commands(&mut self, eps: &[String]) {
+        self.update_available_cmds_based_on_endpoints(eps);
+    }
+
+    pub fn update_command_description_by_location(&mut self, location: &str, description: &str) {
+        // If we already know this command, update it's description
+        if let Some(cmd) = self.find_by_first_location_mut(location) {
+            cmd.update_description(description);
+        }
+    }
+
+    pub fn update_command_description_by_name(&mut self, name: &str, description: &str) {
+        // If we already know this command, update it's description
+        if let Some(cmd) = self.find_by_cmd_mut(name) {
+            cmd.update_description(description);
+        }
     }
 }

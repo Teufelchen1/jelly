@@ -11,14 +11,14 @@ use slipmux::Slipmux;
 use slipmux::encode_buffered;
 
 use super::App;
-use super::InputType;
-use super::Job;
 
 use crate::command::Command;
 use crate::command::CommandType;
 use crate::datatypes::coap_log::Request;
 use crate::datatypes::coap_log::token_to_u64;
-use crate::datatypes::job_log::SaveToFile;
+use crate::datatypes::job_log::Job;
+use crate::datatypes::user_input::InputType;
+use crate::datatypes::user_input::SaveToFile;
 use crate::events::Event;
 use crate::tui::UiState;
 
@@ -35,16 +35,16 @@ impl App {
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
-                if self.user_input_manager.command_exists_by_location(s) {
+                if self.command_library.command_exists_by_location(s) {
                     continue;
                 }
                 if s.starts_with("/shell/") {
                     let new_command = Command::from_location(s, "A RIOT shell command");
-                    self.user_input_manager.known_commands.add(new_command);
+                    self.command_library.add(new_command);
 
                     let new_endpoint =
                         Command::new_coap_get(s, "A CoAP resource describing a RIOT shell command");
-                    self.user_input_manager.known_commands.add(new_endpoint);
+                    self.command_library.add(new_endpoint);
 
                     // Fetch description
                     let mut request: CoapRequest<String> = Self::build_get_request(s);
@@ -52,13 +52,12 @@ impl App {
                     self.configuration_log.add_new(Request::new(request));
                 } else {
                     let new_command = Command::new_coap_get(s, "A CoAP resource");
-                    self.user_input_manager.known_commands.add(new_command);
+                    self.command_library.add(new_command);
                 }
             }
         }
 
-        self.user_input_manager
-            .check_for_new_available_commands(&eps);
+        self.command_library.check_for_new_available_commands(&eps);
     }
 
     pub fn on_connect(&mut self) {
@@ -171,10 +170,10 @@ impl App {
                             // RIOT specific hook
                             if uri_path.starts_with("/shell/") {
                                 let dscr = String::from_utf8_lossy(&response.payload);
-                                self.user_input_manager
+                                self.command_library
                                     .update_command_description_by_location(&uri_path, &dscr);
 
-                                self.user_input_manager.update_command_description_by_name(
+                                self.command_library.update_command_description_by_name(
                                     uri_path.strip_prefix("/shell/").unwrap(),
                                     &dscr,
                                 );
@@ -221,12 +220,7 @@ impl App {
     }
 
     fn execute_command(&mut self, cmd: &str, cmd_string: &str, file: SaveToFile) {
-        // This works around a lifetime issue
-        let cmd = self
-            .user_input_manager
-            .known_commands
-            .find_by_cmd(cmd)
-            .unwrap();
+        let cmd = self.command_library.find_by_cmd(cmd).unwrap();
         // Process the user input string into arguments, yielding a handler
         let res = (cmd.parse)(cmd, cmd_string);
         match res {
@@ -268,7 +262,7 @@ impl App {
     }
 
     fn handle_command_commit(&mut self) {
-        match self.user_input_manager.classify_input() {
+        match InputType::from_raw(&self.user_input_manager.user_input, &self.command_library) {
             InputType::RawCoap(endpoint) => {
                 let mut request: CoapRequest<String> = CoapRequest::new();
                 request.set_method(Method::Get);
@@ -321,7 +315,8 @@ impl App {
                 }
             }
             KeyCode::Tab => {
-                self.user_input_manager.set_suggest_completion();
+                self.user_input_manager
+                    .set_suggest_completion(&self.command_library.list_by_cmd_ref());
                 if let Some(ui_state) = ui_state {
                     ui_state.get_dirty();
                 }

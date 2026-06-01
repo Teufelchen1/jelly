@@ -9,13 +9,12 @@ use ratatui::Frame;
 use slipmux::Slipmux;
 use slipmux::encode_buffered;
 
+use crate::command::CommandLibrary;
 use crate::datatypes::coap_log::Request;
-use crate::datatypes::job_log::Job;
 use crate::datatypes::job_log::JobId;
 use crate::datatypes::job_log::JobLog;
 use crate::datatypes::log::Log;
 use crate::datatypes::packet_log::PacketDirection;
-use crate::datatypes::user_input_manager::InputType;
 use crate::datatypes::user_input_manager::UserInputManager;
 use crate::events::Event;
 use crate::tui::UiState;
@@ -30,6 +29,7 @@ pub struct App {
     diagnostic_log: Log<String>,
     packet_log: Log<PacketDirection>,
     user_input_manager: UserInputManager,
+    command_library: CommandLibrary,
     token_count: u16,
     next_mid: u16,
     overall_log: Log<String>,
@@ -39,8 +39,6 @@ pub struct App {
 
 impl App {
     pub fn new(event_sender: Sender<Event>) -> Self {
-        let mut user_input_manager = UserInputManager::new();
-        user_input_manager.check_for_new_available_commands(&[]);
         Self {
             connected: false,
             event_sender,
@@ -50,7 +48,8 @@ impl App {
             diagnostic_log: Log::new(),
             packet_log: Log::new(),
 
-            user_input_manager,
+            user_input_manager: UserInputManager::new(),
+            command_library: CommandLibrary::default(),
 
             token_count: 0,
             next_mid: rand::rng().random(),
@@ -62,17 +61,14 @@ impl App {
     }
 
     pub fn force_all_commands_availabe(&mut self, ui_state: Option<&mut UiState>) {
-        self.user_input_manager.force_all_commands_availabe();
+        self.command_library.force_all_cmds_available();
         if let Some(ui_state) = ui_state {
             self.populate_command_help_list(ui_state);
         }
     }
 
     pub fn populate_command_help_list(&self, ui_state: &mut UiState) {
-        let cmd_list = self
-            .user_input_manager
-            .known_commands
-            .list_available_commands();
+        let cmd_list = self.command_library.list_available_commands();
 
         // Vec<(Name, Description, Help)>
         let err_list = cmd_list
@@ -153,6 +149,12 @@ impl App {
             &self.overall_log,
             &self.packet_log,
         );
-        ui_state.draw(frame, &self.user_input_manager, &self.job_log, logs);
+        ui_state.draw(
+            frame,
+            &self.user_input_manager,
+            &self.command_library,
+            &self.job_log,
+            logs,
+        );
     }
 }
