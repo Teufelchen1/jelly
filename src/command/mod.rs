@@ -108,11 +108,6 @@ impl Command {
         self.description.clear();
         self.description.push_str(description);
     }
-
-    /// Checks if the name of this command matches a prefix
-    fn _starts_with(&self, prefix: &str) -> bool {
-        self.cmd.starts_with(prefix)
-    }
 }
 
 impl Eq for Command {}

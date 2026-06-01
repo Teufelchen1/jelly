@@ -220,7 +220,6 @@ impl App {
     }
 
     fn execute_command(&mut self, cmd: &str, cmd_string: &str, file: SaveToFile) {
-        // This works around a lifetime issue
         let cmd = self.command_library.find_by_cmd(cmd).unwrap();
         // Process the user input string into arguments, yielding a handler
         let res = (cmd.parse)(cmd, cmd_string);

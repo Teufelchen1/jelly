@@ -13,10 +13,13 @@ impl CommandLibrary {
     /// - help: Prints all available commands
     /// - /.well-known/core: Query the wkc
     pub fn default() -> Self {
-        Self {
-            cmds: vec![], // Todo: Auto available cmds without requirements
+        let mut me = Self {
+            cmds: vec![],
             stored_cmds: all_commands(),
-        }
+        };
+        // Automagically make cmds available that don't have ep requirements
+        me.update_available_cmds_based_on_endpoints(&[]);
+        me
     }
 
     /// Takes a list of endpoints that are available, this is typically the list received
@@ -62,42 +65,6 @@ impl CommandLibrary {
     /// Adds a `Command`
     pub fn add(&mut self, cmd: Command) {
         self.cmds.push(cmd);
-    }
-
-    /// Returns all `Command`s whos `.cmd` matches the given prefix
-    pub fn _matching_prefix_by_cmd(&self, prefix: &str) -> Vec<&Command> {
-        self.cmds
-            .iter()
-            .filter(|known_cmd| known_cmd._starts_with(prefix))
-            .collect()
-    }
-
-    /// Takes a given prefix, computes all `Command`s that match it.
-    /// The prefix is then prolonged as long as the list of matching `Command`s stays identical
-    /// For example if the given prefix `F` matches `FooBar`, `FooBaz` and `FooBizz`, this
-    /// function would return '`(FooB, [FooBar, FooBaz, FooBizz])`'
-    pub fn _longest_common_prefixed_by_cmd(&self, prefix: &str) -> (String, Vec<&Command>) {
-        let cmds = self._matching_prefix_by_cmd(prefix);
-
-        let actual_prefix = match cmds.len() {
-            0 => prefix.to_owned(),
-            1 => cmds[0].cmd.clone(),
-            _ => {
-                let mut common_prefix = prefix.to_owned();
-                let first_cmd = &cmds[0].cmd;
-                'outer: for (i, character) in first_cmd.chars().enumerate().skip(prefix.len()) {
-                    for othercmd in cmds.iter().skip(1) {
-                        if i >= othercmd.cmd.len() || othercmd.cmd.chars().nth(i) != Some(character)
-                        {
-                            break 'outer;
-                        }
-                    }
-                    common_prefix.push(character);
-                }
-                common_prefix
-            }
-        };
-        (actual_prefix, cmds)
     }
 
     /// Finds the `Command` whose `cmd` matches exactly the input

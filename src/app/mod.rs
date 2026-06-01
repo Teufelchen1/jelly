@@ -39,9 +39,6 @@ pub struct App {
 
 impl App {
     pub fn new(event_sender: Sender<Event>) -> Self {
-        //let mut user_input_manager = UserInputManager::new();
-        // todo
-        //user_input_manager.check_for_new_available_commands(&[]);
         Self {
             connected: false,
             event_sender,
