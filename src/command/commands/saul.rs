@@ -7,7 +7,7 @@ use coap_lite::{CoapRequest, Packet};
 use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
-use senml;
+//use senml;
 
 use super::Command;
 use super::CommandHandler;
@@ -128,26 +128,24 @@ impl CommandHandler for Saul {
                 out = decode_sensor_list_into_string(&self.payload);
             }
             Some(SaulOperation::Read { sensor_ids: _ }) => {
-                match senml::pack::Pack::from_cbor(&self.payload) {
-                    Ok(parsed) => {
-                        for record in parsed {
-                            let _ = writeln!(out, "{record}");
-                        }
-                    }
-                    Err(e) => {
-                        let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
-                    }
-                }
+                // match senml::pack::Pack::from_cbor(&self.payload) {
+                //     Ok(parsed) => {
+                //         let _ = writeln!(out, "{:}", parsed.normalize());
+                //     }
+                //     Err(e) => {
+                //         let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
+                //     }
+                // }
             }
             Some(SaulOperation::Write { id: _, data: _ }) => {
-                match senml::record::RawRecord::from_cbor(&self.payload) {
-                    Ok(parsed) => {
-                        let _ = writeln!(out, "Koens SenML Says:\n{parsed:?}");
-                    }
-                    Err(e) => {
-                        let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
-                    }
-                }
+                // match senml::record::RawRecord::from_cbor(&self.payload) {
+                //     Ok(parsed) => {
+                //         let _ = writeln!(out, "Koens SenML Says:\n{parsed:?}");
+                //     }
+                //     Err(e) => {
+                //         let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
+                //     }
+                // }
             }
         }
         self.buffer = out;

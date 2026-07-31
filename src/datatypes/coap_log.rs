@@ -14,6 +14,7 @@ use ratatui::text::Text;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
 
 use super::log::Log;
 use super::log::LogEntry;
@@ -159,9 +160,11 @@ impl LogEntry<Request> {
 
         let block = block.title(title);
         let height = content.lines.len();
-        let para = Paragraph::new(content).block(block);
+        let para = Paragraph::new(content)
+            .wrap(Wrap { trim: false })
+            .block(block);
 
-        (height + 2, para)
+        (height + 3, para)
     }
 }
 

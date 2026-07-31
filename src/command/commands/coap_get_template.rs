@@ -22,8 +22,13 @@ impl CommandHandler for CoapGet {
     fn init(&mut self) -> CoapRequest<String> {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
-        // The saved path is needed here to generate the coap request
-        request.set_path(&self.0);
+
+        // Might also be a bug in coap-lite that "/" should be turned into an
+        // empty option set; documentation isn't quite conclusive.
+        if self.0 != "/" {
+            // The saved path is needed here to generate the coap request
+            request.set_path(&self.0);
+        }
         request
     }
 }
