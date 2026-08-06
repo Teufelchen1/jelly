@@ -92,6 +92,44 @@ impl LogEntry<Request> {
             MessageClass::Response(_) => _ = write!(out, "Response"),
             MessageClass::Reserved(_) => _ = write!(out, "Reserved"),
         }
+
+        let payload = &self.data.req.message.payload;
+
+        let request_body = if payload.is_empty() {
+            "Empty payload".to_owned()
+        } else {
+            match self.data.req.message.get_content_format() {
+                Some(ContentFormat::ApplicationLinkFormat) => {
+                    String::from_utf8_lossy(payload).replace(",<", ",\n<")
+                }
+                Some(ContentFormat::TextPlain) => String::from_utf8_lossy(payload).to_string(),
+                // this is a cheap-in-terms-of-dependencies hex formatting; `aa bb cc` would be
+                // prettier than `[aa, bb, cc]`, but needs extra dependencies.
+                Some(
+                    ContentFormat::ApplicationCBOR
+                    | ContentFormat::ApplicationCborSeq
+                    | ContentFormat::ApplicationSenmlCBOR,
+                ) => cbor_edn::Sequence::from_cbor(payload).map_or_else(
+                    |e| format!("Parsing error {e}, content {payload:02x?}"),
+                    |mut c| {
+                        cbor_edn::Transformation::new().pretty().apply_to(&mut c);
+                        c.serialize()
+                    },
+                ),
+                // With nothing given (as opposed to, for example, application/octet-stream when we
+                // should not guess), we venture a guess because it is *so* prevalent, and hard to
+                // mistake.
+                None => {
+                    if let Ok(payload_str) = str::from_utf8(payload) {
+                        payload_str.to_owned()
+                    } else {
+                        format!("{payload:02x?}")
+                    }
+                }
+                _ => format!("{payload:02x?}"),
+            }
+        };
+        _ = write!(out, " {request_body}");
         out
     }
 
@@ -230,7 +268,10 @@ impl LogEntry<CoapResponse> {
                     | ContentFormat::ApplicationSenmlCBOR,
                 ) => cbor_edn::Sequence::from_cbor(payload).map_or_else(
                     |e| format!("Parsing error {e}, content {payload:02x?}"),
-                    |c| c.serialize(),
+                    |mut c| {
+                        cbor_edn::Transformation::new().pretty().apply_to(&mut c);
+                        c.serialize()
+                    },
                 ),
                 // With nothing given (as opposed to, for example, application/octet-stream when we
                 // should not guess), we venture a guess because it is *so* prevalent, and hard to
