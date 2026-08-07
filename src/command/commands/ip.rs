@@ -13,66 +13,37 @@ use super::Command;
 use super::CommandHandler;
 use super::CommandType;
 
-#[derive(Clone, Debug)]
-struct MyIpv6Addr {
-    addr: std::net::Ipv6Addr,
-    prefix: u8,
-}
-
-impl std::str::FromStr for MyIpv6Addr {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, String> {
-        let mut splitted = s.split('/');
-        if let Some(addr) = splitted.next() {
-            let addr = std::net::Ipv6Addr::from_str(addr).map_err(|e| e.to_string())?;
-            let prefix = if let Some(prefix) = splitted.next() {
-                u8::from_str(prefix).map_err(|e| e.to_string())?
-            } else {
-                128
-            };
-            Ok(Self { addr, prefix })
-        } else {
-            Err("No ipv6 addr provided".to_string())
-        }
-    }
-}
-
 /// This is an example on how to use cbor as payload for the coap request.
 #[derive(Parser, Debug)]
-#[command(name = "Saul")]
+#[command(name = "Ifconfig")]
 #[command(version = "1.0")]
 #[command(disable_help_flag = false)]
-#[command(about = "This is saul over coap")]
-pub struct IpCli {
+#[command(about = "This is ifconfig over coap")]
+pub struct IfconfigCli {
+    iface: Option<String>,
+
     #[command(subcommand)]
-    operation: Option<IpOperation>,
+    operation: Option<IfconfigOperation>,
 }
 
 #[derive(Subcommand, Debug)]
-enum IpOperation {
-    /// Lists all attached sensors and actuators (this is the default)
-    List,
-    /// Read the values from the specified interface
-    Read {
-        #[arg(required = true, num_args = 1.., value_delimiter = ' ')]
-        interface_names: Vec<String>,
-    },
-    /// Write a 8 bit value into an actuator
-    AddrAdd { addr: MyIpv6Addr, iface: String },
+enum IfconfigOperation {
+    /// Add an IPv6 address to the interface
+    Add { addr: Ipv6AddrCidr },
 }
 
-struct Ip {
+struct Ifconfig {
     location: String,
     buffer: String,
     payload: Vec<u8>,
     finished: bool,
     displayable: bool,
-    cli: IpCli,
+    cli: IfconfigCli,
 }
 
 pub fn cmd() -> Command {
     Command {
-        cmd: "ip".to_owned(),
+        cmd: "Ifconfig".to_owned(),
         description: "ifconfig over coap".to_owned(),
         parse: |s, a| parse(s, a),
         required_endpoints: vec!["/jelly/netif".to_owned()],
@@ -80,8 +51,11 @@ pub fn cmd() -> Command {
 }
 
 fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
-    let cli = IpCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
-    Ok(CommandType::CoAP(Box::new(Ip {
+    let cli = IfconfigCli::try_parse_from(args.split_whitespace()).map_err(|e| e.to_string())?;
+    if cli.operation.is_some() && cli.iface.is_none() {
+        return Err("a subcommand can only be used when an interface is given".to_string());
+    }
+    Ok(CommandType::CoAP(Box::new(Ifconfig {
         location: cmd.required_endpoints[0].clone(),
         buffer: String::new(),
         payload: vec![],
@@ -91,62 +65,61 @@ fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
     })))
 }
 
-impl CommandHandler for Ip {
+impl CommandHandler for Ifconfig {
     fn init(&mut self) -> CoapRequest<String> {
         let mut buffer: [u8; 64] = [0; 64];
         let mut encoder = Encoder::new(&mut buffer[..]);
 
-        let request = match &self.cli.operation {
-            None | Some(IpOperation::List) => {
-                let mut request: CoapRequest<String> = CoapRequest::new();
-                request.set_method(Method::Get);
-                request.set_path(&self.location);
-                request
-            }
-            Some(IpOperation::Read { interface_names }) => {
-                encoder
-                    .array(interface_names.len().try_into().unwrap())
-                    .unwrap();
-                for iface in interface_names {
-                    encoder.str(iface).unwrap();
-                }
+        let request = if let Some(iface_id) = &self.cli.iface {
+            match &self.cli.operation {
+                None => {
+                    // Could query multiple iface here but the legacy command doesn't do this
+                    // so we don't either (but we could)
+                    encoder.array(1).unwrap();
+                    encoder.str(iface_id).unwrap();
+                    encoder.end().unwrap();
 
-                encoder.end().unwrap();
-                let mut request: CoapRequest<String> = CoapRequest::new();
-                request.set_method(Method::Get);
-                request.set_path(&self.location);
-                request
-                    .message
-                    .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                request.message.set_payload(&buffer).unwrap();
-                request
+                    let mut request: CoapRequest<String> = CoapRequest::new();
+                    request.set_method(Method::Get);
+                    request.set_path(&self.location);
+                    request
+                        .message
+                        .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                    request.message.set_payload(&buffer).unwrap();
+                    request
+                }
+                Some(IfconfigOperation::Add { addr }) => {
+                    let addr_octs = addr.addr.octets();
+                    encoder
+                        .array(2)
+                        .unwrap()
+                        .tag(minicbor::data::Tag::new(20))
+                        .unwrap()
+                        .str(iface_id)
+                        .unwrap()
+                        .tag(minicbor::data::Tag::new(54))
+                        .unwrap()
+                        .array(2)
+                        .unwrap()
+                        .bytes(&addr_octs)
+                        .unwrap()
+                        .u8(addr.prefix)
+                        .unwrap();
+                    let mut request: CoapRequest<String> = CoapRequest::new();
+                    request.set_method(Method::Post);
+                    request.set_path(&self.location);
+                    request
+                        .message
+                        .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                    request.message.set_payload(&buffer).unwrap();
+                    request
+                }
             }
-            Some(IpOperation::AddrAdd { addr, iface }) => {
-                let addr_octs = addr.addr.octets();
-                encoder
-                    .array(2)
-                    .unwrap()
-                    .tag(minicbor::data::Tag::new(20))
-                    .unwrap()
-                    .str(iface)
-                    .unwrap()
-                    .tag(minicbor::data::Tag::new(54))
-                    .unwrap()
-                    .array(2)
-                    .unwrap()
-                    .bytes(&addr_octs)
-                    .unwrap()
-                    .u8(addr.prefix)
-                    .unwrap();
-                let mut request: CoapRequest<String> = CoapRequest::new();
-                request.set_method(Method::Post);
-                request.set_path(&self.location);
-                request
-                    .message
-                    .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                request.message.set_payload(&buffer).unwrap();
-                request
-            }
+        } else {
+            let mut request: CoapRequest<String> = CoapRequest::new();
+            request.set_method(Method::Get);
+            request.set_path(&self.location);
+            request
         };
 
         request
@@ -157,14 +130,11 @@ impl CommandHandler for Ip {
         let mut out = String::new();
 
         match self.cli.operation {
-            None | Some(IpOperation::List) => {
-                out = decode_netif_list_into_string(&self.payload);
-            }
-            Some(IpOperation::Read { interface_names: _ }) => {
-                out = decode_netif_list_into_string(&self.payload);
-            }
-            Some(IpOperation::AddrAdd { addr: _, iface: _ }) => {
+            Some(IfconfigOperation::Add { addr: _ }) => {
                 // no op
+            }
+            None => {
+                out = decode_netif_list_into_string(&self.payload);
             }
         }
         self.buffer = out;
@@ -190,63 +160,162 @@ impl CommandHandler for Ip {
     }
 }
 
-fn decode_netif_into_string(decoder: &mut Decoder) -> String {
-    fn get_ipv6(data: &[u8]) -> std::net::Ipv6Addr {
-        let ip = std::net::Ipv6Addr::from(
-            <&[u8] as TryInto<[u8; 16]>>::try_into(data).expect("Ipv6 should be 16 bytes long"),
-        );
-        ip
-    }
-    fn print_mac(out: &mut String, data: &[u8]) {
-        let last_i = data.len() - 1;
-        for i in 0..last_i {
-            write!(out, "{:02X}:", data[i]).unwrap();
-        }
-        write!(out, "{:02X}", data[last_i]).unwrap();
-    }
+struct Mac {
+    data: [u8; 8],
+}
 
-    let mut out = String::new();
-    while decoder.probe().tag().is_ok() {
-        match decoder.tag().unwrap().as_u64() {
-            20 => {
-                write!(out, "Iface {}\n", decoder.str().unwrap()).unwrap();
-            }
-            48 => {
-                write!(out, "   HWaddr: ").unwrap();
-                print_mac(&mut out, decoder.bytes().unwrap());
-                write!(out, "\n").unwrap();
-            }
-            54 => {
-                write!(out, "   inet6 ").unwrap();
-                if decoder.probe().array().is_ok() {
-                    decoder.array().unwrap();
-                    if let Ok(prefix) = decoder.u8() {
-                        let ip = get_ipv6(decoder.bytes().unwrap());
-                        let _ = write!(out, "group: {ip}/{prefix}");
-                    } else {
-                        let ip = get_ipv6(decoder.bytes().unwrap());
-                        let _ = write!(out, "addr: {ip}");
-                        if let Ok(prefix) = decoder.u8() {
-                            let _ = write!(out, "/{prefix}");
-                        }
-                    }
-                } else {
-                    let ip = get_ipv6(decoder.bytes().unwrap());
-                    let _ = write!(out, "addr: {ip}");
-                }
-                writeln!(out).unwrap();
-            }
-            302 => {
-                if decoder.bool().unwrap() {
-                    writeln!(out, "   Link type: wired").unwrap();
-                } else {
-                    writeln!(out, "   Link type: wireless").unwrap();
-                }
-            }
-            _ => continue,
+impl Mac {
+    fn new(data: &[u8; 8]) -> Self {
+        Self { data: *data }
+    }
+}
+
+impl std::fmt::Display for Mac {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let last_i = self.data.len() - 1;
+        for i in 0..last_i {
+            write!(out, "{:02X}:", self.data[i])?;
+        }
+        write!(out, "{:02X}", self.data[last_i])
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Ipv6AddrCidr {
+    addr: std::net::Ipv6Addr,
+    prefix: u8,
+}
+
+impl std::fmt::Display for Ipv6AddrCidr {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if self.addr.is_multicast() {
+            write!(out, "{}", self.addr)
+        } else {
+            write!(out, "{}/{}", self.addr, self.prefix)
         }
     }
-    out
+}
+
+impl Ipv6AddrCidr {
+    fn from_cbor(decoder: &mut Decoder) -> Self {
+        // rfc9164#section-3.1.1 "Address Format"
+        if decoder.probe().bytes().is_ok() {
+            // rfc9164#name-ipv6 "to be encoded as a sixteen-byte byte string"
+            let data: &[u8; 16] = decoder.bytes().unwrap().try_into().unwrap();
+            let addr = std::net::Ipv6Addr::from(*data);
+            Self {
+                addr,
+                prefix: if addr.is_unicast_link_local() {
+                    64
+                } else {
+                    128
+                },
+            }
+        } else if decoder.probe().array().is_ok() {
+            decoder.array().unwrap();
+            // rfc9164#section-3.1.3 "Interface Definition"
+            let (addr, prefix) = if decoder.probe().bytes().is_ok() {
+                let data: &[u8; 16] = decoder.bytes().unwrap().try_into().unwrap();
+                let addr = std::net::Ipv6Addr::from(*data);
+                let prefix = decoder.u8().unwrap_or(128);
+                (addr, prefix)
+            } else
+            // rfc9164#section-3.1.2 "Prefix Format"
+            if decoder.probe().u8().is_ok() {
+                let prefix = decoder.u8().unwrap_or(128);
+                let data: &[u8; 16] = decoder.bytes().unwrap().try_into().unwrap();
+                (std::net::Ipv6Addr::from(*data), prefix)
+            } else {
+                panic!();
+            };
+            Self { addr, prefix }
+        } else {
+            panic!();
+        }
+    }
+}
+
+impl std::str::FromStr for Ipv6AddrCidr {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
+        let mut splitted = s.split('/');
+        if let Some(addr) = splitted.next() {
+            let addr = std::net::Ipv6Addr::from_str(addr).map_err(|e| e.to_string())?;
+            let prefix = if let Some(prefix) = splitted.next() {
+                u8::from_str(prefix).map_err(|e| e.to_string())?
+            } else {
+                128
+            };
+            Ok(Self { addr, prefix })
+        } else {
+            Err("No ipv6 addr provided".to_string())
+        }
+    }
+}
+
+struct Iface {
+    name: String,
+    mac: Option<Mac>,
+    ipv6addr: Vec<Ipv6AddrCidr>,
+    wired: bool,
+}
+
+impl Iface {
+    fn from_cbor(decoder: &mut Decoder) -> Self {
+        let mut me = Self {
+            name: "NoName".to_string(),
+            mac: None,
+            ipv6addr: vec![],
+            wired: true,
+        };
+
+        while decoder.probe().tag().is_ok() {
+            match decoder.tag().unwrap().as_u64() {
+                20 => {
+                    me.name = decoder.str().unwrap().to_string();
+                }
+                48 => {
+                    me.mac = Some(Mac::new(
+                        decoder
+                            .bytes()
+                            .unwrap()
+                            .try_into()
+                            .expect("Mac should be 8 bytes"),
+                    ));
+                }
+                54 => {
+                    me.ipv6addr.push(Ipv6AddrCidr::from_cbor(decoder));
+                }
+                302 => {
+                    me.wired = decoder.bool().unwrap();
+                }
+                _ => continue,
+            }
+        }
+        me
+    }
+}
+
+impl std::fmt::Display for Iface {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let _ = writeln!(out, "Iface {}", self.name);
+        if let Some(mac) = &self.mac {
+            writeln!(out, "   HWaddr: {mac}")?;
+        }
+        if self.wired {
+            writeln!(out, "   Link type: wired")?;
+        } else {
+            writeln!(out, "   Link type: wireless")?;
+        }
+        for ip in &self.ipv6addr {
+            if ip.addr.is_multicast() {
+                writeln!(out, "   group: {ip}")?;
+            } else {
+                writeln!(out, "   addr: {ip}")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 fn decode_netif_list_into_string(data: &[u8]) -> String {
@@ -257,7 +326,7 @@ fn decode_netif_list_into_string(data: &[u8]) -> String {
     {
         while decoder.probe().array().is_ok() {
             decoder.array().unwrap();
-            let _ = writeln!(out, "{}", decode_netif_into_string(&mut decoder));
+            let _ = writeln!(out, "{}", Iface::from_cbor(&mut decoder));
             if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
                 decoder.skip().unwrap();
             }
