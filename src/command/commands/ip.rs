@@ -81,122 +81,63 @@ impl CommandHandler for Ifconfig {
     fn init(&mut self) -> CoapRequest<String> {
         let mut buffer: Vec<u8> = vec![];
         let mut encoder = Encoder::new(&mut buffer);
+        let mut request: CoapRequest<String> = CoapRequest::new();
+        request.set_path(&self.location);
 
         let request = if let Some(iface_id) = &self.cli.iface {
-            if let Some(operation) = &self.cli.operation {
+            let method = if let Some(operation) = &self.cli.operation {
+                encoder
+                    .array(2)
+                    .unwrap()
+                    .tag(minicbor::data::Tag::new(20))
+                    .unwrap()
+                    .str(iface_id)
+                    .unwrap();
                 match operation {
                     IfconfigOperation::Add { addr } => {
-                        let addr_octs = addr.addr.octets();
-                        encoder
-                            .array(2)
-                            .unwrap()
-                            .tag(minicbor::data::Tag::new(20))
-                            .unwrap()
-                            .str(iface_id)
-                            .unwrap()
-                            .tag(minicbor::data::Tag::new(54))
-                            .unwrap()
-                            .array(2)
-                            .unwrap()
-                            .bytes(&addr_octs)
-                            .unwrap()
-                            .u8(addr.prefix)
-                            .unwrap();
-                        let mut request: CoapRequest<String> = CoapRequest::new();
-                        request.set_method(Method::Post);
-                        request.set_path(&self.location);
-                        request
-                            .message
-                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                        request.message.set_payload(&buffer).unwrap();
-                        request
+                        addr.into_cbor_with_prefix(&mut encoder);
+                        Method::Post
                     }
                     IfconfigOperation::Del { addr } => {
-                        let addr_octs = addr.addr.octets();
-                        encoder
-                            .array(2)
-                            .unwrap()
-                            .tag(minicbor::data::Tag::new(20))
-                            .unwrap()
-                            .str(iface_id)
-                            .unwrap()
-                            .tag(minicbor::data::Tag::new(54))
-                            .unwrap()
-                            .bytes(&addr_octs)
-                            .unwrap();
-                        let mut request: CoapRequest<String> = CoapRequest::new();
-                        request.set_method(Method::Patch);
-                        request.set_path(&self.location);
-                        request
-                            .message
-                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                        request.message.set_payload(&buffer).unwrap();
-                        request
+                        addr.into_cbor_without_prefix(&mut encoder);
+                        Method::Patch
                     }
                     IfconfigOperation::Up => {
                         encoder
-                            .array(2)
-                            .unwrap()
-                            .tag(minicbor::data::Tag::new(20))
-                            .unwrap()
-                            .str(iface_id)
-                            .unwrap()
                             .tag(minicbor::data::Tag::new(303))
                             .unwrap()
                             .bool(true)
                             .unwrap();
-                        let mut request: CoapRequest<String> = CoapRequest::new();
-                        request.set_method(Method::Patch);
-                        request.set_path(&self.location);
-                        request
-                            .message
-                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                        request.message.set_payload(&buffer).unwrap();
-                        request
+                        Method::Patch
                     }
                     IfconfigOperation::Down => {
                         encoder
-                            .array(2)
-                            .unwrap()
-                            .tag(minicbor::data::Tag::new(20))
-                            .unwrap()
-                            .str(iface_id)
-                            .unwrap()
                             .tag(minicbor::data::Tag::new(303))
                             .unwrap()
                             .bool(false)
                             .unwrap();
-                        let mut request: CoapRequest<String> = CoapRequest::new();
-                        request.set_method(Method::Patch);
-                        request.set_path(&self.location);
-                        request
-                            .message
-                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                        request.message.set_payload(&buffer).unwrap();
-                        request
+                        Method::Patch
                     }
                     IfconfigOperation::Set { key: _, value: _ } => todo!(),
                 }
             } else {
-                // Could query multiple iface here but the legacy command doesn't do this
-                // so we don't either (but we could)
-                encoder.array(1).unwrap();
-                encoder.str(iface_id).unwrap();
-                encoder.end().unwrap();
+                encoder
+                    .tag(minicbor::data::Tag::new(20))
+                    .unwrap()
+                    .str(iface_id)
+                    .unwrap();
 
-                let mut request: CoapRequest<String> = CoapRequest::new();
-                request.set_method(Method::Get);
-                request.set_path(&self.location);
-                request
-                    .message
-                    .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                request.message.set_payload(&buffer).unwrap();
-                request
-            }
+                Method::Get
+            };
+            request.set_method(method);
+            request
+                .message
+                .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+            request.message.set_payload(&buffer).unwrap();
+
+            request
         } else {
-            let mut request: CoapRequest<String> = CoapRequest::new();
             request.set_method(Method::Get);
-            request.set_path(&self.location);
             request
         };
 
@@ -204,16 +145,16 @@ impl CommandHandler for Ifconfig {
     }
 
     fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        let resp_status = match response.header.code {
+            coap_lite::MessageClass::Response(ref code) => code,
+            _ => &coap_lite::ResponseType::UnKnown,
+        };
         self.payload.clone_from(&response.payload);
         let mut out = String::new();
 
         if let Some(operation) = &self.cli.operation {
             match operation {
                 IfconfigOperation::Add { addr: _ } | IfconfigOperation::Del { addr: _ } => {
-                    let resp_status = match response.header.code {
-                        coap_lite::MessageClass::Response(ref code) => code,
-                        _ => &coap_lite::ResponseType::UnKnown,
-                    };
                     if resp_status.is_error() {
                         let _ = writeln!(out, "Couldn't add/del ip address");
                     }
@@ -221,7 +162,12 @@ impl CommandHandler for Ifconfig {
                 _ => (), // no op
             }
         } else {
-            out = decode_netif_list_into_string(&self.payload);
+            // Todo: React to the error specific
+            if resp_status.is_error() {
+                let _ = writeln!(out, "Couldn't list the interface(s)");
+            } else {
+                out = decode_netif_list_into_string(&self.payload);
+            }
         }
         self.buffer = out;
         self.finished = true;
@@ -317,6 +263,44 @@ impl Ipv6AddrCidr {
             Self { addr, prefix }
         } else {
             panic!();
+        }
+    }
+
+    fn into_cbor_with_prefix<W>(&self, encoder: &mut Encoder<W>)
+    where
+        W: minicbor::encode::Write<Error = core::convert::Infallible>,
+    {
+        self.into_cbor(encoder, true);
+    }
+
+    fn into_cbor_without_prefix<W>(&self, encoder: &mut Encoder<W>)
+    where
+        W: minicbor::encode::Write<Error = core::convert::Infallible>,
+    {
+        self.into_cbor(encoder, false);
+    }
+
+    fn into_cbor<W>(&self, encoder: &mut Encoder<W>, with_prefix: bool)
+    where
+        W: minicbor::encode::Write<Error = core::convert::Infallible>,
+    {
+        let addr_octs = self.addr.octets();
+        if with_prefix {
+            encoder
+                .tag(minicbor::data::Tag::new(54))
+                .unwrap()
+                .array(2)
+                .unwrap()
+                .bytes(&addr_octs)
+                .unwrap()
+                .u8(self.prefix)
+                .unwrap();
+        } else {
+            encoder
+                .tag(minicbor::data::Tag::new(54))
+                .unwrap()
+                .bytes(&addr_octs)
+                .unwrap();
         }
     }
 }
