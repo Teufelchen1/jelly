@@ -28,8 +28,20 @@ pub struct IfconfigCli {
 
 #[derive(Subcommand, Debug)]
 enum IfconfigOperation {
+    Up,
+    Down,
+    Set {
+        key: String,
+        value: String,
+    },
     /// Add an IPv6 address to the interface
-    Add { addr: Ipv6AddrCidr },
+    Add {
+        addr: Ipv6AddrCidr,
+    },
+    /// Delete an IPv6 address from the interface
+    Del {
+        addr: Ipv6AddrCidr,
+    },
 }
 
 struct Ifconfig {
@@ -67,53 +79,119 @@ fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
 
 impl CommandHandler for Ifconfig {
     fn init(&mut self) -> CoapRequest<String> {
-        let mut buffer: [u8; 64] = [0; 64];
-        let mut encoder = Encoder::new(&mut buffer[..]);
+        let mut buffer: Vec<u8> = vec![];
+        let mut encoder = Encoder::new(&mut buffer);
 
         let request = if let Some(iface_id) = &self.cli.iface {
-            match &self.cli.operation {
-                None => {
-                    // Could query multiple iface here but the legacy command doesn't do this
-                    // so we don't either (but we could)
-                    encoder.array(1).unwrap();
-                    encoder.str(iface_id).unwrap();
-                    encoder.end().unwrap();
+            if let Some(operation) = &self.cli.operation {
+                match operation {
+                    IfconfigOperation::Add { addr } => {
+                        let addr_octs = addr.addr.octets();
+                        encoder
+                            .array(2)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(20))
+                            .unwrap()
+                            .str(iface_id)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(54))
+                            .unwrap()
+                            .array(2)
+                            .unwrap()
+                            .bytes(&addr_octs)
+                            .unwrap()
+                            .u8(addr.prefix)
+                            .unwrap();
+                        let mut request: CoapRequest<String> = CoapRequest::new();
+                        request.set_method(Method::Post);
+                        request.set_path(&self.location);
+                        request
+                            .message
+                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                        request.message.set_payload(&buffer).unwrap();
+                        request
+                    }
+                    IfconfigOperation::Del { addr } => {
+                        let addr_octs = addr.addr.octets();
+                        encoder
+                            .array(2)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(20))
+                            .unwrap()
+                            .str(iface_id)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(54))
+                            .unwrap()
+                            .bytes(&addr_octs)
+                            .unwrap();
+                        let mut request: CoapRequest<String> = CoapRequest::new();
+                        request.set_method(Method::Patch);
+                        request.set_path(&self.location);
+                        request
+                            .message
+                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                        request.message.set_payload(&buffer).unwrap();
+                        request
+                    }
+                    IfconfigOperation::Up => {
+                        encoder
+                            .array(2)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(20))
+                            .unwrap()
+                            .str(iface_id)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(303))
+                            .unwrap()
+                            .bool(true)
+                            .unwrap();
+                        let mut request: CoapRequest<String> = CoapRequest::new();
+                        request.set_method(Method::Patch);
+                        request.set_path(&self.location);
+                        request
+                            .message
+                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                        request.message.set_payload(&buffer).unwrap();
+                        request
+                    }
+                    IfconfigOperation::Down => {
+                        encoder
+                            .array(2)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(20))
+                            .unwrap()
+                            .str(iface_id)
+                            .unwrap()
+                            .tag(minicbor::data::Tag::new(303))
+                            .unwrap()
+                            .bool(false)
+                            .unwrap();
+                        let mut request: CoapRequest<String> = CoapRequest::new();
+                        request.set_method(Method::Patch);
+                        request.set_path(&self.location);
+                        request
+                            .message
+                            .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                        request.message.set_payload(&buffer).unwrap();
+                        request
+                    }
+                    IfconfigOperation::Set { key: _, value: _ } => todo!(),
+                }
+            } else {
+                // Could query multiple iface here but the legacy command doesn't do this
+                // so we don't either (but we could)
+                encoder.array(1).unwrap();
+                encoder.str(iface_id).unwrap();
+                encoder.end().unwrap();
 
-                    let mut request: CoapRequest<String> = CoapRequest::new();
-                    request.set_method(Method::Get);
-                    request.set_path(&self.location);
-                    request
-                        .message
-                        .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                    request.message.set_payload(&buffer).unwrap();
-                    request
-                }
-                Some(IfconfigOperation::Add { addr }) => {
-                    let addr_octs = addr.addr.octets();
-                    encoder
-                        .array(2)
-                        .unwrap()
-                        .tag(minicbor::data::Tag::new(20))
-                        .unwrap()
-                        .str(iface_id)
-                        .unwrap()
-                        .tag(minicbor::data::Tag::new(54))
-                        .unwrap()
-                        .array(2)
-                        .unwrap()
-                        .bytes(&addr_octs)
-                        .unwrap()
-                        .u8(addr.prefix)
-                        .unwrap();
-                    let mut request: CoapRequest<String> = CoapRequest::new();
-                    request.set_method(Method::Post);
-                    request.set_path(&self.location);
-                    request
-                        .message
-                        .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
-                    request.message.set_payload(&buffer).unwrap();
-                    request
-                }
+                let mut request: CoapRequest<String> = CoapRequest::new();
+                request.set_method(Method::Get);
+                request.set_path(&self.location);
+                request
+                    .message
+                    .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
+                request.message.set_payload(&buffer).unwrap();
+                request
             }
         } else {
             let mut request: CoapRequest<String> = CoapRequest::new();
@@ -129,13 +207,21 @@ impl CommandHandler for Ifconfig {
         self.payload.clone_from(&response.payload);
         let mut out = String::new();
 
-        match self.cli.operation {
-            Some(IfconfigOperation::Add { addr: _ }) => {
-                // no op
+        if let Some(operation) = &self.cli.operation {
+            match operation {
+                IfconfigOperation::Add { addr: _ } | IfconfigOperation::Del { addr: _ } => {
+                    let resp_status = match response.header.code {
+                        coap_lite::MessageClass::Response(ref code) => code,
+                        _ => &coap_lite::ResponseType::UnKnown,
+                    };
+                    if resp_status.is_error() {
+                        let _ = writeln!(out, "Couldn't add/del ip address");
+                    }
+                }
+                _ => (), // no op
             }
-            None => {
-                out = decode_netif_list_into_string(&self.payload);
-            }
+        } else {
+            out = decode_netif_list_into_string(&self.payload);
         }
         self.buffer = out;
         self.finished = true;
