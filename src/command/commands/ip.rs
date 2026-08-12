@@ -323,20 +323,31 @@ impl std::str::FromStr for Ipv6AddrCidr {
     }
 }
 
+#[derive(Default)]
 struct Iface {
     name: String,
     mac: Option<Mac>,
     ipv6addr: Vec<Ipv6AddrCidr>,
     wired: bool,
+    channel: Option<u16>,
+    channel_frequency: Option<u32>,
+    channel_page: Option<u16>,
+    network_id: Option<u16>,
+    rssi: Option<i16>,
+    link: Option<bool>,
+    tx_power: Option<u16>,
+    state: Option<i32>,
+    retrans: Option<u8>,
+    csma: Option<u8>,
 }
 
 impl Iface {
     fn from_cbor(decoder: &mut Decoder) -> Self {
         let mut me = Self {
             name: "NoName".to_string(),
-            mac: None,
             ipv6addr: vec![],
             wired: true,
+            ..Default::default()
         };
 
         while decoder.probe().tag().is_ok() {
@@ -359,7 +370,37 @@ impl Iface {
                 302 => {
                     me.wired = decoder.bool().unwrap();
                 }
-                _ => continue,
+                304 => {
+                    me.channel = Some(decoder.u16().unwrap());
+                }
+                305 => {
+                    me.channel_frequency = Some(decoder.u32().unwrap());
+                }
+                306 => {
+                    me.channel_page = Some(decoder.u16().unwrap());
+                }
+                307 => {
+                    me.network_id = Some(decoder.u16().unwrap());
+                }
+                308 => {
+                    me.rssi = Some(decoder.i16().unwrap());
+                }
+                309 => {
+                    me.link = Some(decoder.bool().unwrap());
+                }
+                310 => {
+                    me.tx_power = Some(decoder.u16().unwrap());
+                }
+                311 => {
+                    me.state = Some(decoder.i32().unwrap());
+                }
+                312 => {
+                    me.retrans = Some(decoder.u8().unwrap());
+                }
+                313 => {
+                    me.csma = Some(decoder.u8().unwrap());
+                }
+                _ => decoder.skip().unwrap(),
             }
         }
         me
@@ -370,18 +411,54 @@ impl std::fmt::Display for Iface {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let _ = writeln!(out, "Iface {}", self.name);
         if let Some(mac) = &self.mac {
-            writeln!(out, "   HWaddr: {mac}")?;
+            writeln!(out, "  HWaddr: {mac}")?;
         }
+        if let Some(channel) = &self.channel {
+            write!(out, "  Channel: {channel}")?;
+        }
+        if let Some(channel_frequency) = &self.channel_frequency {
+            write!(out, "  Frequency: {channel_frequency}")?;
+        }
+        if let Some(channel_page) = &self.channel_page {
+            write!(out, "  Page: {channel_page}")?;
+        }
+        if let Some(network_id) = &self.network_id {
+            write!(out, "  NID: 0x{network_id:x}")?;
+        }
+        if let Some(rssi) = &self.rssi {
+            write!(out, "  RSSI: {rssi}")?;
+        }
+
+        writeln!(out, "")?;
+
+        if let Some(link) = &self.link {
+            write!(out, "  Link: {link}")?;
+        }
+        if let Some(tx_power) = &self.tx_power {
+            write!(out, "  TX-Power: {tx_power}")?;
+        }
+        if let Some(state) = &self.state {
+            write!(out, "  State: {state}")?;
+        }
+        if let Some(retrans) = &self.retrans {
+            write!(out, "  Retransmission: {retrans}")?;
+        }
+        if let Some(csma) = &self.csma {
+            write!(out, "  CSMA: {csma}")?;
+        }
+
+        writeln!(out, "")?;
+
         if self.wired {
-            writeln!(out, "   Link type: wired")?;
+            writeln!(out, "  Link type: wired")?;
         } else {
-            writeln!(out, "   Link type: wireless")?;
+            writeln!(out, "  Link type: wireless")?;
         }
         for ip in &self.ipv6addr {
             if ip.addr.is_multicast() {
-                writeln!(out, "   group: {ip}")?;
+                writeln!(out, "  group: {ip}")?;
             } else {
-                writeln!(out, "   addr: {ip}")?;
+                writeln!(out, "  addr: {ip}")?;
             }
         }
         Ok(())
