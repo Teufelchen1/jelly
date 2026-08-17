@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::write;
 
 use clap::Parser;
 use clap::Subcommand;
@@ -424,6 +425,109 @@ impl std::fmt::Display for Ieee802154 {
 }
 
 #[derive(Default)]
+struct NetifFlags {
+    promisc: Option<bool>,
+    autoack: Option<bool>,
+    ack_req: Option<bool>,
+    preload: Option<bool>,
+    rawmode: Option<bool>,
+    mac_no_sleep: Option<bool>,
+    csma: Option<bool>,
+    autocca: Option<bool>,
+    iq_invert: Option<bool>,
+    rx_single: Option<bool>,
+    chan_hop: Option<bool>,
+    otaa: Option<bool>,
+    rtr: Option<bool>,
+    rtr_adv: Option<bool>,
+    sixlo: Option<bool>,
+    abr: Option<bool>,
+    iphc: Option<bool>,
+}
+
+impl NetifFlags {
+    fn set(&mut self, tag: u64, flag: bool) {
+        match tag {
+            326 => self.promisc = Some(flag),
+            327 => self.autoack = Some(flag),
+            328 => self.ack_req = Some(flag),
+            329 => self.preload = Some(flag),
+            330 => self.rawmode = Some(flag),
+            331 => self.mac_no_sleep = Some(flag),
+            332 => self.csma = Some(flag),
+            333 => self.autocca = Some(flag),
+            334 => self.iq_invert = Some(flag),
+            335 => self.rx_single = Some(flag),
+            336 => self.chan_hop = Some(flag),
+            337 => self.otaa = Some(flag),
+            338 => self.rtr = Some(flag),
+            339 => self.rtr_adv = Some(flag),
+            340 => self.sixlo = Some(flag),
+            341 => self.abr = Some(flag),
+            342 => self.iphc = Some(flag),
+            _ => (),
+        }
+    }
+}
+
+impl std::fmt::Display for NetifFlags {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if self.promisc.is_some_and(|x| x) {
+            write!(out, "  PROMISC")?;
+        }
+        if self.autoack.is_some_and(|x| x) {
+            write!(out, "  AUTOACK")?;
+        }
+        if self.ack_req.is_some_and(|x| x) {
+            write!(out, "  ACK_REQ")?;
+        }
+        if self.preload.is_some_and(|x| x) {
+            write!(out, "  PRELOAD")?;
+        }
+        if self.rawmode.is_some_and(|x| x) {
+            write!(out, "  RAWMODE")?;
+        }
+        if self.mac_no_sleep.is_some_and(|x| x) {
+            write!(out, "  MAC_NO_SLEEP")?;
+        }
+        if self.csma.is_some_and(|x| x) {
+            write!(out, "  CSMA")?;
+        }
+        if self.autocca.is_some_and(|x| x) {
+            write!(out, "  AUTOCCA")?;
+        }
+        if self.iq_invert.is_some_and(|x| x) {
+            write!(out, "  IQ_INVERT")?;
+        }
+        if self.rx_single.is_some_and(|x| x) {
+            write!(out, "  RX_SINGLE")?;
+        }
+        if self.chan_hop.is_some_and(|x| x) {
+            write!(out, "  CHAN_HOP")?;
+        }
+        if self.otaa.is_some_and(|x| x) {
+            write!(out, "  OTAA")?;
+        }
+        if self.rtr.is_some_and(|x| x) {
+            write!(out, "  RTR")?;
+        }
+        if self.rtr_adv.is_some_and(|x| x) {
+            write!(out, "  RTR_ADV")?;
+        }
+        if self.sixlo.is_some_and(|x| x) {
+            write!(out, "  6LO")?;
+        }
+        if self.abr.is_some_and(|x| x) {
+            write!(out, "  ABR")?;
+        }
+        if self.iphc.is_some_and(|x| x) {
+            write!(out, "  IPHC")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
 struct Iface {
     name: String,
     mac: Option<Mac>,
@@ -439,7 +543,11 @@ struct Iface {
     state: Option<i32>,
     retrans: Option<u8>,
     csma: Option<u8>,
+    l2_pdu: Option<u16>,
+    mtu: Option<u16>,
+    hop_limit: Option<u8>,
     ieee802154: Option<Ieee802154>,
+    netif_flags: NetifFlags,
 }
 
 impl Iface {
@@ -452,7 +560,8 @@ impl Iface {
         };
 
         while decoder.probe().tag().is_ok() {
-            match decoder.tag().unwrap().as_u64() {
+            let tag = decoder.tag().unwrap().as_u64();
+            match tag {
                 20 => {
                     me.name = decoder.str().unwrap().to_string();
                 }
@@ -502,6 +611,16 @@ impl Iface {
                     me.csma = Some(decoder.u8().unwrap());
                 }
                 325 => me.ieee802154 = Some(Ieee802154::from_cbor(decoder)),
+                326..=342 => me.netif_flags.set(tag, decoder.bool().unwrap()),
+                343 => {
+                    me.l2_pdu = Some(decoder.u16().unwrap());
+                }
+                344 => {
+                    me.mtu = Some(decoder.u16().unwrap());
+                }
+                345 => {
+                    me.hop_limit = Some(decoder.u8().unwrap());
+                }
                 _ => decoder.skip().unwrap(),
             }
         }
@@ -543,8 +662,28 @@ impl std::fmt::Display for Iface {
             write!(out, "  TX-Power: {tx_power}")?;
         }
         if let Some(state) = &self.state {
-            write!(out, "  State: {state}")?;
+            let _netopt_state_str: [&str; 7] =
+                ["OFF", "SLEEP", "IDLE", "RX", "TX", "RESET", "STANDBY"];
+            if *state < 7 {
+                write!(out, "  State: {:}", _netopt_state_str[*state as usize])?;
+            } else {
+                write!(out, "  State: {state}")?;
+            }
         }
+
+        writeln!(out, "")?;
+
+        write!(out, "{:}", self.netif_flags)?;
+        if let Some(l2_pdu) = &self.l2_pdu {
+            write!(out, "  L2-PDU:{l2_pdu}")?;
+        }
+        if let Some(mtu) = &self.mtu {
+            write!(out, "  MTU:{mtu}")?;
+        }
+        if let Some(hop_limit) = &self.hop_limit {
+            write!(out, "  HL:{hop_limit}")?;
+        }
+
         if let Some(retrans) = &self.retrans {
             write!(out, "  Retransmission: {retrans}")?;
         }
@@ -561,9 +700,9 @@ impl std::fmt::Display for Iface {
         }
         for ip in &self.ipv6addr {
             if ip.addr.is_multicast() {
-                writeln!(out, "  group: {ip}")?;
+                writeln!(out, "  inet6 group: {ip}")?;
             } else {
-                writeln!(out, "  addr: {ip}")?;
+                writeln!(out, "  inet6 addr: {ip}")?;
             }
         }
         Ok(())
