@@ -164,7 +164,7 @@ impl CommandHandler for Ifconfig {
         } else {
             // Todo: React to the error specific
             if resp_status.is_error() {
-                let _ = writeln!(out, "Couldn't list the interface(s)");
+                let _ = writeln!(out, "Couldn't list the interface(s): {resp_status:?}");
             } else {
                 out = decode_netif_list_into_string(&self.payload);
             }
@@ -324,6 +324,106 @@ impl std::str::FromStr for Ipv6AddrCidr {
 }
 
 #[derive(Default)]
+struct Ieee802154 {
+    phy: Option<u32>,
+    oqpsk_rate: Option<u32>,
+    mr_oqpsk_chips: Option<u32>,
+    mr_oqpsk_rate: Option<u32>,
+    mr_ofdm_option: Option<u32>,
+    mr_ofdm_mcs: Option<u32>,
+    mr_fsk_modulation_index: Option<u32>,
+    mr_fsk_modulation_order: Option<u32>,
+    mr_fsk_srate: Option<u32>,
+    mr_fsk_fec: Option<u32>,
+    channel_spacing: Option<u32>,
+}
+
+impl Ieee802154 {
+    fn from_cbor(decoder: &mut Decoder) -> Self {
+        let mut me = Self {
+            ..Default::default()
+        };
+
+        if decoder.probe().array().is_ok() {
+            decoder.array().unwrap();
+            while decoder.probe().tag().is_ok() {
+                match decoder.tag().unwrap().as_u64() {
+                    314 => me.phy = Some(decoder.u32().unwrap()),
+                    315 => me.oqpsk_rate = Some(decoder.u32().unwrap()),
+                    316 => me.mr_oqpsk_chips = Some(decoder.u32().unwrap()),
+                    317 => me.mr_oqpsk_rate = Some(decoder.u32().unwrap()),
+                    318 => me.mr_ofdm_option = Some(decoder.u32().unwrap()),
+                    319 => me.mr_ofdm_mcs = Some(decoder.u32().unwrap()),
+                    320 => me.mr_fsk_modulation_index = Some(decoder.u32().unwrap()),
+                    321 => me.mr_fsk_modulation_order = Some(decoder.u32().unwrap()),
+                    322 => me.mr_fsk_srate = Some(decoder.u32().unwrap()),
+                    323 => me.mr_fsk_fec = Some(decoder.u32().unwrap()),
+                    324 => me.channel_spacing = Some(decoder.u32().unwrap()),
+                    _ => decoder.skip().unwrap(),
+                }
+            }
+            // Skip array end
+            decoder.skip().unwrap();
+        }
+
+        me
+    }
+}
+
+impl std::fmt::Display for Ieee802154 {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if let Some(phy) = &self.phy {
+            if *phy < 7 {
+                let _netopt_ieee802154_phy_str: [&str; 7] = [
+                    "DISABLED",
+                    "BPSK",
+                    "ASK",
+                    "O-QPSK",
+                    "MR-O-QPSK",
+                    "MR-OFDM",
+                    "MR-FSK",
+                ];
+                write!(out, "  PHY: {:}", _netopt_ieee802154_phy_str[*phy as usize])?;
+            }
+        }
+        if let Some(oqpsk_rate) = &self.oqpsk_rate {
+            write!(out, "  oqpsk_rate: {oqpsk_rate}")?;
+        }
+        if let Some(mr_oqpsk_chips) = &self.mr_oqpsk_chips {
+            write!(out, "  mr_oqpsk_chips: {mr_oqpsk_chips}")?;
+        }
+        if let Some(mr_oqpsk_rate) = &self.mr_oqpsk_rate {
+            write!(out, "  mr_oqpsk_rate: {mr_oqpsk_rate}")?;
+        }
+        if let Some(mr_ofdm_option) = &self.mr_ofdm_option {
+            write!(out, "  mr_ofdm_option: {mr_ofdm_option}")?;
+        }
+        if let Some(mr_ofdm_mcs) = &self.mr_ofdm_mcs {
+            write!(out, "  mr_ofdm_mcs: {mr_ofdm_mcs}")?;
+        }
+        if let Some(mr_fsk_modulation_index) = &self.mr_fsk_modulation_index {
+            writeln!(out, "  mr_fsk_modulation_index: {mr_fsk_modulation_index}")?;
+        }
+        if let Some(mr_fsk_modulation_order) = &self.mr_fsk_modulation_order {
+            write!(
+                out,
+                "  mr_fsk_modulation_order: {mr_fsk_modulation_order}-FSK"
+            )?;
+        }
+        if let Some(mr_fsk_srate) = &self.mr_fsk_srate {
+            write!(out, "  mr_fsk_srate: {mr_fsk_srate} kHz")?;
+        }
+        if let Some(mr_fsk_fec) = &self.mr_fsk_fec {
+            write!(out, "  mr_fsk_fec: {mr_fsk_fec}")?;
+        }
+        if let Some(channel_spacing) = &self.channel_spacing {
+            write!(out, "  channel_spacing: {channel_spacing} kHz")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
 struct Iface {
     name: String,
     mac: Option<Mac>,
@@ -339,6 +439,7 @@ struct Iface {
     state: Option<i32>,
     retrans: Option<u8>,
     csma: Option<u8>,
+    ieee802154: Option<Ieee802154>,
 }
 
 impl Iface {
@@ -400,6 +501,7 @@ impl Iface {
                 313 => {
                     me.csma = Some(decoder.u8().unwrap());
                 }
+                325 => me.ieee802154 = Some(Ieee802154::from_cbor(decoder)),
                 _ => decoder.skip().unwrap(),
             }
         }
@@ -427,6 +529,9 @@ impl std::fmt::Display for Iface {
         }
         if let Some(rssi) = &self.rssi {
             write!(out, "  RSSI: {rssi}")?;
+        }
+        if let Some(ieee802154) = &self.ieee802154 {
+            write!(out, "{ieee802154}")?;
         }
 
         writeln!(out, "")?;
