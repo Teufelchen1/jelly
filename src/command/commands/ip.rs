@@ -105,7 +105,7 @@ impl CommandHandler for Ifconfig {
                     }
                     IfconfigOperation::Up => {
                         encoder
-                            .tag(minicbor::data::Tag::new(303))
+                            .tag(minicbor::data::Tag::new(309))
                             .unwrap()
                             .bool(true)
                             .unwrap();
@@ -113,7 +113,7 @@ impl CommandHandler for Ifconfig {
                     }
                     IfconfigOperation::Down => {
                         encoder
-                            .tag(minicbor::data::Tag::new(303))
+                            .tag(minicbor::data::Tag::new(309))
                             .unwrap()
                             .bool(false)
                             .unwrap();
@@ -193,17 +193,27 @@ impl CommandHandler for Ifconfig {
     }
 }
 
-struct Mac {
+#[derive(Default)]
+struct Eui64 {
     data: [u8; 8],
+    len: usize,
 }
 
-impl Mac {
-    fn new(data: &[u8; 8]) -> Self {
-        Self { data: *data }
+impl Eui64 {
+    fn new(data: &[u8]) -> Self {
+        let len = data.len();
+        let mut me = Self::default();
+        if len > 8 {
+            me
+        } else {
+            me.data[..len].clone_from_slice(data);
+            me.len = len;
+            me
+        }
     }
 }
 
-impl std::fmt::Display for Mac {
+impl std::fmt::Display for Eui64 {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let last_i = self.data.len() - 1;
         for i in 0..last_i {
@@ -530,7 +540,7 @@ impl std::fmt::Display for NetifFlags {
 #[derive(Default)]
 struct Iface {
     name: String,
-    mac: Option<Mac>,
+    mac: Option<Eui64>,
     ipv6addr: Vec<Ipv6AddrCidr>,
     wired: bool,
     channel: Option<u16>,
@@ -540,9 +550,9 @@ struct Iface {
     rssi: Option<i16>,
     link: Option<bool>,
     tx_power: Option<u16>,
-    state: Option<i32>,
+    state: Option<u32>,
     retrans: Option<u8>,
-    csma: Option<u8>,
+    csma_retries: Option<u8>,
     l2_pdu: Option<u16>,
     mtu: Option<u16>,
     hop_limit: Option<u8>,
@@ -566,7 +576,7 @@ impl Iface {
                     me.name = decoder.str().unwrap().to_string();
                 }
                 48 => {
-                    me.mac = Some(Mac::new(
+                    me.mac = Some(Eui64::new(
                         decoder
                             .bytes()
                             .unwrap()
@@ -602,13 +612,13 @@ impl Iface {
                     me.tx_power = Some(decoder.u16().unwrap());
                 }
                 311 => {
-                    me.state = Some(decoder.i32().unwrap());
+                    me.state = Some(decoder.u32().unwrap());
                 }
                 312 => {
                     me.retrans = Some(decoder.u8().unwrap());
                 }
                 313 => {
-                    me.csma = Some(decoder.u8().unwrap());
+                    me.csma_retries = Some(decoder.u8().unwrap());
                 }
                 325 => me.ieee802154 = Some(Ieee802154::from_cbor(decoder)),
                 326..=342 => me.netif_flags.set(tag, decoder.bool().unwrap()),
@@ -687,8 +697,8 @@ impl std::fmt::Display for Iface {
         if let Some(retrans) = &self.retrans {
             write!(out, "  Retransmission: {retrans}")?;
         }
-        if let Some(csma) = &self.csma {
-            write!(out, "  CSMA: {csma}")?;
+        if let Some(csma_retries) = &self.csma_retries {
+            write!(out, "  CSMA: {csma_retries}")?;
         }
 
         writeln!(out, "")?;
