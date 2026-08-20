@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::vec;
 use std::write;
 
 use clap::Parser;
@@ -52,6 +53,7 @@ struct Ifconfig {
     finished: bool,
     displayable: bool,
     cli: IfconfigCli,
+    ifaces: Vec<String>,
 }
 
 pub fn cmd() -> Command {
@@ -75,6 +77,7 @@ fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
         finished: false,
         displayable: false,
         cli,
+        ifaces: vec![],
     })))
 }
 
@@ -85,15 +88,17 @@ impl CommandHandler for Ifconfig {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_path(&self.location);
 
-        let request = if let Some(iface_id) = &self.cli.iface {
+        if let Some(iface_id) = &self.cli.iface {
+            request
+                .message
+                .add_option_str(coap_lite::CoapOption::UriQuery, &format!("name={iface_id}"))
+                .unwrap();
             let method = if let Some(operation) = &self.cli.operation {
-                encoder
-                    .array(2)
-                    .unwrap()
-                    .tag(minicbor::data::Tag::new(20))
-                    .unwrap()
-                    .str(iface_id)
-                    .unwrap();
+                encoder.array(1).unwrap();
+                // .tag(minicbor::data::Tag::new(20))
+                // .unwrap()
+                // .str(iface_id)
+                // .unwrap();
                 match operation {
                     IfconfigOperation::Add { addr } => {
                         addr.into_cbor_with_prefix(&mut encoder);
@@ -122,11 +127,11 @@ impl CommandHandler for Ifconfig {
                     IfconfigOperation::Set { key: _, value: _ } => todo!(),
                 }
             } else {
-                encoder
-                    .tag(minicbor::data::Tag::new(20))
-                    .unwrap()
-                    .str(iface_id)
-                    .unwrap();
+                // encoder
+                //     .tag(minicbor::data::Tag::new(20))
+                //     .unwrap()
+                //     .str(iface_id)
+                //     .unwrap();
 
                 Method::Get
             };
@@ -135,42 +140,77 @@ impl CommandHandler for Ifconfig {
                 .message
                 .set_content_format(coap_lite::ContentFormat::ApplicationCBOR);
             request.message.set_payload(&buffer).unwrap();
-
-            request
         } else {
             request.set_method(Method::Get);
-            request
-        };
+        }
 
         request
     }
 
     fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
+        fn _ifaces_from_cbor_list(cbor: &[u8]) -> Vec<String> {
+            let mut ret = vec![];
+            let mut decoder = Decoder::new(cbor);
+            if decoder.probe().array().is_ok() {
+                decoder.array().unwrap();
+                while decoder.probe().tag().is_ok() {
+                    let tag = decoder.tag().unwrap().as_u64();
+                    match tag {
+                        20 => {
+                            ret.push(decoder.str().unwrap().to_string());
+                        }
+                        _ => continue,
+                    }
+                }
+            }
+            ret
+        }
+
         let resp_status = match response.header.code {
             coap_lite::MessageClass::Response(ref code) => code,
             _ => &coap_lite::ResponseType::UnKnown,
         };
         self.payload.clone_from(&response.payload);
-        let mut out = String::new();
 
         if let Some(operation) = &self.cli.operation {
             match operation {
                 IfconfigOperation::Add { addr: _ } | IfconfigOperation::Del { addr: _ } => {
                     if resp_status.is_error() {
-                        let _ = writeln!(out, "Couldn't add/del ip address");
+                        let _ = writeln!(self.buffer, "Couldn't add/del ip address");
                     }
                 }
                 _ => (), // no op
             }
-        } else {
+        } else if self.cli.iface.is_some() {
             // Todo: React to the error specific
             if resp_status.is_error() {
-                let _ = writeln!(out, "Couldn't list the interface(s): {resp_status:?}");
+                let _ = writeln!(
+                    self.buffer,
+                    "Couldn't list the interface(s): {resp_status:?}"
+                );
             } else {
-                out = decode_netif_list_into_string(&self.payload);
+                let _ = writeln!(
+                    self.buffer,
+                    "{}",
+                    decode_netif_list_into_string(&self.payload)
+                );
             }
+        } else {
+            self.ifaces = _ifaces_from_cbor_list(&self.payload);
         }
-        self.buffer = out;
+
+        if let Some(iface) = self.ifaces.pop() {
+            self.cli.iface = Some(iface.clone());
+            let mut request: CoapRequest<String> = CoapRequest::new();
+            request.set_path(&self.location);
+            request
+                .message
+                .add_option_str(coap_lite::CoapOption::UriQuery, &format!("name={iface}"))
+                .unwrap();
+            request.set_method(Method::Get);
+            return Some(request);
+        }
+
         self.finished = true;
         self.displayable = true;
         None
@@ -723,14 +763,11 @@ fn decode_netif_list_into_string(data: &[u8]) -> String {
     let mut out = String::new();
     let mut decoder = Decoder::new(data);
 
-    decoder.array().unwrap();
-    {
-        while decoder.probe().array().is_ok() {
-            decoder.array().unwrap();
-            let _ = writeln!(out, "{}", Iface::from_cbor(&mut decoder));
-            if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
-                decoder.skip().unwrap();
-            }
+    if decoder.probe().array().is_ok() {
+        decoder.array().unwrap();
+        let _ = writeln!(out, "{}", Iface::from_cbor(&mut decoder));
+        if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
+            decoder.skip().unwrap();
         }
     }
     out
