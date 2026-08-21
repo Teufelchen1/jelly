@@ -127,12 +127,6 @@ impl CommandHandler for Ifconfig {
                     IfconfigOperation::Set { key: _, value: _ } => todo!(),
                 }
             } else {
-                // encoder
-                //     .tag(minicbor::data::Tag::new(20))
-                //     .unwrap()
-                //     .str(iface_id)
-                //     .unwrap();
-
                 Method::Get
             };
             request.set_method(method);
@@ -189,11 +183,7 @@ impl CommandHandler for Ifconfig {
                     "Couldn't list the interface(s): {resp_status:?}"
                 );
             } else {
-                let _ = writeln!(
-                    self.buffer,
-                    "{}",
-                    decode_netif_list_into_string(&self.payload)
-                );
+                let _ = writeln!(self.buffer, "{}", decode_netif_into_string(&self.payload));
             }
         } else {
             self.ifaces = _ifaces_from_cbor_list(&self.payload);
@@ -255,7 +245,7 @@ impl Eui64 {
 
 impl std::fmt::Display for Eui64 {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let last_i = self.data.len() - 1;
+        let last_i = self.len - 1;
         for i in 0..last_i {
             write!(out, "{:02X}:", self.data[i])?;
         }
@@ -375,6 +365,74 @@ impl std::str::FromStr for Ipv6AddrCidr {
 }
 
 #[derive(Default)]
+struct Lora {
+    bandwidth: Option<u8>,
+    spreading_factor: Option<u8>,
+    coding_rate: Option<u8>,
+    demod_margin: Option<u8>,
+    num_gateways: Option<u8>,
+}
+
+impl Lora {
+    fn from_cbor(decoder: &mut Decoder) -> Self {
+        let mut me = Self::default();
+
+        if decoder.probe().array().is_ok() {
+            decoder.array().unwrap();
+            while decoder.probe().tag().is_ok() {
+                match decoder.tag().unwrap().as_u64() {
+                    348 => me.bandwidth = Some(decoder.u8().unwrap()),
+                    349 => me.spreading_factor = Some(decoder.u8().unwrap()),
+                    350 => me.coding_rate = Some(decoder.u8().unwrap()),
+                    351 => me.demod_margin = Some(decoder.u8().unwrap()),
+                    352 => me.num_gateways = Some(decoder.u8().unwrap()),
+                    _ => decoder.skip().unwrap(),
+                }
+            }
+            // Skip array end
+            decoder.skip().unwrap();
+        }
+
+        me
+    }
+}
+
+impl std::fmt::Display for Lora {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if let Some(bandwidth) = &self.bandwidth {
+            if *bandwidth < 3 {
+                let _netopt_bandwidth_str: [&str; 3] = ["125", "250", "500"];
+                write!(
+                    out,
+                    "  BW: {:} kHz",
+                    _netopt_bandwidth_str[*bandwidth as usize]
+                )?;
+            }
+        }
+        if let Some(spreading_factor) = &self.spreading_factor {
+            write!(out, "  spreading_factor: {spreading_factor}")?;
+        }
+        if let Some(coding_rate) = &self.coding_rate {
+            if *coding_rate < 4 {
+                let _netopt_coding_rate_str: [&str; 4] = ["4/5", "4/6", "4/7", "4/8"];
+                write!(
+                    out,
+                    "  CR: {:}",
+                    _netopt_coding_rate_str[*coding_rate as usize]
+                )?;
+            }
+        }
+        if let Some(demod_margin) = &self.demod_margin {
+            write!(out, "  demod_margin: {demod_margin}")?;
+        }
+        if let Some(num_gateways) = &self.num_gateways {
+            write!(out, "  num_gateways: {num_gateways}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
 struct Ieee802154 {
     phy: Option<u32>,
     oqpsk_rate: Option<u32>,
@@ -391,9 +449,7 @@ struct Ieee802154 {
 
 impl Ieee802154 {
     fn from_cbor(decoder: &mut Decoder) -> Self {
-        let mut me = Self {
-            ..Default::default()
-        };
+        let mut me = Self::default();
 
         if decoder.probe().array().is_ok() {
             decoder.array().unwrap();
@@ -578,7 +634,7 @@ impl std::fmt::Display for NetifFlags {
 }
 
 #[derive(Default)]
-struct Iface {
+struct Netif {
     name: String,
     mac: Option<Eui64>,
     ipv6addr: Vec<Ipv6AddrCidr>,
@@ -598,9 +654,10 @@ struct Iface {
     hop_limit: Option<u8>,
     ieee802154: Option<Ieee802154>,
     netif_flags: NetifFlags,
+    lora: Option<Lora>,
 }
 
-impl Iface {
+impl Netif {
     fn from_cbor(decoder: &mut Decoder) -> Self {
         let mut me = Self {
             name: "NoName".to_string(),
@@ -616,13 +673,7 @@ impl Iface {
                     me.name = decoder.str().unwrap().to_string();
                 }
                 48 => {
-                    me.mac = Some(Eui64::new(
-                        decoder
-                            .bytes()
-                            .unwrap()
-                            .try_into()
-                            .expect("Mac should be 8 bytes"),
-                    ));
+                    me.mac = Some(Eui64::new(decoder.bytes().unwrap().try_into().unwrap()));
                 }
                 54 => {
                     me.ipv6addr.push(Ipv6AddrCidr::from_cbor(decoder));
@@ -671,6 +722,9 @@ impl Iface {
                 345 => {
                     me.hop_limit = Some(decoder.u8().unwrap());
                 }
+                353 => {
+                    me.lora = Some(Lora::from_cbor(decoder));
+                }
                 _ => decoder.skip().unwrap(),
             }
         }
@@ -678,7 +732,7 @@ impl Iface {
     }
 }
 
-impl std::fmt::Display for Iface {
+impl std::fmt::Display for Netif {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let _ = writeln!(out, "Iface {}", self.name);
         if let Some(mac) = &self.mac {
@@ -704,6 +758,10 @@ impl std::fmt::Display for Iface {
         }
 
         writeln!(out, "")?;
+
+        if let Some(lora) = &self.lora {
+            writeln!(out, "{lora}")?;
+        }
 
         if let Some(link) = &self.link {
             write!(out, "  Link: {link}")?;
@@ -759,13 +817,13 @@ impl std::fmt::Display for Iface {
     }
 }
 
-fn decode_netif_list_into_string(data: &[u8]) -> String {
+fn decode_netif_into_string(data: &[u8]) -> String {
     let mut out = String::new();
     let mut decoder = Decoder::new(data);
 
     if decoder.probe().array().is_ok() {
         decoder.array().unwrap();
-        let _ = writeln!(out, "{}", Iface::from_cbor(&mut decoder));
+        let _ = writeln!(out, "{}", Netif::from_cbor(&mut decoder));
         if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
             decoder.skip().unwrap();
         }

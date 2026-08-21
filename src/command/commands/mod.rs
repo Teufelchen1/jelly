@@ -5,7 +5,7 @@ use super::CommandHandler;
 use super::CommandType;
 
 mod coap_get_template;
-mod ip;
+mod ifconfig;
 mod mem_read;
 mod multi_endpoints_sample;
 mod ps;
@@ -24,7 +24,7 @@ pub enum InternalCommand {
 pub fn all_commands() -> Vec<Command> {
     vec![
         saul::cmd(),
-        ip::cmd(),
+        ifconfig::cmd(),
         multi_endpoints_sample::cmd(),
         mem_read::cmd(),
         ps::cmd(),

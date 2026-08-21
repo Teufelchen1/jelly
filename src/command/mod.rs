@@ -55,6 +55,7 @@ pub trait CommandHandler {
 }
 
 /// Represents a command that the user can type into jelly
+#[derive(Debug)]
 pub struct Command {
     /// The name of the command, this is what the user types into jelly.
     pub cmd: String,
