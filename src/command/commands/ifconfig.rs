@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::println;
 use std::vec;
 use std::write;
 
@@ -9,13 +10,78 @@ use coap_lite::{CoapRequest, Packet};
 use coap_message::MinimalWritableMessage;
 use minicbor::Decoder;
 use minicbor::Encoder;
-//use senml;
 
 use super::Command;
 use super::CommandHandler;
 use super::CommandType;
 
-/// This is an example on how to use cbor as payload for the coap request.
+const TAG_IEEE_MAC: u64 = 48; /* Choosen by IANA */
+const TAG_IPV6: u64 = 54; /* Choosen by IANA */
+
+const TAG_NETIF_NAME: u64 = 0;
+const TAG_NETOPT_ADDRESS: u64 = 1;
+const TAG_NETOPT_ADDRESS_LONG: u64 = 2;
+const TAG_NETOPT_IS_WIRED: u64 = 3;
+
+const TAG_NETOPT_IPV6_ADDR: u64 = 4;
+const TAG_NETOPT_IPV6_GROUP: u64 = 5;
+
+const TAG_NETOPT_CHANNEL: u64 = 6;
+const TAG_NETOPT_CHANNEL_FREQUENCY: u64 = 7;
+const TAG_NETOPT_CHANNEL_PAGE: u64 = 8;
+const TAG_NETOPT_NID: u64 = 9;
+const TAG_NETOPT_RSSI: u64 = 10;
+const TAG_NETOPT_CCA_THRESHOLD: u64 = 11;
+const TAG_NETOPT_LINK: u64 = 12;
+const TAG_NETOPT_ACTIVE: u64 = 13;
+const TAG_NETOPT_TX_POWER: u64 = 14;
+const TAG_NETOPT_STATE: u64 = 15;
+const TAG_NETOPT_RETRANS: u64 = 16;
+const TAG_NETOPT_CSMA_RETRIES: u64 = 17;
+const TAG_NETOPT_MAX_PDU_SIZE: u64 = 18;
+const TAG_NETOPT_MAX_PDU_SIZE_IPV6: u64 = 19;
+const TAG_NETOPT_HOP_LIMIT: u64 = 20;
+const TAG_NETOPT_SRC_LEN: u64 = 21;
+
+const TAG_FLAG_ARRAY: u64 = 22;
+const TAG_NETOPT_PROMISCUOUSMODE: u64 = 0;
+const TAG_NETOPT_AUTOACK: u64 = 1;
+const TAG_NETOPT_ACK_REQ: u64 = 2;
+const TAG_NETOPT_PRELOADING: u64 = 3;
+const TAG_NETOPT_RAWMODE: u64 = 4;
+const TAG_NETOPT_MAC_NO_SLEEP: u64 = 5;
+const TAG_NETOPT_CSMA: u64 = 6;
+const TAG_NETOPT_AUTOCCA: u64 = 7;
+const TAG_NETOPT_IQ_INVERT: u64 = 8;
+const TAG_NETOPT_SINGLE_RECEIVE: u64 = 9;
+const TAG_NETOPT_CHANNEL_HOP: u64 = 10;
+const TAG_NETOPT_OTAA: u64 = 11;
+const TAG_NETOPT_IPV6_FORWARDING: u64 = 12;
+const TAG_NETOPT_IPV6_SND_RTR_ADV: u64 = 13;
+const TAG_NETOPT_6LO: u64 = 14;
+const TAG_NETOPT_6LO_ABR: u64 = 15;
+const TAG_NETOPT_6LO_IPHC: u64 = 16;
+
+const TAG_IEEE802154_ARRAY: u64 = 23;
+const TAG_NETOPT_IEEE802154_PHY: u64 = 0;
+const TAG_NETOPT_OQPSK_RATE: u64 = 1;
+const TAG_NETOPT_MR_OQPSK_CHIPS: u64 = 2;
+const TAG_NETOPT_MR_OQPSK_RATE: u64 = 3;
+const TAG_NETOPT_MR_OFDM_OPTION: u64 = 4;
+const TAG_NETOPT_MR_OFDM_MCS: u64 = 5;
+const TAG_NETOPT_MR_FSK_MODULATION_INDEX: u64 = 6;
+const TAG_NETOPT_MR_FSK_MODULATION_ORDER: u64 = 7;
+const TAG_NETOPT_MR_FSK_SRATE: u64 = 8;
+const TAG_NETOPT_MR_FSK_FEC: u64 = 9;
+const TAG_NETOPT_CHANNEL_SPACING: u64 = 10;
+
+const TAG_LORA_ARRAY: u64 = 24;
+const TAG_NETOPT_BANDWIDTH: u64 = 0;
+const TAG_NETOPT_SPREADING_FACTOR: u64 = 1;
+const TAG_NETOPT_CODING_RATE: u64 = 2;
+const TAG_NETOPT_DEMOD_MARGIN: u64 = 3;
+const TAG_NETOPT_NUM_GATEWAYS: u64 = 4;
+
 #[derive(Parser, Debug)]
 #[command(name = "Ifconfig")]
 #[command(version = "1.0")]
@@ -95,10 +161,6 @@ impl CommandHandler for Ifconfig {
                 .unwrap();
             let method = if let Some(operation) = &self.cli.operation {
                 encoder.array(1).unwrap();
-                // .tag(minicbor::data::Tag::new(20))
-                // .unwrap()
-                // .str(iface_id)
-                // .unwrap();
                 match operation {
                     IfconfigOperation::Add { addr } => {
                         addr.into_cbor_with_prefix(&mut encoder);
@@ -110,7 +172,7 @@ impl CommandHandler for Ifconfig {
                     }
                     IfconfigOperation::Up => {
                         encoder
-                            .tag(minicbor::data::Tag::new(309))
+                            .tag(minicbor::data::Tag::new(TAG_NETOPT_LINK))
                             .unwrap()
                             .bool(true)
                             .unwrap();
@@ -118,13 +180,34 @@ impl CommandHandler for Ifconfig {
                     }
                     IfconfigOperation::Down => {
                         encoder
-                            .tag(minicbor::data::Tag::new(309))
+                            .tag(minicbor::data::Tag::new(TAG_NETOPT_LINK))
                             .unwrap()
                             .bool(false)
                             .unwrap();
                         Method::Patch
                     }
-                    IfconfigOperation::Set { key: _, value: _ } => todo!(),
+                    IfconfigOperation::Set { key, value } => {
+                        match key.as_str() {
+                            "addr_long" => {
+                                let bytes = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+                                encoder
+                                    .tag(minicbor::data::Tag::new(TAG_NETOPT_ADDRESS_LONG))
+                                    .unwrap()
+                                    .bytes(&bytes)
+                                    .unwrap();
+                            }
+                            "nid" => {
+                                let nid = 27;
+                                encoder
+                                    .tag(minicbor::data::Tag::new(TAG_NETOPT_NID))
+                                    .unwrap()
+                                    .u16(nid)
+                                    .unwrap();
+                            }
+                            _ => todo!(),
+                        }
+                        Method::Patch
+                    }
                 }
             } else {
                 Method::Get
@@ -147,14 +230,8 @@ impl CommandHandler for Ifconfig {
             let mut decoder = Decoder::new(cbor);
             if decoder.probe().array().is_ok() {
                 decoder.array().unwrap();
-                while decoder.probe().tag().is_ok() {
-                    let tag = decoder.tag().unwrap().as_u64();
-                    match tag {
-                        20 => {
-                            ret.push(decoder.str().unwrap().to_string());
-                        }
-                        _ => continue,
-                    }
+                while decoder.probe().str().is_ok() {
+                    ret.push(decoder.str().unwrap().to_string());
                 }
             }
             ret
@@ -299,11 +376,11 @@ impl Ipv6AddrCidr {
                 let data: &[u8; 16] = decoder.bytes().unwrap().try_into().unwrap();
                 (std::net::Ipv6Addr::from(*data), prefix)
             } else {
-                panic!();
+                todo!();
             };
             Self { addr, prefix }
         } else {
-            panic!();
+            todo!();
         }
     }
 
@@ -328,7 +405,7 @@ impl Ipv6AddrCidr {
         let addr_octs = self.addr.octets();
         if with_prefix {
             encoder
-                .tag(minicbor::data::Tag::new(54))
+                .tag(minicbor::data::Tag::new(TAG_IPV6))
                 .unwrap()
                 .array(2)
                 .unwrap()
@@ -338,7 +415,7 @@ impl Ipv6AddrCidr {
                 .unwrap();
         } else {
             encoder
-                .tag(minicbor::data::Tag::new(54))
+                .tag(minicbor::data::Tag::new(TAG_IPV6))
                 .unwrap()
                 .bytes(&addr_octs)
                 .unwrap();
@@ -379,13 +456,15 @@ impl Lora {
 
         if decoder.probe().array().is_ok() {
             decoder.array().unwrap();
-            while decoder.probe().tag().is_ok() {
-                match decoder.tag().unwrap().as_u64() {
-                    348 => me.bandwidth = Some(decoder.u8().unwrap()),
-                    349 => me.spreading_factor = Some(decoder.u8().unwrap()),
-                    350 => me.coding_rate = Some(decoder.u8().unwrap()),
-                    351 => me.demod_margin = Some(decoder.u8().unwrap()),
-                    352 => me.num_gateways = Some(decoder.u8().unwrap()),
+            while decoder.probe().u64().is_ok() {
+                match decoder.u64().unwrap() {
+                    TAG_NETOPT_BANDWIDTH => me.bandwidth = Some(decoder.u8().unwrap()),
+                    TAG_NETOPT_SPREADING_FACTOR => {
+                        me.spreading_factor = Some(decoder.u8().unwrap())
+                    }
+                    TAG_NETOPT_CODING_RATE => me.coding_rate = Some(decoder.u8().unwrap()),
+                    TAG_NETOPT_DEMOD_MARGIN => me.demod_margin = Some(decoder.u8().unwrap()),
+                    TAG_NETOPT_NUM_GATEWAYS => me.num_gateways = Some(decoder.u8().unwrap()),
                     _ => decoder.skip().unwrap(),
                 }
             }
@@ -451,21 +530,25 @@ impl Ieee802154 {
     fn from_cbor(decoder: &mut Decoder) -> Self {
         let mut me = Self::default();
 
-        if decoder.probe().array().is_ok() {
-            decoder.array().unwrap();
-            while decoder.probe().tag().is_ok() {
-                match decoder.tag().unwrap().as_u64() {
-                    314 => me.phy = Some(decoder.u32().unwrap()),
-                    315 => me.oqpsk_rate = Some(decoder.u32().unwrap()),
-                    316 => me.mr_oqpsk_chips = Some(decoder.u32().unwrap()),
-                    317 => me.mr_oqpsk_rate = Some(decoder.u32().unwrap()),
-                    318 => me.mr_ofdm_option = Some(decoder.u32().unwrap()),
-                    319 => me.mr_ofdm_mcs = Some(decoder.u32().unwrap()),
-                    320 => me.mr_fsk_modulation_index = Some(decoder.u32().unwrap()),
-                    321 => me.mr_fsk_modulation_order = Some(decoder.u32().unwrap()),
-                    322 => me.mr_fsk_srate = Some(decoder.u32().unwrap()),
-                    323 => me.mr_fsk_fec = Some(decoder.u32().unwrap()),
-                    324 => me.channel_spacing = Some(decoder.u32().unwrap()),
+        if decoder.probe().map().is_ok() {
+            decoder.map().unwrap();
+            while decoder.probe().u64().is_ok() {
+                match decoder.u64().unwrap() {
+                    TAG_NETOPT_IEEE802154_PHY => me.phy = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_OQPSK_RATE => me.oqpsk_rate = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_MR_OQPSK_CHIPS => me.mr_oqpsk_chips = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_MR_OQPSK_RATE => me.mr_oqpsk_rate = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_MR_OFDM_OPTION => me.mr_ofdm_option = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_MR_OFDM_MCS => me.mr_ofdm_mcs = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_MR_FSK_MODULATION_INDEX => {
+                        me.mr_fsk_modulation_index = Some(decoder.u32().unwrap())
+                    }
+                    TAG_NETOPT_MR_FSK_MODULATION_ORDER => {
+                        me.mr_fsk_modulation_order = Some(decoder.u32().unwrap())
+                    }
+                    TAG_NETOPT_MR_FSK_SRATE => me.mr_fsk_srate = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_MR_FSK_FEC => me.mr_fsk_fec = Some(decoder.u32().unwrap()),
+                    TAG_NETOPT_CHANNEL_SPACING => me.channel_spacing = Some(decoder.u32().unwrap()),
                     _ => decoder.skip().unwrap(),
                 }
             }
@@ -552,26 +635,36 @@ struct NetifFlags {
 }
 
 impl NetifFlags {
-    fn set(&mut self, tag: u64, flag: bool) {
-        match tag {
-            326 => self.promisc = Some(flag),
-            327 => self.autoack = Some(flag),
-            328 => self.ack_req = Some(flag),
-            329 => self.preload = Some(flag),
-            330 => self.rawmode = Some(flag),
-            331 => self.mac_no_sleep = Some(flag),
-            332 => self.csma = Some(flag),
-            333 => self.autocca = Some(flag),
-            334 => self.iq_invert = Some(flag),
-            335 => self.rx_single = Some(flag),
-            336 => self.chan_hop = Some(flag),
-            337 => self.otaa = Some(flag),
-            338 => self.rtr = Some(flag),
-            339 => self.rtr_adv = Some(flag),
-            340 => self.sixlo = Some(flag),
-            341 => self.abr = Some(flag),
-            342 => self.iphc = Some(flag),
-            _ => (),
+    fn set(&mut self, decoder: &mut Decoder) {
+        if decoder.probe().array().is_ok() {
+            decoder.array().unwrap();
+            while decoder.probe().u64().is_ok() {
+                let tag = decoder.u64().unwrap();
+                let flag = decoder.bool().unwrap();
+                match tag {
+                    TAG_NETOPT_PROMISCUOUSMODE => self.promisc = Some(flag),
+                    TAG_NETOPT_AUTOACK => self.autoack = Some(flag),
+                    TAG_NETOPT_ACK_REQ => self.ack_req = Some(flag),
+                    TAG_NETOPT_PRELOADING => self.preload = Some(flag),
+                    TAG_NETOPT_RAWMODE => self.rawmode = Some(flag),
+                    TAG_NETOPT_MAC_NO_SLEEP => self.mac_no_sleep = Some(flag),
+                    TAG_NETOPT_CSMA => self.csma = Some(flag),
+                    TAG_NETOPT_AUTOCCA => self.autocca = Some(flag),
+                    TAG_NETOPT_IQ_INVERT => self.iq_invert = Some(flag),
+                    TAG_NETOPT_SINGLE_RECEIVE => self.rx_single = Some(flag),
+                    TAG_NETOPT_CHANNEL_HOP => self.chan_hop = Some(flag),
+                    TAG_NETOPT_OTAA => self.otaa = Some(flag),
+                    TAG_NETOPT_IPV6_FORWARDING => self.rtr = Some(flag),
+                    TAG_NETOPT_IPV6_SND_RTR_ADV => self.rtr_adv = Some(flag),
+                    TAG_NETOPT_6LO => self.sixlo = Some(flag),
+                    TAG_NETOPT_6LO_ABR => self.abr = Some(flag),
+                    TAG_NETOPT_6LO_IPHC => self.iphc = Some(flag),
+                    _ => (),
+                }
+            }
+            if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
+                decoder.skip().unwrap();
+            }
         }
     }
 }
@@ -666,63 +759,74 @@ impl Netif {
             ..Default::default()
         };
 
-        while decoder.probe().tag().is_ok() {
-            let tag = decoder.tag().unwrap().as_u64();
+        while decoder.probe().u64().is_ok() {
+            let tag = decoder.u64().unwrap();
             match tag {
-                20 => {
+                TAG_NETIF_NAME => {
                     me.name = decoder.str().unwrap().to_string();
                 }
-                48 => {
-                    me.mac = Some(Eui64::new(decoder.bytes().unwrap().try_into().unwrap()));
+                TAG_NETOPT_ADDRESS_LONG => {
+                    if decoder.tag().is_ok_and(|x| x.as_u64() == TAG_IEEE_MAC) {
+                        me.mac = Some(Eui64::new(decoder.bytes().unwrap().try_into().unwrap()));
+                    }
                 }
-                54 => {
-                    me.ipv6addr.push(Ipv6AddrCidr::from_cbor(decoder));
+                TAG_NETOPT_IPV6_ADDR | TAG_NETOPT_IPV6_GROUP => {
+                    if decoder.probe().array().is_ok() {
+                        decoder.array().unwrap();
+                        while decoder.probe().tag().is_ok_and(|x| x.as_u64() == TAG_IPV6) {
+                            decoder.tag().unwrap();
+                            me.ipv6addr.push(Ipv6AddrCidr::from_cbor(decoder));
+                        }
+                    }
+                    if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
+                        decoder.skip().unwrap();
+                    }
                 }
-                302 => {
+                TAG_NETOPT_IS_WIRED => {
                     me.wired = decoder.bool().unwrap();
                 }
-                304 => {
+                TAG_NETOPT_CHANNEL => {
                     me.channel = Some(decoder.u16().unwrap());
                 }
-                305 => {
+                TAG_NETOPT_CHANNEL_FREQUENCY => {
                     me.channel_frequency = Some(decoder.u32().unwrap());
                 }
-                306 => {
+                TAG_NETOPT_CHANNEL_PAGE => {
                     me.channel_page = Some(decoder.u16().unwrap());
                 }
-                307 => {
+                TAG_NETOPT_NID => {
                     me.network_id = Some(decoder.u16().unwrap());
                 }
-                308 => {
+                TAG_NETOPT_RSSI => {
                     me.rssi = Some(decoder.i16().unwrap());
                 }
-                309 => {
+                TAG_NETOPT_LINK => {
                     me.link = Some(decoder.bool().unwrap());
                 }
-                310 => {
+                TAG_NETOPT_TX_POWER => {
                     me.tx_power = Some(decoder.u16().unwrap());
                 }
-                311 => {
+                TAG_NETOPT_STATE => {
                     me.state = Some(decoder.u32().unwrap());
                 }
-                312 => {
+                TAG_NETOPT_RETRANS => {
                     me.retrans = Some(decoder.u8().unwrap());
                 }
-                313 => {
+                TAG_NETOPT_CSMA_RETRIES => {
                     me.csma_retries = Some(decoder.u8().unwrap());
                 }
-                325 => me.ieee802154 = Some(Ieee802154::from_cbor(decoder)),
-                326..=342 => me.netif_flags.set(tag, decoder.bool().unwrap()),
-                343 => {
+                TAG_IEEE802154_ARRAY => me.ieee802154 = Some(Ieee802154::from_cbor(decoder)),
+                TAG_FLAG_ARRAY => me.netif_flags.set(decoder),
+                TAG_NETOPT_MAX_PDU_SIZE => {
                     me.l2_pdu = Some(decoder.u16().unwrap());
                 }
-                344 => {
+                TAG_NETOPT_MAX_PDU_SIZE_IPV6 => {
                     me.mtu = Some(decoder.u16().unwrap());
                 }
-                345 => {
+                TAG_NETOPT_HOP_LIMIT => {
                     me.hop_limit = Some(decoder.u8().unwrap());
                 }
-                353 => {
+                TAG_LORA_ARRAY => {
                     me.lora = Some(Lora::from_cbor(decoder));
                 }
                 _ => decoder.skip().unwrap(),
@@ -821,8 +925,8 @@ fn decode_netif_into_string(data: &[u8]) -> String {
     let mut out = String::new();
     let mut decoder = Decoder::new(data);
 
-    if decoder.probe().array().is_ok() {
-        decoder.array().unwrap();
+    if decoder.probe().map().is_ok() {
+        decoder.map().unwrap();
         let _ = writeln!(out, "{}", Netif::from_cbor(&mut decoder));
         if let Ok(minicbor::data::Type::Break) = decoder.probe().datatype() {
             decoder.skip().unwrap();
