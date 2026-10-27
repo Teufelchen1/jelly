@@ -127,7 +127,7 @@ impl UiState {
 
     pub fn get_config(&self) -> String {
         format!(
-            "OS: {} {}\nBoard: {}\n",
+            "OS: {} {}\nBoard: {} {}\n",
             self.impl_info
                 .os_name
                 .as_ref()
@@ -140,6 +140,10 @@ impl UiState {
                 .board
                 .as_ref()
                 .map_or("Unknown", |s| s.as_ref()),
+            self.impl_info
+                .device_id
+                .as_ref()
+                .map_or_else(Default::default, |s| hex::encode(&**s)),
         )
     }
 

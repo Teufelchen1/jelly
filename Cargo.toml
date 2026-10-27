@@ -50,6 +50,7 @@ tun-rs = { version = "2.7.7", features = ["interruptible"] }
 pnet_packet = { version = "0.35", default-features = false }
 
 ratatui_widget_scrolling = { version = "0.1.0", path = "ratatui_widget_scrolling/" }
+hex = "0.4.3"
 
 [dependencies.ratatui]
 version = "0.30"

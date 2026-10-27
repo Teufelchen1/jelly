@@ -12,6 +12,7 @@ dependencies = [
  "coap-lite",
  "coap-message 0.3.7",
  "crossterm",
+ "hex",
  "minicbor",
  "pnet_packet",
  "rand",
