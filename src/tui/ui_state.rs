@@ -8,6 +8,7 @@ use ratatui_widget_scrolling::ScrollState;
 
 use super::ColorTheme;
 use super::color::ColorPalette;
+use crate::implinfo::ImplInfo;
 
 #[derive(Default, Clone, Copy)]
 pub enum SelectedTab {
@@ -31,8 +32,7 @@ pub struct UiState {
     pub help_scroll: ScrollState,
     pub current_tab: SelectedTab,
     pub command_help_list: String,
-    riot_board: String,
-    riot_version: String,
+    impl_info: ImplInfo,
     theme: ColorPalette,
     dirty: bool,
 }
@@ -54,8 +54,7 @@ impl UiState {
 
             command_help_list: String::new(),
 
-            riot_board: "Unknown".to_owned(),
-            riot_version: "Unknown".to_owned(),
+            impl_info: ImplInfo::default(),
 
             theme: ColorPalette::from(color_theme),
 
@@ -94,14 +93,19 @@ impl UiState {
         }
     }
 
+    pub fn set_impl_info(&mut self, info: ImplInfo) {
+        self.dirty = true;
+        self.impl_info = info;
+    }
+
     pub fn set_board_name(&mut self, name: String) {
         self.dirty = true;
-        self.riot_board = name;
+        self.impl_info.board = Some(name);
     }
 
     pub fn set_board_version(&mut self, version: String) {
         self.dirty = true;
-        self.riot_version = version;
+        self.impl_info.os_version = Some(version);
     }
 
     pub fn set_iface_name(&mut self, name: String) {
@@ -122,7 +126,14 @@ impl UiState {
     pub fn get_config(&self) -> String {
         format!(
             "Version: {}\nBoard: {}\n",
-            self.riot_version, self.riot_board,
+            self.impl_info
+                .os_version
+                .as_ref()
+                .map_or("Unknown", |s| s.as_ref()),
+            self.impl_info
+                .board
+                .as_ref()
+                .map_or("Unknown", |s| s.as_ref()),
         )
     }
 
