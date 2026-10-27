@@ -20,7 +20,6 @@ use crate::events::Event;
 use crate::tui::UiState;
 
 mod handler;
-mod implinfo;
 
 pub struct App {
     connected: bool,

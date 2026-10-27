@@ -20,6 +20,7 @@ mod command;
 mod datatypes;
 mod events;
 mod headless;
+mod implinfo;
 mod network;
 mod slipmux;
 mod transport;

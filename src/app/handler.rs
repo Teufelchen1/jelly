@@ -174,7 +174,7 @@ impl App {
                         }
                         p if self.path_is_impl_info(p) => {
                             if let Some(ui_state) = ui_state {
-                                use super::implinfo::ImplInfo;
+                                use crate::implinfo::ImplInfo;
                                 match minicbor::decode::<ImplInfo>(&response.payload) {
                                     Ok(info) => {
                                         if let Some(board) = info.board {
