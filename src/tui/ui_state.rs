@@ -103,8 +103,10 @@ impl UiState {
         self.impl_info.board = Some(name);
     }
 
+    /// Sets RIOT OS version
     pub fn set_board_version(&mut self, version: String) {
         self.dirty = true;
+        self.impl_info.os_name = Some("RIOT OS".into());
         self.impl_info.os_version = Some(version);
     }
 
@@ -125,11 +127,15 @@ impl UiState {
 
     pub fn get_config(&self) -> String {
         format!(
-            "Version: {}\nBoard: {}\n",
+            "OS: {} {}\nBoard: {}\n",
+            self.impl_info
+                .os_name
+                .as_ref()
+                .map_or("Unknown", |s| s.as_ref()),
             self.impl_info
                 .os_version
                 .as_ref()
-                .map_or("Unknown", |s| s.as_ref()),
+                .map_or("", |s| s.as_ref()),
             self.impl_info
                 .board
                 .as_ref()
