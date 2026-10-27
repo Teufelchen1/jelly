@@ -31,7 +31,7 @@ impl App {
             if maybe.is_none() {
                 continue;
             }
-            let s = maybe.unwrap().split('>').next().unwrap();
+            let (s, params) = maybe.unwrap().split_once('>').unwrap();
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
@@ -54,6 +54,12 @@ impl App {
                     let new_command = Command::new_coap_get(s, "A CoAP resource");
                     self.command_library.add(new_command);
                 }
+            }
+            if params.contains("impl-info") {
+                self.impl_info_path = Some(s.to_owned());
+                let mut request: CoapRequest<String> = Self::build_get_request(s);
+                self.send_configuration_request(&mut request.message);
+                self.configuration_log.add_new(Request::new(request));
             }
         }
 
@@ -164,6 +170,21 @@ impl App {
                             self.on_well_known_core(&response);
                             if let Some(ui_state) = ui_state {
                                 self.populate_command_help_list(ui_state);
+                            }
+                        }
+                        p if self.path_is_impl_info(p) => {
+                            if let Some(ui_state) = ui_state {
+                                use super::implinfo::ImplInfo;
+                                match minicbor::decode::<ImplInfo>(&response.payload) {
+                                    Ok(info) => {
+                                        if let Some(board) = info.board {
+                                            ui_state.set_board_name(board);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        ui_state.set_board_name(e.to_string());
+                                    }
+                                }
                             }
                         }
                         _ => {
@@ -394,5 +415,11 @@ impl App {
             _ => {}
         }
         true
+    }
+
+    /// Returns true if during /.well-known/core a link with rel="impl-info" has been found, and
+    /// `path` is that very discovered path.
+    fn path_is_impl_info(&self, path: &str) -> bool {
+        self.impl_info_path.as_ref().is_some_and(|p| p == path)
     }
 }

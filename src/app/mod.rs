@@ -20,6 +20,7 @@ use crate::events::Event;
 use crate::tui::UiState;
 
 mod handler;
+mod implinfo;
 
 pub struct App {
     connected: bool,
@@ -30,6 +31,8 @@ pub struct App {
     packet_log: Log<PacketDirection>,
     user_input_manager: UserInputManager,
     command_library: CommandLibrary,
+    /// URI path that was discovered for a `rel=impl-info` resource.
+    impl_info_path: Option<String>,
     token_count: u16,
     next_mid: u16,
     overall_log: Log<String>,
@@ -50,6 +53,7 @@ impl App {
 
             user_input_manager: UserInputManager::new(),
             command_library: CommandLibrary::default(),
+            impl_info_path: None,
 
             token_count: 0,
             next_mid: rand::rng().random(),

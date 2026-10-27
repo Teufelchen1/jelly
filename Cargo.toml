@@ -41,7 +41,7 @@ coap-lite = { version = "0.13", default-features = false }
 coap-message = "0.3.6"
 crossterm = { version = "0.29", default-features = false, features = ["events"] }
 rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
-minicbor = "2"
+minicbor = { version = "2", features = ["derive", "std"] }
 # This disables the libudev-sys dependencies, making auto enumeration unavailable
 serialport = { version = "4", default-features = false }
 slipmux = "0.3.2"
