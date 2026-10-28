@@ -25,11 +25,10 @@ impl App {
         let mut eps: Vec<String> = vec![];
         // Poor mans clif parser
         for s in String::from_utf8_lossy(&response.payload).split(',') {
-            let maybe = s.strip_prefix('<');
-            if maybe.is_none() {
+            let Some(maybe) = s.strip_prefix('<') else {
                 continue;
-            }
-            let (s, params) = maybe.unwrap().split_once('>').unwrap();
+            };
+            let (s, params) = maybe.split_once('>').unwrap();
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
