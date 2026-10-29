@@ -2,10 +2,7 @@ use super::{Command, CommandHandler, CommandType};
 
 use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
-use coap_lite::{
-    CoapOption,
-    option_value::{OptionValueString, OptionValueU16},
-};
+use coap_lite::{CoapOption, ContentFormat, option_value::OptionValueString};
 use coap_lite::{MessageClass, ResponseType};
 
 /// The over-all state of a the Edit command, which can change over several invocations of it.
@@ -14,10 +11,9 @@ use coap_lite::{MessageClass, ResponseType};
 /// short operations from the command (and thus to never fail).
 type State = std::cell::RefCell<Result<EditableState, String>>;
 /// State indicating that there is a resource that can be edited, and which state it is in.
-#[derive(PartialEq, Eq)]
 pub struct EditableState {
     path: Vec<String>,
-    content_format: Option<u16>,
+    content_format: Option<ContentFormat>,
     payload: Vec<u8>,
 }
 
@@ -59,11 +55,7 @@ impl CoapEdit {
             ));
         }
 
-        let content_format = response
-            .get_first_option_as::<OptionValueU16>(CoapOption::ContentFormat)
-            .transpose()
-            .map_err(|_| "Unprocessable content format option in response".to_string())?
-            .map(|cf| cf.0);
+        let content_format = response.get_content_format();
 
         let path: Result<Vec<_>, _> = request
             .message
@@ -114,19 +106,53 @@ impl CoapEdit {
         // We have to edit right away, for at .parse() time is the last time before sending the
         // request that we can actually decide that things did *not* work.
 
+        let content_format = working_state.content_format.unwrap_or_else(|| {
+            // Simple heuristic for guessing
+            if str::from_utf8(&working_state.payload).is_ok() {
+                ContentFormat::TextPlain
+            } else {
+                ContentFormat::ApplicationOctetStream
+            }
+        });
+
+        let decoded = match content_format {
+            ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq => {
+                let parsed = cbor_edn::Sequence::from_cbor(&working_state.payload)
+                    .map_err(|e| format!("parsing error, can not edit: {e}"))?;
+                parsed.serialize()
+            }
+            ContentFormat::TextPlain => str::from_utf8(&working_state.payload)
+                .map(|s| s.to_owned())
+                .map_err(|e| format!("plain text needs to be UTF-8 encoded ({e})"))?,
+            _ => todo!(),
+        };
+
         let tempfile_suffix = working_state.path.last().map_or("root", |s| s);
-        match crate::tui::hands_off_terminal(|| {
+        let edited = match crate::tui::hands_off_terminal(|| {
             edit::edit_with_builder(
-                &working_state.payload,
+                decoded,
                 &edit::Builder::new().suffix("-").suffix(tempfile_suffix),
             )
+            .map_err(|e| format!("editor error: {e}"))
         }) {
-            Ok(edited) => working_state.payload = edited.as_bytes().into(),
+            Ok(edited) => edited,
             Err(e) => {
                 // We haven't updated state so we can just put back hat we had
                 *state = Ok(working_state);
-                return Err(format!("edit eror: {e}"));
+                return Err(e);
             }
+        };
+
+        working_state.payload = match content_format {
+            ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq => {
+                let parsed = cbor_edn::Sequence::parse(&edited)
+                    .map_err(|e| format!("can not convert to CBOR due to parsing error: {e}"))?;
+                parsed.to_cbor().map_err(|e| {
+                    format!("can not convert to CBOR due to unrecognized parts: {e}")
+                })?
+            }
+            ContentFormat::TextPlain => edited.as_bytes().into(),
+            _ => todo!(),
         };
 
         Ok(CommandType::CoAP(Box::new(Self::Nascent(
