@@ -115,13 +115,28 @@ impl CoapEdit {
             }
         });
 
-        let decoded = match content_format {
+        /// Groupings of content formats because CBOR tend to become many
+        enum DecoderFormat {
+            Cbor,
+            Text,
+            Other,
+        }
+
+        let content_format = match content_format {
             ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq => {
+                DecoderFormat::Cbor
+            }
+            ContentFormat::TextPlain => DecoderFormat::Text,
+            _ => DecoderFormat::Other,
+        };
+
+        let decoded = match content_format {
+            DecoderFormat::Cbor => {
                 let parsed = cbor_edn::Sequence::from_cbor(&working_state.payload)
                     .map_err(|e| format!("parsing error, can not edit: {e}"))?;
                 parsed.serialize()
             }
-            ContentFormat::TextPlain => str::from_utf8(&working_state.payload)
+            DecoderFormat::Text => str::from_utf8(&working_state.payload)
                 .map(|s| s.to_owned())
                 .map_err(|e| format!("plain text needs to be UTF-8 encoded ({e})"))?,
             _ => todo!(),
@@ -144,14 +159,14 @@ impl CoapEdit {
         };
 
         working_state.payload = match content_format {
-            ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq => {
+            DecoderFormat::Cbor => {
                 let parsed = cbor_edn::Sequence::parse(&edited)
                     .map_err(|e| format!("can not convert to CBOR due to parsing error: {e}"))?;
                 parsed.to_cbor().map_err(|e| {
                     format!("can not convert to CBOR due to unrecognized parts: {e}")
                 })?
             }
-            ContentFormat::TextPlain => edited.as_bytes().into(),
+            DecoderFormat::Text => edited.as_bytes().into(),
             _ => todo!(),
         };
 
