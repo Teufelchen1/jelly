@@ -114,7 +114,7 @@ impl App {
         }
     }
 
-    pub fn on_configuration_msg(&mut self, ui_state: Option<&mut UiState>, data: &[u8]) {
+    pub fn on_configuration_msg(&mut self, mut ui_state: Option<&mut UiState>, data: &[u8]) {
         let response = Packet::from_bytes(data).unwrap();
 
         if matches!(response.header.code, coap_lite::MessageClass::Request(_)) {
@@ -138,6 +138,8 @@ impl App {
         let token = response.get_token();
         let hash_index = token_to_u64(token);
 
+        let mut altered_available_commands = false;
+
         // Do we have a job / handler for this request?
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response);
@@ -154,14 +156,14 @@ impl App {
                     }
                     match uri_path.as_str() {
                         "/jelly/board" => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 ui_state.set_board_name(
                                     String::from_utf8_lossy(&response.payload).to_string(),
                                 );
                             }
                         }
                         "/jelly/ver" => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 ui_state.set_board_version(
                                     String::from_utf8_lossy(&response.payload).to_string(),
                                 );
@@ -169,12 +171,10 @@ impl App {
                         }
                         "/.well-known/core" => {
                             self.on_well_known_core(&response);
-                            if let Some(ui_state) = ui_state {
-                                self.populate_command_help_list(ui_state);
-                            }
+                            altered_available_commands = true;
                         }
                         p if self.path_is_impl_info(p) => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 match minicbor::decode(&response.payload) {
                                     Ok(info) => ui_state.set_impl_info(info),
                                     Err(e) => {
@@ -205,6 +205,12 @@ impl App {
                 self.configuration_packets.push(response.clone());
                 false
             };
+
+        if altered_available_commands {
+            if let Some(ui_state) = ui_state {
+                self.populate_command_help_list(ui_state);
+            }
+        }
 
         if response.header.get_type() == coap_lite::MessageType::Confirmable {
             if expected {
