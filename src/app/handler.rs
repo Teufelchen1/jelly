@@ -7,8 +7,6 @@ use coap_lite::RequestType as Method;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use slipmux::Slipmux;
-use slipmux::encode_buffered;
 
 use super::App;
 
@@ -264,6 +262,10 @@ impl App {
     fn handle_command_commit(&mut self) {
         match InputType::from_raw(&self.user_input_manager.user_input, &self.command_library) {
             InputType::RawCoap(endpoint) => {
+                // Note that this code path is only taken when requesting a resource that is *not*
+                // listed in /.well-known/core -- but we can't send it the same path as the usual
+                // Command handling, because for those paths, no command has been auto-created.
+
                 let mut request: CoapRequest<String> = CoapRequest::new();
                 request.set_method(Method::Get);
                 if endpoint != "/" {
@@ -271,12 +273,7 @@ impl App {
                     // empty option set; documentation isn't quite conclusive.
                     request.set_path(&endpoint);
                 }
-                request.message.set_token(self.get_new_token());
-                let data =
-                    encode_buffered(Slipmux::Configuration(request.message.to_bytes().unwrap()));
-                self.event_sender
-                    .send(Event::SendConfiguration(data))
-                    .unwrap();
+                self.send_configuration_request(&mut request.message);
                 self.configuration_log.add_new(Request::new(request));
             }
             InputType::RawCommand(cmd) => {
