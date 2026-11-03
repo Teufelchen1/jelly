@@ -25,11 +25,14 @@ impl App {
         let mut eps: Vec<String> = vec![];
         // Poor mans clif parser
         for s in String::from_utf8_lossy(&response.payload).split(',') {
-            let maybe = s.strip_prefix('<');
-            if maybe.is_none() {
+            let Some(maybe) = s.strip_prefix('<') else {
                 continue;
-            }
-            let s = maybe.unwrap().split('>').next().unwrap();
+            };
+            let Some((s, params)) = maybe.split_once('>') else {
+                // We could continue, but if there's not a '>' before the next ',', that comma is
+                // inside (like `</foo/bar,baz>`, and our parsing is utterly broken already.
+                break;
+            };
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
@@ -52,6 +55,12 @@ impl App {
                     let new_command = Command::new_coap_get(s, "A CoAP resource");
                     self.command_library.add(new_command);
                 }
+            }
+            if params.contains("impl-info") {
+                self.impl_info_path = Some(s.to_owned());
+                let mut request: CoapRequest<String> = Self::build_get_request(s);
+                self.send_configuration_request(&mut request.message);
+                self.configuration_log.add_new(Request::new(request));
             }
         }
 
@@ -162,6 +171,21 @@ impl App {
                             self.on_well_known_core(&response);
                             if let Some(ui_state) = ui_state {
                                 self.populate_command_help_list(ui_state);
+                            }
+                        }
+                        requested_path
+                            if self
+                                .impl_info_path
+                                .as_ref()
+                                .is_some_and(|p| p == requested_path) =>
+                        {
+                            if let Some(ui_state) = ui_state {
+                                match minicbor::decode(&response.payload) {
+                                    Ok(info) => ui_state.set_impl_info(info),
+                                    Err(e) => {
+                                        ui_state.set_board_name(e.to_string());
+                                    }
+                                }
                             }
                         }
                         _ => {
