@@ -26,6 +26,7 @@ pub fn cmd() -> Command {
             "/shell/reboot".to_owned(),
             "/.well-known/core".to_owned(),
         ],
+        state: None,
     }
 }
 

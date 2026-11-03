@@ -22,6 +22,7 @@ pub fn cmd() -> Command {
         description: "Query the wkc".to_owned(),
         parse: |c, a| Ok(CommandType::CoAP(parse(c, a))),
         required_endpoints: vec!["/.well-known/core".to_owned()],
+        state: None,
     }
 }
 

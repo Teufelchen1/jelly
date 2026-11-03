@@ -25,11 +25,14 @@ impl App {
         let mut eps: Vec<String> = vec![];
         // Poor mans clif parser
         for s in String::from_utf8_lossy(&response.payload).split(',') {
-            let maybe = s.strip_prefix('<');
-            if maybe.is_none() {
+            let Some(maybe) = s.strip_prefix('<') else {
                 continue;
-            }
-            let s = maybe.unwrap().split('>').next().unwrap();
+            };
+            let Some((s, params)) = maybe.split_once('>') else {
+                // We could continue, but if there's not a '>' before the next ',', that comma is
+                // inside (like `</foo/bar,baz>`, and our parsing is utterly broken already.
+                break;
+            };
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
@@ -52,6 +55,12 @@ impl App {
                     let new_command = Command::new_coap_get(s, "A CoAP resource");
                     self.command_library.add(new_command);
                 }
+            }
+            if params.contains("impl-info") {
+                self.impl_info_path = Some(s.to_owned());
+                let mut request: CoapRequest<String> = Self::build_get_request(s);
+                self.send_configuration_request(&mut request.message);
+                self.configuration_log.add_new(Request::new(request));
             }
         }
 
@@ -105,7 +114,7 @@ impl App {
         }
     }
 
-    pub fn on_configuration_msg(&mut self, ui_state: Option<&mut UiState>, data: &[u8]) {
+    pub fn on_configuration_msg(&mut self, mut ui_state: Option<&mut UiState>, data: &[u8]) {
         let response = Packet::from_bytes(data).unwrap();
 
         if matches!(response.header.code, coap_lite::MessageClass::Request(_)) {
@@ -129,6 +138,8 @@ impl App {
         let token = response.get_token();
         let hash_index = token_to_u64(token);
 
+        let mut altered_available_commands = false;
+
         // Do we have a job / handler for this request?
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response);
@@ -136,6 +147,18 @@ impl App {
         let expected =
             if let Some(request) = self.configuration_log.get_request_by_token_mut(hash_index) {
                 request.add_response(response.clone());
+
+                if request.req.get_method() == &Method::Get {
+                    let edit = Command::new_edit(&request.req, &response);
+                    if let Some(old_edit) = self.command_library.find_by_cmd_mut("edit") {
+                        *old_edit = edit;
+                    } else {
+                        self.command_library.add(edit);
+                        // Not sure if this is costly, but nothing about the command's presentation
+                        // changed unless we're inserting it for the first time.
+                        altered_available_commands = true;
+                    }
+                }
 
                 let option_list_ = request.req.message.get_option(CoapOption::UriPath);
                 if let Some(option_list) = option_list_ {
@@ -145,14 +168,14 @@ impl App {
                     }
                     match uri_path.as_str() {
                         "/jelly/board" => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 ui_state.set_board_name(
                                     String::from_utf8_lossy(&response.payload).to_string(),
                                 );
                             }
                         }
                         "/jelly/ver" => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 ui_state.set_board_version(
                                     String::from_utf8_lossy(&response.payload).to_string(),
                                 );
@@ -160,8 +183,21 @@ impl App {
                         }
                         "/.well-known/core" => {
                             self.on_well_known_core(&response);
-                            if let Some(ui_state) = ui_state {
-                                self.populate_command_help_list(ui_state);
+                            altered_available_commands = true;
+                        }
+                        requested_path
+                            if self
+                                .impl_info_path
+                                .as_ref()
+                                .is_some_and(|p| p == requested_path) =>
+                        {
+                            if let Some(ui_state) = ui_state.as_mut() {
+                                match minicbor::decode(&response.payload) {
+                                    Ok(info) => ui_state.set_impl_info(info),
+                                    Err(e) => {
+                                        ui_state.set_board_name(e.to_string());
+                                    }
+                                }
                             }
                         }
                         _ => {
@@ -179,6 +215,7 @@ impl App {
                         }
                     }
                 }
+
                 true
             } else {
                 // This should never happen, as it means that the riot node
@@ -186,6 +223,12 @@ impl App {
                 self.configuration_packets.push(response.clone());
                 false
             };
+
+        if altered_available_commands {
+            if let Some(ui_state) = ui_state {
+                self.populate_command_help_list(ui_state);
+            }
+        }
 
         if response.header.get_type() == coap_lite::MessageType::Confirmable {
             if expected {

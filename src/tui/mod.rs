@@ -1,3 +1,4 @@
+use std::pin::pin;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
@@ -25,9 +26,45 @@ mod color;
 mod render;
 mod ui_state;
 
-fn terminal_thread(sender: &Sender<Event>) {
+/// Signal sendable into the terminal thread that no receive operations should be performed while
+/// the Sender is set to true.
+///
+/// There is no back channel: Switching to lockout mode, there's at most one event (key) swallowed,
+/// and that competes on a running thread with a process being started. Switching back from lockout
+/// mode, whatever used to read events is already gone, so that component won't be reading any
+/// more, and events queue up anyway.
+static SET_LOCKOUT: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>> =
+    std::sync::Mutex::new(None);
+
+fn terminal_thread(sender: &Sender<Event>, receive_lockout: tokio::sync::watch::Receiver<bool>) {
+    tokio::runtime::Builder::new_current_thread()
+        .name("event-processing")
+        .build()
+        .unwrap()
+        .block_on(terminal_task_unless_locked_out(sender, receive_lockout));
+}
+
+async fn terminal_task_unless_locked_out(
+    sender: &Sender<Event>,
+    mut receive_lockout: tokio::sync::watch::Receiver<bool>,
+) {
     loop {
-        match crossterm::event::read().unwrap() {
+        futures::future::select(
+            pin!(terminal_task(sender)),
+            pin!(receive_lockout.wait_for(|&v| v == true)),
+        )
+        .await;
+        receive_lockout.wait_for(|&v| v == false).await.unwrap();
+        sender.send(Event::TerminalRedraw).unwrap();
+    }
+}
+
+async fn terminal_task(sender: &Sender<Event>) {
+    use futures::StreamExt as _;
+    let mut stream = crossterm::event::EventStream::new();
+    loop {
+        let event = stream.next().await.unwrap().unwrap();
+        match event {
             crossterm::event::Event::Key(key) => {
                 sender.send(Event::TerminalKey(key)).unwrap();
             }
@@ -48,7 +85,38 @@ fn terminal_thread(sender: &Sender<Event>) {
 }
 
 fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
-    thread::spawn(move || terminal_thread(&sender))
+    let (send_lockout, receive_lockout) = tokio::sync::watch::channel(false);
+    *SET_LOCKOUT.lock().unwrap() = Some(send_lockout);
+    thread::spawn(move || terminal_thread(&sender, receive_lockout))
+}
+
+/// For the duration of a closure, makes the TUI not touch the terminal (e.g. while another
+/// component spawns an editor or a game of pacman).
+pub fn hands_off_terminal<R>(f: impl FnOnce() -> R) -> R {
+    use crossterm::ExecutableCommand;
+    use ratatui::crossterm::terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    };
+    use std::io::stdout;
+
+    disable_raw_mode().unwrap();
+    stdout().execute(LeaveAlternateScreen).unwrap();
+
+    // Mutex stays locked for the whole duration -- we could lock temporarily and make this a
+    // counting affair, but if two components tried to keep the TUI out of the terminal, they'd get
+    // in conflict about how they use it.
+    let mut lockout_sender = SET_LOCKOUT.lock().unwrap();
+    let lockout_sender = lockout_sender
+        .as_mut()
+        .expect("placed at terminal creation and never taken");
+    lockout_sender.send(true).unwrap();
+
+    let result = f();
+
+    stdout().execute(EnterAlternateScreen).unwrap();
+    enable_raw_mode().unwrap();
+    lockout_sender.send(false).unwrap();
+    result
 }
 
 pub fn start_tui(args: Cli, main_channel: EventChannel) {
@@ -124,6 +192,14 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
         ) {
             ProcessEventResult::NothingToDo => {
                 if ui_state.is_dirty() {
+                    if ui_state.pending_clear {
+                        // We can't run terminal.clear() because that would also query the cursor
+                        // location and expect to be the one reading it -- but we're reading from
+                        // another thread.
+                        terminal.current_buffer_mut().reset();
+                        terminal.swap_buffers();
+                        ui_state.pending_clear = false;
+                    }
                     terminal
                         .draw(|frame| app.draw(&mut ui_state, frame))
                         .unwrap();
@@ -237,6 +313,10 @@ pub fn process_next_event(
         }
         Event::TerminalMouse(mouse) => {
             ui_state.on_mouse(mouse);
+        }
+        Event::TerminalRedraw => {
+            ui_state.get_dirty();
+            ui_state.pending_clear = true;
         }
         Event::TerminalResize | Event::TerminalEOF => ui_state.get_dirty(),
         Event::NetworkConnect(interface_name) => {

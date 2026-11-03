@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use coap_lite::{CoapRequest, Packet};
 
+use commands::CoapEdit;
 use commands::CoapGet;
 pub use commands::InternalCommand;
 pub use library::CommandLibrary;
@@ -70,6 +71,16 @@ pub struct Command {
     /// On success, returns a `CommandType`.
     /// On error, returns a human readable usage error.
     pub parse: fn(&Self, args: &str) -> Result<CommandType, String>,
+
+    /// Data that commands that carry state can store at creation time.
+    ///
+    /// (In a sense, this is a bypass for either .parse taking a closure, or commands having access
+    /// to the App at execution time).
+    ///
+    /// This could be a box, but then every command that *does* need to carry the data around would
+    /// need to do a `Box<Rc<_>>`, and we already know that we don't need Send, so this is cheap
+    /// for the general case.
+    state: Option<std::rc::Rc<dyn std::any::Any>>,
 }
 
 impl Command {
@@ -80,6 +91,7 @@ impl Command {
             description: description.to_owned(),
             required_endpoints: vec![],
             parse: |_c, cmd_str| Ok(CommandType::Text(cmd_str.to_owned())),
+            state: None,
         }
     }
 
@@ -91,6 +103,7 @@ impl Command {
             description: description.to_owned(),
             required_endpoints: vec![resource.to_owned()],
             parse: |c, a| Ok(CommandType::CoAP(CoapGet::parse(c, a))),
+            state: None,
         }
     }
 
@@ -107,6 +120,25 @@ impl Command {
     pub fn update_description(&mut self, description: &str) {
         self.description.clear();
         self.description.push_str(description);
+    }
+
+    /// Creates a command that, when run after a GET, opens an editor and PUTs it back up.
+    ///
+    /// This intentionally takes arguments that might not be successful: When something goes wrong
+    /// constructing the cache state, it's better to fail here than not have the new command
+    /// created at all (and the old edit command linger) -- this is to ensure that if a user GETs
+    /// /a, then GETs /b unsuccessfully and tris to edit it, they don't accidentally edit /a.
+    pub fn new_edit(request: &CoapRequest<String>, response: &Packet) -> Self {
+        Self {
+            cmd: "edit".to_string(),
+            description: "Performs a read-modify-write operation on the last used resource"
+                .to_string(),
+            required_endpoints: vec![],
+            parse: |c, a| CoapEdit::parse(c, a),
+            state: Some(std::rc::Rc::new(std::cell::RefCell::new(
+                CoapEdit::state_for(request, response),
+            ))),
+        }
     }
 }
 
