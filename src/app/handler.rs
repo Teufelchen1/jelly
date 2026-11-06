@@ -172,12 +172,7 @@ impl App {
                                 self.populate_command_help_list(ui_state);
                             }
                         }
-                        requested_path
-                            if self
-                                .impl_info_path
-                                .as_ref()
-                                .is_some_and(|p| p == requested_path) =>
-                        {
+                        p if self.path_is_impl_info(p) => {
                             if let Some(ui_state) = ui_state {
                                 match minicbor::decode(&response.payload) {
                                     Ok(info) => ui_state.set_impl_info(info),
@@ -415,5 +410,11 @@ impl App {
             _ => {}
         }
         true
+    }
+
+    /// Returns true if during /.well-known/core a link with rel="impl-info" has been found, and
+    /// `path` is that very discovered path.
+    fn path_is_impl_info(&self, path: &str) -> bool {
+        self.impl_info_path.as_ref().is_some_and(|p| p == path)
     }
 }
