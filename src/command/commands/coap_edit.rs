@@ -139,7 +139,7 @@ impl CoapEdit {
             DecoderFormat::Text => str::from_utf8(&working_state.payload)
                 .map(|s| s.to_owned())
                 .map_err(|e| format!("plain text needs to be UTF-8 encoded ({e})"))?,
-            _ => todo!(),
+            DecoderFormat::Other => hex::encode(&working_state.payload),
         };
 
         let tempfile_suffix = working_state.path.last().map_or("root", |s| s);
@@ -167,8 +167,16 @@ impl CoapEdit {
                 })?
             }
             DecoderFormat::Text => edited.as_bytes().into(),
-            _ => todo!(),
+            DecoderFormat::Other => {
+                // It'd be nice and efficient to have an option in hex to just ignore space, but
+                // this will do.
+                let replaced = edited.replace(" ", "").replace("\n", "");
+                hex::decode(replaced)
+                    .map_err(|e| format!("can not convert hex back to binary: {e}"))?
+            }
         };
+
+        // FIXME: It would be nice if we could store the edited text, eg. for an `edit --recover` command
 
         Ok(CommandType::CoAP(Box::new(Self::Nascent(
             working_state,
