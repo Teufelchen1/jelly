@@ -17,6 +17,13 @@ pub struct EditableState {
     payload: Vec<u8>,
 }
 
+/// Groupings of content formats (because CBOR tend to become many)
+enum DecoderFormat {
+    Cbor,
+    Text,
+    Other,
+}
+
 pub enum CoapEdit {
     Nascent(EditableState, std::rc::Rc<dyn std::any::Any>),
     // PUT has been sent; waiting for response. If PUT comes back positive, the internal state
@@ -85,7 +92,7 @@ impl CoapEdit {
             .state
             .as_ref()
             .expect("edit is always created with state");
-        let mut state = cmd_state
+        let mut state = (*cmd_state)
             .downcast_ref::<State>()
             .expect("edit always has a State as payload")
             .borrow_mut();
@@ -114,13 +121,6 @@ impl CoapEdit {
                 ContentFormat::ApplicationOctetStream
             }
         });
-
-        /// Groupings of content formats because CBOR tend to become many
-        enum DecoderFormat {
-            Cbor,
-            Text,
-            Other,
-        }
 
         let content_format = match content_format {
             ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq => {
@@ -186,6 +186,10 @@ impl CoapEdit {
 }
 
 impl CommandHandler for CoapEdit {
+    #[expect(
+        clippy::assigning_clones,
+        reason = "clippy doesn't see that this is initialized empty and thus without a usable allocation"
+    )]
     fn init(&mut self) -> CoapRequest<String> {
         let Self::Nascent(state, cmd_state) = core::mem::replace(
             self,

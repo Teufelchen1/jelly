@@ -108,6 +108,10 @@ fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
 
 /// For the duration of a closure, makes the TUI not touch the terminal (e.g. while another
 /// component spawns an editor or a game of pacman).
+#[allow(
+    clippy::significant_drop_tightening,
+    reason = "see inner comment on mutex staying locked"
+)]
 pub fn hands_off_terminal<R>(f: impl FnOnce() -> R) -> R {
     use crossterm::execute;
     use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -142,6 +146,7 @@ pub fn hands_off_terminal<R>(f: impl FnOnce() -> R) -> R {
     .unwrap();
     enable_raw_mode().unwrap();
     lockout_sender.send(false).unwrap();
+
     result
 }
 
