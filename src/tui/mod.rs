@@ -106,6 +106,45 @@ fn create_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
     thread::spawn(move || terminal_thread(&sender, receive_lockout))
 }
 
+/// For the duration of a closure, makes the TUI not touch the terminal (e.g. while another
+/// component spawns an editor or a game of pacman).
+pub fn hands_off_terminal<R>(f: impl FnOnce() -> R) -> R {
+    use crossterm::execute;
+    use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+    use std::io::stdout;
+
+    disable_raw_mode().unwrap();
+    execute!(
+        stdout(),
+        crossterm::terminal::LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture,
+        crossterm::cursor::Show
+    )
+    .unwrap();
+
+    // Mutex stays locked for the whole duration -- we could lock temporarily and make this a
+    // counting affair, but if two components tried to keep the TUI out of the terminal, they'd get
+    // in conflict about how they use it.
+    let mut lockout_sender = SET_LOCKOUT.lock().unwrap();
+    let lockout_sender = lockout_sender
+        .as_mut()
+        .expect("placed at terminal creation and never taken");
+    lockout_sender.send(true).unwrap();
+
+    let result = f();
+
+    execute!(
+        stdout(),
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture,
+        crossterm::cursor::Hide
+    )
+    .unwrap();
+    enable_raw_mode().unwrap();
+    lockout_sender.send(false).unwrap();
+    result
+}
+
 pub fn start_tui(args: Cli, main_channel: EventChannel) {
     fn reset_terminal() {
         crossterm::terminal::disable_raw_mode().unwrap();
