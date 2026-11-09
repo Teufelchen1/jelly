@@ -70,6 +70,16 @@ pub struct Command {
     /// On success, returns a `CommandType`.
     /// On error, returns a human readable usage error.
     pub parse: fn(&Self, args: &str) -> Result<CommandType, String>,
+
+    /// Data that commands that carry state can store at creation time.
+    ///
+    /// (In a sense, this is a bypass for either .parse taking a closure, or commands having access
+    /// to the App at execution time).
+    ///
+    /// This could be a box, but then every command that *does* need to carry the data around would
+    /// need to do a `Box<Rc<_>>`, and we already know that we don't need Send, so this is cheap
+    /// for the general case.
+    state: Option<std::rc::Rc<dyn std::any::Any>>,
 }
 
 impl Command {
@@ -80,6 +90,7 @@ impl Command {
             description: description.to_owned(),
             required_endpoints: vec![],
             parse: |_c, cmd_str| Ok(CommandType::Text(cmd_str.to_owned())),
+            state: None,
         }
     }
 
@@ -91,6 +102,7 @@ impl Command {
             description: description.to_owned(),
             required_endpoints: vec![resource.to_owned()],
             parse: |c, a| Ok(CommandType::CoAP(CoapGet::parse(c, a))),
+            state: None,
         }
     }
 
