@@ -148,6 +148,18 @@ impl App {
             if let Some(request) = self.configuration_log.get_request_by_token_mut(hash_index) {
                 request.add_response(response.clone());
 
+                if request.req.get_method() == &Method::Get {
+                    let edit = Command::new_edit(&request.req, &response);
+                    if let Some(existing_edit) = self.command_library.find_by_cmd_mut("edit") {
+                        *existing_edit = edit;
+                    } else {
+                        self.command_library.add(edit);
+                        // Not sure if this is costly, but nothing about the command's presentation
+                        // changed unless we're inserting it for the first time.
+                        altered_available_commands = true;
+                    }
+                }
+
                 let option_list_ = request.req.message.get_option(CoapOption::UriPath);
                 if let Some(option_list) = option_list_ {
                     let mut uri_path = String::new();
