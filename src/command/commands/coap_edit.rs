@@ -7,10 +7,18 @@ use coap_lite::{MessageClass, ResponseType};
 
 /// The over-all state of a the Edit command, which can change over several invocations of it.
 ///
-/// It is contained in a `RefCell` and taken out for single command executions, and only borrowed for
-/// short operations from the command (and thus to never fail).
+/// It is contained in a `RefCell` and taken out for single command executions so that the state
+/// can be mutated across the steps of a command execution (even though `parse` only gets it
+/// through a shared reference), and only borrowed for short operations from the command (and thus
+/// to never fail).
+///
+/// The error variant is what is to be shown in the next stage, not necessarily immediately: For
+/// example, a state is crated when GET'ting a resource is not shown, but prepared for if and when
+/// the user issues the `edit` command.
 type State = std::cell::RefCell<Result<EditableState, String>>;
-/// State indicating that there is a resource that can be edited, and which state it is in.
+
+/// State indicating that there is a resource that can be edited, and which state it was seen in,
+/// or should be PUT as.
 pub struct EditableState {
     path: Vec<String>,
     content_format: Option<ContentFormat>,
@@ -24,11 +32,22 @@ enum DecoderFormat {
     Other,
 }
 
+/// State of a command instance
 pub enum CoapEdit {
+    /// The command has been issued and parsed, and (due to when errors may be handled) also has
+    /// been run through to the editing process.
+    ///
+    /// This carries around what is effectively the pointer to where eventually, the edited state
+    /// will be returned into the the (non-instance) command.
     Nascent(EditableState, std::rc::Rc<dyn std::any::Any>),
-    // PUT has been sent; waiting for response. If PUT comes back positive, the internal state
-    // can be written back for follow-up edits.
+    /// PUT has been sent; waiting for response. If PUT comes back positive, the internal state
+    /// can be written back for follow-up edits.
+    ///
+    /// This carries around what is effectively the pointer to where eventually, the edited state
+    /// will be returned into the the (non-instance) command.
     RunningPut(EditableState, std::rc::Rc<dyn std::any::Any>),
+    /// The command has completed; the editable state has been returned into the `edit` command, so
+    /// that follow-up edits can happen.
     Successful,
     Error(String),
 }
