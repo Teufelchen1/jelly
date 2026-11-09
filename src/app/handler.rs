@@ -25,11 +25,14 @@ impl App {
         let mut eps: Vec<String> = vec![];
         // Poor mans clif parser
         for s in String::from_utf8_lossy(&response.payload).split(',') {
-            let maybe = s.strip_prefix('<');
-            if maybe.is_none() {
+            let Some(maybe) = s.strip_prefix('<') else {
                 continue;
-            }
-            let (s, params) = maybe.unwrap().split_once('>').unwrap();
+            };
+            let Some((s, params)) = maybe.split_once('>') else {
+                // We could continue, but if there's not a '>' before the next ',', that comma is
+                // inside (like `</foo/bar,baz>`, and our parsing is utterly broken already.
+                break;
+            };
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
