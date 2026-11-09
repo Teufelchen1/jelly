@@ -35,6 +35,7 @@ pub struct UiState {
     impl_info: ImplInfo,
     theme: ColorPalette,
     dirty: bool,
+    pub pending_clear: bool,
 }
 
 impl UiState {
@@ -59,6 +60,7 @@ impl UiState {
             theme: ColorPalette::from(color_theme),
 
             dirty: true,
+            pending_clear: false,
         }
     }
 

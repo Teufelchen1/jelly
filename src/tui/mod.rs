@@ -124,6 +124,14 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
         ) {
             ProcessEventResult::NothingToDo => {
                 if ui_state.is_dirty() {
+                    if ui_state.pending_clear {
+                        // We can't run terminal.clear() because that would also query the cursor
+                        // location and expect to be the one reading it -- but we're reading from
+                        // another thread.
+                        terminal.current_buffer_mut().reset();
+                        terminal.swap_buffers();
+                        ui_state.pending_clear = false;
+                    }
                     terminal
                         .draw(|frame| app.draw(&mut ui_state, frame))
                         .unwrap();
@@ -237,6 +245,10 @@ pub fn process_next_event(
         }
         Event::TerminalMouse(mouse) => {
             ui_state.on_mouse(mouse);
+        }
+        Event::TerminalRedraw => {
+            ui_state.get_dirty();
+            ui_state.pending_clear = true;
         }
         Event::TerminalResize | Event::TerminalEOF => ui_state.get_dirty(),
         Event::NetworkConnect(interface_name) => {
