@@ -19,5 +19,8 @@ pub enum Event {
     TerminalKey(KeyEvent),
     TerminalMouse(MouseEvent),
     TerminalResize,
+    /// Something interacted with the terminal in such a way that everything on screen needs to be
+    /// redrawn.
+    TerminalRedraw,
     TerminalEOF,
 }

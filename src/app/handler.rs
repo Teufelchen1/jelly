@@ -114,7 +114,7 @@ impl App {
         }
     }
 
-    pub fn on_configuration_msg(&mut self, ui_state: Option<&mut UiState>, data: &[u8]) {
+    pub fn on_configuration_msg(&mut self, mut ui_state: Option<&mut UiState>, data: &[u8]) {
         let response = Packet::from_bytes(data).unwrap();
 
         if matches!(response.header.code, coap_lite::MessageClass::Request(_)) {
@@ -138,6 +138,8 @@ impl App {
         let token = response.get_token();
         let hash_index = token_to_u64(token);
 
+        let mut altered_available_commands = false;
+
         // Do we have a job / handler for this request?
         // Removes it from the job list if finished
         self.handle_pending_job(hash_index, &response);
@@ -145,6 +147,18 @@ impl App {
         let expected =
             if let Some(request) = self.configuration_log.get_request_by_token_mut(hash_index) {
                 request.add_response(response.clone());
+
+                if request.req.get_method() == &Method::Get {
+                    let edit = Command::new_edit(&request.req, &response);
+                    if let Some(existing_edit) = self.command_library.find_by_cmd_mut("edit") {
+                        *existing_edit = edit;
+                    } else {
+                        self.command_library.add(edit);
+                        // Not sure if this is costly, but nothing about the command's presentation
+                        // changed unless we're inserting it for the first time.
+                        altered_available_commands = true;
+                    }
+                }
 
                 let option_list_ = request.req.message.get_option(CoapOption::UriPath);
                 if let Some(option_list) = option_list_ {
@@ -154,14 +168,14 @@ impl App {
                     }
                     match uri_path.as_str() {
                         "/jelly/board" => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 ui_state.set_board_name(
                                     String::from_utf8_lossy(&response.payload).to_string(),
                                 );
                             }
                         }
                         "/jelly/ver" => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 ui_state.set_board_version(
                                     String::from_utf8_lossy(&response.payload).to_string(),
                                 );
@@ -169,12 +183,10 @@ impl App {
                         }
                         "/.well-known/core" => {
                             self.on_well_known_core(&response);
-                            if let Some(ui_state) = ui_state {
-                                self.populate_command_help_list(ui_state);
-                            }
+                            altered_available_commands = true;
                         }
                         p if self.path_is_impl_info(p) => {
-                            if let Some(ui_state) = ui_state {
+                            if let Some(ui_state) = ui_state.as_mut() {
                                 match minicbor::decode(&response.payload) {
                                     Ok(info) => ui_state.set_impl_info(info),
                                     Err(e) => {
@@ -205,6 +217,10 @@ impl App {
                 self.configuration_packets.push(response.clone());
                 false
             };
+
+        if altered_available_commands && let Some(ui_state) = ui_state {
+            self.populate_command_help_list(ui_state);
+        }
 
         if response.header.get_type() == coap_lite::MessageType::Confirmable {
             if expected {

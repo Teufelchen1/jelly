@@ -13,6 +13,7 @@ pub fn cmd() -> Command {
         description: "Enables all implemented commands disregarding their requirements".to_owned(),
         parse: |_, _| Ok(CommandType::Jelly(InternalCommand::ForceCmdsAvailable(run))),
         required_endpoints: vec![],
+        state: None,
     }
 }
 

@@ -13,6 +13,7 @@ pub fn cmd() -> Command {
         description: "Jelly Help".to_owned(),
         parse: |_, _| Ok(CommandType::Jelly(InternalCommand::Help(run))),
         required_endpoints: vec![],
+        state: None,
     }
 }
 
