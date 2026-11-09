@@ -130,9 +130,9 @@ impl Command {
     /// /a, then GETs /b unsuccessfully and tris to edit it, they don't accidentally edit /a.
     pub fn new_edit(request: &CoapRequest<String>, response: &Packet) -> Self {
         Self {
-            cmd: "edit".to_string(),
+            cmd: "edit".to_owned(),
             description: "Performs a read-modify-write operation on the last used resource"
-                .to_string(),
+                .to_owned(),
             required_endpoints: vec![],
             parse: |c, a| CoapEdit::parse(c, a),
             state: Some(std::rc::Rc::new(std::cell::RefCell::new(

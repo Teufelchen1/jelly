@@ -7,7 +7,7 @@ use coap_lite::{MessageClass, ResponseType};
 
 /// The over-all state of a the Edit command, which can change over several invocations of it.
 ///
-/// It is contained in a RefCell and taken out for single command executions, and only borrowed for
+/// It is contained in a `RefCell` and taken out for single command executions, and only borrowed for
 /// short operations from the command (and thus to never fail).
 type State = std::cell::RefCell<Result<EditableState, String>>;
 /// State indicating that there is a resource that can be edited, and which state it is in.
@@ -35,11 +35,11 @@ impl CoapEdit {
         if request.get_method() != &Method::Get {
             return Err(
                 "Can not edit non-GET request (bug: should have been caught at new_edit caller)"
-                    .to_string(),
+                    .to_owned(),
             );
         }
         if request.message.options().any(|o| o.0 != &11) {
-            return Err("Can not edit after request that had unknown options.".to_string());
+            return Err("Can not edit after request that had unknown options.".to_owned());
         }
 
         if response.header.code != MessageClass::Response(ResponseType::Content) {
@@ -60,11 +60,11 @@ impl CoapEdit {
         let path: Result<Vec<_>, _> = request
             .message
             .get_options_as::<OptionValueString>(CoapOption::UriPath)
-            .unwrap_or(Default::default())
+            .unwrap_or_default()
             .into_iter()
-            .map(|res| res.map(|s| s.0.to_owned()))
+            .map(|res| res.map(|s| s.0))
             .collect();
-        let path = path.map_err(|_| "Unprocessable Uri-Path option in request".to_string())?;
+        let path = path.map_err(|_| "Unprocessable Uri-Path option in request".to_owned())?;
 
         // FIXME: carry ETag, send If-Match
         // FIXME: check for critical response options; store content format and etag
@@ -79,7 +79,7 @@ impl CoapEdit {
     pub fn parse(cmd: &Command, args: &str) -> Result<CommandType, String> {
         if args != "edit" {
             return Err("usage: `edit` (invoked after any CoAP GET request)\n".to_owned());
-        };
+        }
 
         let cmd_state = cmd
             .state
@@ -98,7 +98,7 @@ impl CoapEdit {
         // completion.
         let working_state = core::mem::replace(
             &mut *state,
-            Err("edit failed: Previous edit did not complete yet.\n".to_string()),
+            Err("edit failed: Previous edit did not complete yet.\n".to_owned()),
         );
         // checked above, but we didn't want to spoil the error message by taking it out up there.
         let mut working_state = working_state.unwrap();
@@ -137,7 +137,7 @@ impl CoapEdit {
                 parsed.serialize()
             }
             DecoderFormat::Text => str::from_utf8(&working_state.payload)
-                .map(|s| s.to_owned())
+                .map(std::borrow::ToOwned::to_owned)
                 .map_err(|e| format!("plain text needs to be UTF-8 encoded ({e})"))?,
             DecoderFormat::Other => hex::encode(&working_state.payload),
         };
@@ -146,7 +146,7 @@ impl CoapEdit {
         let edited = match crate::tui::hands_off_terminal(|| {
             edit::edit_with_builder(
                 decoded,
-                &edit::Builder::new().suffix("-").suffix(tempfile_suffix),
+                edit::Builder::new().suffix("-").suffix(tempfile_suffix),
             )
             .map_err(|e| format!("editor error: {e}"))
         }) {
@@ -170,7 +170,7 @@ impl CoapEdit {
             DecoderFormat::Other => {
                 // It'd be nice and efficient to have an option in hex to just ignore space, but
                 // this will do.
-                let replaced = edited.replace(" ", "").replace("\n", "");
+                let replaced = edited.replace([' ', '\n'], "");
                 hex::decode(replaced)
                     .map_err(|e| format!("can not convert hex back to binary: {e}"))?
             }
@@ -187,9 +187,9 @@ impl CoapEdit {
 
 impl CommandHandler for CoapEdit {
     fn init(&mut self) -> CoapRequest<String> {
-        let CoapEdit::Nascent(state, cmd_state) = core::mem::replace(
+        let Self::Nascent(state, cmd_state) = core::mem::replace(
             self,
-            CoapEdit::Error("bug: init() returned without setting a new self".to_string()),
+            Self::Error("bug: init() returned without setting a new self".to_owned()),
         ) else {
             unreachable!(
                 "init is called once per parsed CoapEdit, which is constructed in Nascent state"
@@ -205,22 +205,15 @@ impl CommandHandler for CoapEdit {
         }
         request.message.payload = state.payload.clone();
 
-        *self = CoapEdit::RunningPut(
-            EditableState {
-                path: state.path,
-                content_format: state.content_format,
-                payload: state.payload,
-            },
-            cmd_state,
-        );
+        *self = Self::RunningPut(state, cmd_state);
 
         request
     }
 
     fn handle(&mut self, payload: &coap_lite::Packet) -> Option<coap_lite::CoapRequest<String>> {
-        let CoapEdit::RunningPut(state_if_successful, cmd_state) = core::mem::replace(
+        let Self::RunningPut(state_if_successful, cmd_state) = core::mem::replace(
             self,
-            CoapEdit::Error("bug: handle() returned without setting a new self".to_string()),
+            Self::Error("bug: handle() returned without setting a new self".to_owned()),
         ) else {
             unreachable!("response handling only happens after entering the RunningPut state");
         };
@@ -230,9 +223,9 @@ impl CommandHandler for CoapEdit {
                 .downcast_ref::<State>()
                 .expect("edit always has a State as payload")
                 .borrow_mut() = Ok(state_if_successful);
-            *self = CoapEdit::Successful;
+            *self = Self::Successful;
         } else {
-            *self = CoapEdit::Error(format!(
+            *self = Self::Error(format!(
                 "PUTting the data was not successful, response code {}",
                 payload.header.code
             ));
@@ -246,14 +239,14 @@ impl CommandHandler for CoapEdit {
     }
 
     fn is_finished(&self) -> bool {
-        matches!(self, CoapEdit::Successful | CoapEdit::Error(_))
+        matches!(self, Self::Successful | Self::Error(_))
     }
 
     fn display(&self, buffer: &mut String) {
         use std::fmt::Write;
         match &self {
-            CoapEdit::Successful => writeln!(buffer, "Edit was applied successfullly.\n").unwrap(),
-            CoapEdit::Error(e) => writeln!(buffer, "Editing failed: {e}.\n").unwrap(),
+            Self::Successful => writeln!(buffer, "Edit was applied successfullly.\n").unwrap(),
+            Self::Error(e) => writeln!(buffer, "Editing failed: {e}.\n").unwrap(),
             _ => unreachable!("we didn't ask to be displayed yet"),
         }
     }

@@ -218,10 +218,8 @@ impl App {
                 false
             };
 
-        if altered_available_commands {
-            if let Some(ui_state) = ui_state {
-                self.populate_command_help_list(ui_state);
-            }
+        if altered_available_commands && let Some(ui_state) = ui_state {
+            self.populate_command_help_list(ui_state);
         }
 
         if response.header.get_type() == coap_lite::MessageType::Confirmable {

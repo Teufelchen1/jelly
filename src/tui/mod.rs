@@ -67,10 +67,10 @@ async fn terminal_task_unless_locked_out(
     loop {
         futures::future::select(
             pin!(terminal_task(sender)),
-            pin!(receive_lockout.wait_for(|&v| v == true)),
+            pin!(receive_lockout.wait_for(|&v| v)),
         )
         .await;
-        receive_lockout.wait_for(|&v| v == false).await.unwrap();
+        receive_lockout.wait_for(|&v| !v).await.unwrap();
         sender.send(Event::TerminalRedraw).unwrap();
     }
 }
