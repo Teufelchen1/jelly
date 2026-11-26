@@ -33,6 +33,7 @@ pub fn cmd() -> Command {
         description: "Ps over coap, print thread info".to_owned(),
         parse,
         required_endpoints: vec!["/jelly/Ps".to_owned()],
+        state: None,
     }
 }
 

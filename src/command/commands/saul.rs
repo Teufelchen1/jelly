@@ -48,6 +48,7 @@ pub fn cmd() -> Command {
         description: "Saul over coap".to_owned(),
         parse: |s, a| parse(s, a),
         required_endpoints: vec!["/jelly/Saul".to_owned()],
+        state: None,
     }
 }
 

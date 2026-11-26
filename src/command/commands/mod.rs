@@ -1,9 +1,11 @@
+pub use coap_edit::CoapEdit;
 pub use coap_get_template::CoapGet;
 
 use super::Command;
 use super::CommandHandler;
 use super::CommandType;
 
+mod coap_edit;
 mod coap_get_template;
 mod mem_read;
 mod multi_endpoints_sample;

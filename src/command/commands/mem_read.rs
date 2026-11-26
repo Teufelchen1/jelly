@@ -74,6 +74,7 @@ pub fn cmd() -> Command {
         description: "Read arbitrary memory".to_owned(),
         parse,
         required_endpoints: vec!["/jelly/Memory".to_owned()],
+        state: None,
     }
 }
 
