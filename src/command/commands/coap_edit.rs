@@ -132,24 +132,27 @@ impl CoapEdit {
         // We have to edit right away, for at .parse() time is the last time before sending the
         // request that we can actually decide that things did *not* work.
 
-        let content_format = working_state.content_format.unwrap_or_else(|| {
-            // Simple heuristic for guessing
-            if str::from_utf8(&working_state.payload).is_ok() {
-                ContentFormat::TextPlain
-            } else {
-                ContentFormat::ApplicationOctetStream
-            }
-        });
-
-        let content_format = match content_format {
-            ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq => {
+        let decoder_format = match working_state.content_format {
+            Some(ContentFormat::ApplicationCBOR | ContentFormat::ApplicationCborSeq) => {
                 DecoderFormat::Cbor
             }
-            ContentFormat::TextPlain => DecoderFormat::Text,
-            _ => DecoderFormat::Other,
+            Some(
+                ContentFormat::TextPlain
+                | ContentFormat::ApplicationJSON
+                | ContentFormat::ApplicationLinkFormat,
+            ) => DecoderFormat::Text,
+            Some(ContentFormat::ApplicationOctetStream) => DecoderFormat::Other,
+            _ => {
+                // Simple heuristic for guessing based in content
+                if str::from_utf8(&working_state.payload).is_ok() {
+                    DecoderFormat::Text
+                } else {
+                    DecoderFormat::Other
+                }
+            }
         };
 
-        let decoded = match content_format {
+        let decoded = match decoder_format {
             DecoderFormat::Cbor => {
                 let parsed = cbor_edn::Sequence::from_cbor(&working_state.payload)
                     .map_err(|e| format!("parsing error, can not edit: {e}"))?;
@@ -177,7 +180,7 @@ impl CoapEdit {
             }
         };
 
-        working_state.payload = match content_format {
+        working_state.payload = match decoder_format {
             DecoderFormat::Cbor => {
                 let parsed = cbor_edn::Sequence::parse(&edited)
                     .map_err(|e| format!("can not convert to CBOR due to parsing error: {e}"))?;
