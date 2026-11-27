@@ -39,29 +39,55 @@ pub fn open_network_device(name: &str) -> Result<SyncDevice, String> {
                 )
             }
             ErrorKind::PermissionDenied => {
-                format!(
-                    "Not enough permissions to open network interface {name} or the device might not exist.\n"
-                ) + "On Linux you can create a suitable interface with either of these commands:\n"
-                    + "  Using NetworkManager:\n\t"
-                    + &format!(
-                        "sudo nmcli connection add type tun mode tun owner $(id -u) ifname {name} con-name {name} ipv6.method shared\n"
-                    )
-                    + "  Using ip tools:\n\t"
-                    + &format!(
-                        "sudo ip tuntap add {name} mode tun user $(id -u) && sudo ip link set up {name}"
-                    )
+                #[cfg(target_os = "linux")]
+                {
+                    format!(
+                        "Not enough permissions to open network interface {name} or the device might not exist.\n"
+                    ) + "On Linux you can create a suitable interface with either of these commands:\n"
+                        + "  Using NetworkManager:\n\t"
+                        + &format!(
+                            "sudo nmcli connection add type tun mode tun owner $(id -u) ifname {name} con-name {name} ipv6.method shared\n"
+                        )
+                        + "  Using ip tools:\n\t"
+                        + &format!(
+                            "sudo ip tuntap add {name} mode tun user $(id -u) && sudo ip link set up {name}"
+                        )
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    format!("Not enough permissions to create the network interface {name}\n")
+                        + "On MacOS Jelly needs to be run with elevated permissions (sudo) to create a TUN interface.\n"
+                        + "If you are build Jelly from source, do NOT run: sudo cargo run -- ...\n"
+                        + "Instead, run: sudo ./target/debug/Jelly ..."
+                }
             }
             ErrorKind::InvalidInput => {
-                format!("Network interface {name} does not appear to be a TUN interface.")
+                #[cfg(target_os = "linux")]
+                {
+                    format!(
+                        "Network interface {name} does not appear to be a TUN interface. ({err:?})"
+                    )
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    format!(
+                        "On MacOS the TUN interface name must be utun[0-9], custom names are not allowed.\n"
+                    )
+                }
             }
             _ => {
-                format!("Error creating tun interface: {:}", err.kind())
+                format!("Error creating TUN interface: {err:?}")
             }
         }
     }
-    let dev = DeviceBuilder::new()
-        .name(name)
-        .inherit_enable_state()
+
+    let mut dev_builder = DeviceBuilder::new().name(name);
+
+    if !cfg!(target_os = "macos") {
+        dev_builder = dev_builder.inherit_enable_state();
+    }
+
+    let dev = dev_builder
         .build_sync()
         .map_err(|err| match_err(&err, name))?;
 

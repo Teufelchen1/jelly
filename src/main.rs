@@ -38,12 +38,12 @@ struct Cli {
 
     /// If enabled, attaches the SLIP network to the given host TUN interface
     ///
-    /// Default interface name is slip0
+    /// Default interface name on Linux is slip0 and on MacOS it is utun9
     #[arg(
         short = 't',
         long,
         num_args = 0..=1,
-        default_missing_value = "slip0",
+        default_missing_value = if cfg!(target_os = "macos") { "utun9" } else { "slip0" },
         verbatim_doc_comment,
         required_if_eq("headless_network", "true")
     )]
