@@ -34,16 +34,17 @@ codegen-units = 1
 lto = true
 
 [dependencies]
-cbor-edn = { version = "0.0.9", default-features = false }
+#cbor-edn = { version = "0.0.9", default-features = false }
+cbor-edn = { path = "../cbor-edn" }
 chrono = { version = "0.4", default-features = false }
 clap = { version = "4", features = ["derive"] }
-coap-lite = { version = "0.13", default-features = false }
+coap-lite = { version = "0.13.3", default-features = false }
 coap-message = "0.3.6"
 crossterm = { version = "0.29", default-features = false, features = ["events"] }
 rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
-minicbor = "2"
+minicbor = { version = "2.3.0", default-features = false, features = ["alloc"] }
 # This disables the libudev-sys dependencies, making auto enumeration unavailable
-senml = { path = "../senml" }
+#senml = { path = "../senml" }
 serialport = { version = "4", default-features = false }
 slipmux = "0.3.2"
 terminal-colorsaurus = { version = "1.0.3", default-features = false }

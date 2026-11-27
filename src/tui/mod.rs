@@ -66,6 +66,10 @@ pub fn start_tui(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
     let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
 
+    slipmux_event_sender
+        .send(Event::SendDiagnostic(String::new()))
+        .unwrap();
+
     let network_event_sender = if let Some(network_name) = args.network {
         match open_network_device(&network_name) {
             Ok(dev) => Some(create_network_thread(

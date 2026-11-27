@@ -266,7 +266,7 @@ impl UiState {
             return;
         }
         let title = match user_input_manager.classify_input() {
-            InputType::RawCoap(_) => "User Input: Raw CoAP request",
+            InputType::RawCoap(_, _) => "User Input: Raw CoAP request",
             InputType::RawCommand(_) => "User Input: Raw diagnostic command",
             InputType::Command(cmd, _, _) => &format!("User Input: {cmd}"),
         };

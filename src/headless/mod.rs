@@ -26,18 +26,20 @@ mod network;
 // The first event must be the serial connect. We wait for that event before processing
 // stdin. If we were to process stdin first, we might try to send data to the device
 // before it is even connected. This data would be lost.
-fn await_serial_connect(event_channel: &Receiver<Event>) -> Result<String, &str> {
+fn await_serial_connect(event_channel: &Receiver<Event>) -> Result<String, String> {
     let event = match event_channel.recv_timeout(Duration::from_millis(5000)) {
         Ok(event) => event,
         Err(RecvTimeoutError::Timeout) => {
-            return Err("Timedout while waiting for serial to connect.");
+            return Err("Timedout while waiting for serial to connect.".to_string());
         }
         Err(RecvTimeoutError::Disconnected) => panic!(),
     };
     if let Event::SerialConnect(name) = event {
         return Ok(name);
     }
-    Err("Unknown event occoured while waiting for serial to connect.")
+    Err(format!(
+        "Unknown event occoured while waiting for serial to connect: {event:?}"
+    ))
 }
 
 fn raw_terminal_thread(sender: &Sender<Event>) {

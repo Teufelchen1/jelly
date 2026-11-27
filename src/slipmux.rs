@@ -93,14 +93,18 @@ fn read_thread(
     port_guard: &Arc<Mutex<Option<Box<dyn ReaderWriter>>>>,
 ) {
     loop {
-        let Ok((mut read_port, write_port)) = new_port(device_path) else {
-            sender
-                .send(Event::Diagnostic(
-                    "Unable to open the device, trying again in 3s\n".to_owned(),
-                ))
-                .unwrap();
-            thread::sleep(Duration::from_millis(3000));
-            continue;
+        let (mut read_port, write_port) = match new_port(device_path) {
+            Ok((read_port, write_port)) => (read_port, write_port),
+            Err(err) => {
+                sender
+                    .send(Event::Diagnostic(format!(
+                        "Unable to open the device: {err:?}. Trying again in 3s.\n"
+                    )))
+                    .unwrap();
+
+                thread::sleep(Duration::from_millis(3000));
+                continue;
+            }
         };
 
         {

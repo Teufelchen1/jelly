@@ -1,5 +1,4 @@
 use std::fmt::Write;
-use std::println;
 use std::vec;
 use std::write;
 
@@ -186,7 +185,7 @@ impl CommandHandler for Ifconfig {
                             .unwrap();
                         Method::Patch
                     }
-                    IfconfigOperation::Set { key, value } => {
+                    IfconfigOperation::Set { key, value: _ } => {
                         match key.as_str() {
                             "addr_long" => {
                                 let bytes = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];

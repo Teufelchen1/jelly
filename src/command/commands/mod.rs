@@ -10,6 +10,7 @@ mod mem_read;
 mod multi_endpoints_sample;
 mod ps;
 mod saul;
+mod toggleled0;
 mod wkc;
 
 mod force_cmds_available;
@@ -23,6 +24,7 @@ pub enum InternalCommand {
 
 pub fn all_commands() -> Vec<Command> {
     vec![
+        toggleled0::cmd(),
         saul::cmd(),
         ifconfig::cmd(),
         multi_endpoints_sample::cmd(),

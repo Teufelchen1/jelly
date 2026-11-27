@@ -5,6 +5,9 @@ use ratatui::widgets::Wrap;
 use super::log::Log;
 use super::log::LogEntry;
 
+// TODO: Evaluate looking at the text log as stream of bytes (not lines)
+// Then we can calculate easily how many bytes will fit the screen
+
 impl Log<String> {
     fn add_new_empty(&mut self) {
         self.add_new(String::default());

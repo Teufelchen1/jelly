@@ -222,11 +222,13 @@ impl App {
 
     fn execute_command(&mut self, cmd: &str, cmd_string: &str, file: SaveToFile) {
         // This works around a lifetime issue
-        let cmd = self
-            .user_input_manager
-            .known_commands
-            .find_by_cmd(cmd)
-            .unwrap();
+        let cmd = if let Some(cmd) = self.user_input_manager.known_commands.find_by_cmd(cmd) {
+            cmd
+        } else {
+            self.overall_log
+                .append_message(&format!("Command not in library: {cmd}\n"));
+            return;
+        };
         // Process the user input string into arguments, yielding a handler
         let res = (cmd.parse)(cmd, cmd_string);
         match res {
@@ -269,21 +271,24 @@ impl App {
 
     fn handle_command_commit(&mut self) {
         match self.user_input_manager.classify_input() {
-            InputType::RawCoap(endpoint) => {
-                let mut request: CoapRequest<String> = CoapRequest::new();
-                request.set_method(Method::Get);
-                if endpoint != "/" {
-                    // Might also be a bug in coap-lite that "/" should be turned into an
-                    // empty option set; documentation isn't quite conclusive.
-                    request.set_path(&endpoint);
-                }
-                request.message.set_token(self.get_new_token());
-                let data =
-                    encode_buffered(Slipmux::Configuration(request.message.to_bytes().unwrap()));
-                self.event_sender
-                    .send(Event::SendConfiguration(data))
-                    .unwrap();
-                self.configuration_log.add_new(Request::new(request));
+            InputType::RawCoap(endpoint, file) => {
+                let new_cmd = Command::new_coap_get(&endpoint.trim_ascii_end(), "CoAP endpoint");
+                self.user_input_manager.known_commands.add(new_cmd);
+                self.execute_command(&endpoint.trim_ascii_end(), &endpoint, file);
+                // let mut request: CoapRequest<String> = CoapRequest::new();
+                // request.set_method(Method::Get);
+                // if endpoint != "/" {
+                //     // Might also be a bug in coap-lite that "/" should be turned into an
+                //     // empty option set; documentation isn't quite conclusive.
+                //     request.set_path(&endpoint);
+                // }
+                // request.message.set_token(self.get_new_token());
+                // let data =
+                //     encode_buffered(Slipmux::Configuration(request.message.to_bytes().unwrap()));
+                // self.event_sender
+                //     .send(Event::SendConfiguration(data))
+                //     .unwrap();
+                // self.configuration_log.add_new(Request::new(request));
             }
             InputType::RawCommand(cmd) => {
                 self.event_sender.send(Event::SendDiagnostic(cmd)).unwrap();

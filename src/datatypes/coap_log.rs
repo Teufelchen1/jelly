@@ -129,7 +129,11 @@ impl LogEntry<Request> {
                 _ => format!("{payload:02x?}"),
             }
         };
-        _ = write!(out, " {request_body}");
+        _ = write!(out, " {} bytes:", payload.len());
+        for i in payload {
+            _ = write!(out, "{i:02x}");
+        }
+        _ = write!(out, "{request_body}");
         out
     }
 

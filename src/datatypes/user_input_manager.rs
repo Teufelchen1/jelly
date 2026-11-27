@@ -15,7 +15,7 @@ pub enum InputType {
     /// The user input something that is not known to Jelly but it
     /// starts with a `/` so it likely is a coap endpoint
     /// Treated as configuration message
-    RawCoap(String),
+    RawCoap(String, SaveToFile),
     /// The user input something that is not known to Jelly
     /// Treated as diagnostic message
     RawCommand(String),
@@ -148,7 +148,7 @@ impl UserInputManager {
             Some(cmd) => InputType::Command(cmd.cmd.clone(), cmd_string.to_owned(), file),
             None => {
                 if self.user_input.starts_with('/') {
-                    InputType::RawCoap(self.user_input.clone())
+                    InputType::RawCoap(self.user_input.clone(), file)
                 } else {
                     let mut cmd = self.user_input.clone();
                     if !cmd.ends_with('\n') {

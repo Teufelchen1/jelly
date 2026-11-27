@@ -51,7 +51,7 @@ pub fn cmd() -> Command {
         cmd: "Saul".to_owned(),
         description: "Saul over coap".to_owned(),
         parse: |s, a| parse(s, a),
-        required_endpoints: vec!["/jelly/Saul".to_owned()],
+        required_endpoints: vec!["/jelly/saul".to_owned()],
     }
 }
 
@@ -106,7 +106,7 @@ impl CommandHandler for Saul {
                     .end()
                     .unwrap();
                 let mut request: CoapRequest<String> = CoapRequest::new();
-                request.set_method(Method::Post);
+                request.set_method(Method::Patch);
                 request.set_path(&self.location);
                 request
                     .message
@@ -120,32 +120,41 @@ impl CommandHandler for Saul {
     }
 
     fn handle(&mut self, response: &Packet) -> Option<CoapRequest<String>> {
-        self.payload.clone_from(&response.payload);
-        let mut out = String::new();
+        let resp_status = match response.header.code {
+            coap_lite::MessageClass::Response(ref code) => code,
+            _ => &coap_lite::ResponseType::UnKnown,
+        };
 
-        match self.cli.operation {
-            None | Some(SaulOperation::List) => {
-                out = decode_sensor_list_into_string(&self.payload);
-            }
-            Some(SaulOperation::Read { sensor_ids: _ }) => {
-                // match senml::pack::Pack::from_cbor(&self.payload) {
-                //     Ok(parsed) => {
-                //         let _ = writeln!(out, "{:}", parsed.normalize());
-                //     }
-                //     Err(e) => {
-                //         let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
-                //     }
-                // }
-            }
-            Some(SaulOperation::Write { id: _, data: _ }) => {
-                // match senml::record::RawRecord::from_cbor(&self.payload) {
-                //     Ok(parsed) => {
-                //         let _ = writeln!(out, "Koens SenML Says:\n{parsed:?}");
-                //     }
-                //     Err(e) => {
-                //         let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
-                //     }
-                // }
+        let mut out = String::new();
+        // Todo: React to the error specific
+        if resp_status.is_error() {
+            let _ = writeln!(out, "Couldn't talk to the saul endpoint: {resp_status:?}");
+        } else {
+            self.payload.clone_from(&response.payload);
+            match self.cli.operation {
+                None | Some(SaulOperation::List) => {
+                    out = decode_sensor_list_into_string(&self.payload);
+                }
+                Some(SaulOperation::Read { sensor_ids: _ }) => {
+                    // match senml::pack::Pack::from_cbor(&self.payload) {
+                    //     Ok(parsed) => {
+                    //         let _ = writeln!(out, "{:}", parsed.normalize());
+                    //     }
+                    //     Err(e) => {
+                    //         let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
+                    //     }
+                    // }
+                }
+                Some(SaulOperation::Write { id: _, data: _ }) => {
+                    // match senml::record::RawRecord::from_cbor(&self.payload) {
+                    //     Ok(parsed) => {
+                    //         let _ = writeln!(out, "Koens SenML Says:\n{parsed:?}");
+                    //     }
+                    //     Err(e) => {
+                    //         let _ = writeln!(out, "Koens SenML Says:\n{e:?}");
+                    //     }
+                    // }
+                }
             }
         }
         self.buffer = out;

@@ -1,5 +1,6 @@
 use coap_lite::CoapRequest;
 use coap_lite::RequestType as Method;
+use coap_message::MinimalWritableMessage;
 
 use super::Command;
 use super::CommandHandler;
@@ -9,12 +10,22 @@ use super::CommandHandler;
 /// Allthought the default overview of received CoAP responses will show a summary.
 /// This is used to make all endpoints in the /.well-known/core available for a
 /// quick get request via autocomplete.
-pub struct CoapGet(String);
+pub struct CoapGet(String, Option<String>);
 
 impl CoapGet {
     // Saves the first path of this command...so this won't work with commands that need multiple.
     pub fn parse(cmd: &Command, _args: &str) -> Box<dyn CommandHandler> {
-        Box::new(Self(cmd.required_endpoints[0].clone()))
+        let (path, query) = match cmd.cmd.split_once('&') {
+            Some((path, query)) => {
+                if query != "" {
+                    (path.to_owned(), Some(query.to_owned()))
+                } else {
+                    (path.to_owned(), None)
+                }
+            }
+            None => (cmd.required_endpoints[0].to_owned(), None),
+        };
+        Box::new(Self(path, query))
     }
 }
 
@@ -23,9 +34,16 @@ impl CommandHandler for CoapGet {
         let mut request: CoapRequest<String> = CoapRequest::new();
         request.set_method(Method::Get);
 
+        if let Some(query) = &self.1 {
+            let _ = request
+                .message
+                .add_option_str(coap_lite::CoapOption::UriQuery, &query);
+        }
+
         // Might also be a bug in coap-lite that "/" should be turned into an
         // empty option set; documentation isn't quite conclusive.
         if self.0 != "/" {
+            println!("Setting path: {:?}", self.0);
             // The saved path is needed here to generate the coap request
             request.set_path(&self.0);
         }
