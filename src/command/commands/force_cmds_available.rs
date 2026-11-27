@@ -18,5 +18,5 @@ pub fn cmd() -> Command {
 }
 
 pub fn run(app: &mut App, ui_state: Option<&mut UiState>) {
-    app.force_all_commands_availabe(ui_state);
+    app.force_all_commands_available(ui_state);
 }

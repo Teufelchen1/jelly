@@ -75,7 +75,7 @@ struct Cli {
     ///
     /// Use this mode inside scripts and pipe commands into Jelly.
     /// This may be used interactively.
-    /// Jelly will await input unitl EOF.
+    /// Jelly will await input until EOF.
     /// Jelly will wait for output until all commands are finished or
     /// the time-out is reached. The output will only be displayed once EOF is
     /// reached. This is to preserve the order of input commands regardless of

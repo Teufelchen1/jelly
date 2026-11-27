@@ -37,7 +37,7 @@ fn await_serial_connect(event_channel: &Receiver<Event>) -> Result<String, &str>
     if let Event::SerialConnect(name) = event {
         return Ok(name);
     }
-    Err("Unknown event occoured while waiting for serial to connect.")
+    Err("Unknown event occurred while waiting for serial to connect.")
 }
 
 fn raw_terminal_thread(sender: &Sender<Event>) {

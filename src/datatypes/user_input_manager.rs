@@ -363,7 +363,7 @@ mod tests {
         const USER_INPUT_A: &str = "This goes to the history!";
         const USER_INPUT_B: &str = "This too goes to the history!";
         const USER_INPUT_C: &str = "So does this!";
-        const USER_INPUT_D_NOT_COMMITED_YET: &str = "work in progress";
+        const USER_INPUT_D_NOT_COMMITTED_YET: &str = "work in progress";
         let mut manager = UserInputManager::new();
 
         manager.insert_string(USER_INPUT_A);
@@ -374,7 +374,7 @@ mod tests {
         manager.finish_current_input();
 
         // Deliberately not finishing this input
-        manager.insert_string(USER_INPUT_D_NOT_COMMITED_YET);
+        manager.insert_string(USER_INPUT_D_NOT_COMMITTED_YET);
 
         // Backwards
         manager.set_to_previous_input(); // C
@@ -394,6 +394,6 @@ mod tests {
         // Probably an implementation detail and not part of the API?
         manager.set_to_next_input();
         assert!(manager.input_empty());
-        assert_ne!(manager.user_input, USER_INPUT_D_NOT_COMMITED_YET);
+        assert_ne!(manager.user_input, USER_INPUT_D_NOT_COMMITTED_YET);
     }
 }
