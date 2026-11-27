@@ -37,7 +37,7 @@ fn await_serial_connect(event_channel: &Receiver<Event>) -> Result<String, &str>
     if let Event::SerialConnect(name) = event {
         return Ok(name);
     }
-    Err("Unknown event occoured while waiting for serial to connect.")
+    Err("Unknown event occurred while waiting for serial to connect.")
 }
 
 fn raw_terminal_thread(sender: &Sender<Event>) {
@@ -60,7 +60,8 @@ fn create_raw_terminal_thread(sender: Sender<Event>) -> JoinHandle<()> {
 
 pub fn start_headless_diagnostic(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    let slipmux_event_sender =
+        create_slipmux_thread(event_sender.clone(), args.tty_path, args.baud);
     match await_serial_connect(&event_receiver) {
         Ok(name) => {
             println!("Serial connect with {name}");
@@ -76,13 +77,15 @@ pub fn start_headless_diagnostic(args: Cli, main_channel: EventChannel) {
 
 pub fn start_headless_configuration(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    let slipmux_event_sender =
+        create_slipmux_thread(event_sender.clone(), args.tty_path, args.baud);
     event_loop_configuration(&event_receiver, event_sender, &slipmux_event_sender);
 }
 
 pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    let slipmux_event_sender =
+        create_slipmux_thread(event_sender.clone(), args.tty_path, args.baud);
 
     match await_serial_connect(&event_receiver) {
         Ok(name) => {
@@ -113,7 +116,8 @@ pub fn start_headless_network(args: Cli, main_channel: EventChannel) {
 
 pub fn start_headless_diagnostic_network(args: Cli, main_channel: EventChannel) {
     let (event_sender, event_receiver) = main_channel;
-    let slipmux_event_sender = create_slipmux_thread(event_sender.clone(), args.tty_path);
+    let slipmux_event_sender =
+        create_slipmux_thread(event_sender.clone(), args.tty_path, args.baud);
 
     match await_serial_connect(&event_receiver) {
         Ok(name) => {

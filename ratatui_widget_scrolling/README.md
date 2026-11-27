@@ -167,7 +167,7 @@ loop {
 		break;
 	} else {
 		// If the result is an error, we need to try rendering again.
-		// An error occours when the heights provided in the `height_log` do not match the results
+		// An error occurs when the heights provided in the `height_log` do not match the results
 		// from the closure.  
 		// Each time, the `height_log` gets updated with the freshly calculated heights.
 		// Eventually all heights will be correct.

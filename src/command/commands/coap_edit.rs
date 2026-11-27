@@ -271,7 +271,7 @@ impl CommandHandler for CoapEdit {
     fn display(&self, buffer: &mut String) {
         use std::fmt::Write;
         match &self {
-            Self::Successful => writeln!(buffer, "Edit was applied successfullly.\n").unwrap(),
+            Self::Successful => writeln!(buffer, "Edit was applied successfully.\n").unwrap(),
             Self::Error(e) => writeln!(buffer, "Editing failed: {e}.\n").unwrap(),
             _ => unreachable!("we didn't ask to be displayed yet"),
         }

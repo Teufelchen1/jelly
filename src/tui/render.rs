@@ -130,7 +130,7 @@ impl UiState {
                 )));
             }
             Err(_) => {
-                text.push_line(Line::from("Your current working directory is unkown\n"));
+                text.push_line(Line::from("Your current working directory is unknown\n"));
             }
         }
         text.push_line(Line::from(""));

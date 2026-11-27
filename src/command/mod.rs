@@ -116,7 +116,7 @@ impl Command {
         Self::new_text_type(cmd, description)
     }
 
-    /// Replaces the decription of a command
+    /// Replaces the description of a command
     pub fn update_description(&mut self, description: &str) {
         self.description.clear();
         self.description.push_str(description);
@@ -169,7 +169,7 @@ impl Ord for Command {
         }
 
         // Sort direct coap requests (not really commands) to the back
-        // Regular commands that requiere endpoints are sorted to the front
+        // Regular commands that require endpoints are sorted to the front
         // This ensures that jelly sided commands are sorted before riots commands
         match (scmd.starts_with('/'), ocmd.starts_with('/')) {
             (true, false) => Ordering::Greater,

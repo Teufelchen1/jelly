@@ -7,10 +7,7 @@ use super::CommandType;
 
 mod coap_edit;
 mod coap_get_template;
-mod mem_read;
 mod multi_endpoints_sample;
-mod ps;
-mod saul;
 mod wkc;
 
 mod force_cmds_available;
@@ -24,10 +21,7 @@ pub enum InternalCommand {
 
 pub fn all_commands() -> Vec<Command> {
     vec![
-        saul::cmd(),
         multi_endpoints_sample::cmd(),
-        mem_read::cmd(),
-        ps::cmd(),
         wkc::cmd(),
         Command::new_text_type("help", "Prints all available commands"),
         Command::new_coap_get("/.well-known/core", "Query the wkc"),

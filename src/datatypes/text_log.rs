@@ -22,7 +22,7 @@ impl Log<String> {
     // We want each log line to be a single String in a LogEntry object.
     // But the client might send us multiple messages which are all part of the same output line.
     // This means repeatedly calling this function, each time with the next part of the message.
-    // e.g. ["foo", "bar", "baz\n", "hello wo", "rld!\n"] shoud be transformed into two objects:
+    // e.g. ["foo", "bar", "baz\n", "hello wo", "rld!\n"] should be transformed into two objects:
     // -> [LogEntry("foobarbaz"), LogEntry("hello world!")]
     // In addition, we need to filterout control chars (for ratatui / displaying).
     pub fn append_message(&mut self, message: &str) {

@@ -213,7 +213,7 @@ impl ScrollState {
 pub fn try_render_scroll_state<'a, Element, ElementWidget, F>(
     frame: &mut Frame,
     draw_area: Rect,
-    scroll_positon: usize,
+    scroll_position: usize,
     height_log: &mut [ElementHeight],
     elements: &'a [Element],
     render_element: F,
@@ -257,7 +257,7 @@ where
 
     let mut update_needed = false;
     let (partial_draw_top, full_draw_middle, partial_draw_bottom) =
-        get_areas_to_render_from_scroll_position(draw_area, scroll_positon, height_log);
+        get_areas_to_render_from_scroll_position(draw_area, scroll_position, height_log);
 
     if let Some((index, area)) = partial_draw_top {
         let element = &elements[index];
@@ -374,14 +374,14 @@ pub fn get_areas_to_render_from_scroll_position(
             has_partial_item_bottom = Some(current_index);
             break;
         }
-        // Yes we can completly scroll past this item
+        // Yes we can completely scroll past this item
         scroll_offset -= current_item_height;
     }
 
     // At which item do we need to stop drawing?
     // When we have a partial item at the bottom, that item is also the stop item.
     // If we don't have a partial item at the bottom,
-    // the stop item is the lastest item, it's just outside our viewable space.
+    // the stop item is the latest item, it's just outside our viewable space.
     // e.g. if we have a scroll_offset of 0 (no scrolling going on), the stop item
     // will be `current_index`'s initial value of height_log.len().
     let stop_item_full_drawn = current_index;

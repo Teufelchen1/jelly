@@ -63,7 +63,7 @@ impl App {
         }
     }
 
-    pub fn force_all_commands_availabe(&mut self, ui_state: Option<&mut UiState>) {
+    pub fn force_all_commands_available(&mut self, ui_state: Option<&mut UiState>) {
         self.command_library.force_all_cmds_available();
         if let Some(ui_state) = ui_state {
             self.populate_command_help_list(ui_state);

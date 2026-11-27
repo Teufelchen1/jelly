@@ -18,14 +18,14 @@ and this project largely adheres to [Semantic Versioning](https://semver.org/spe
 ### Added
 
 - CLI/TUI: Let users specify the color theme of the TUI
-- TUI: Allow infinte backlog with smooth scrolling
+- TUI: Allow infinite backlog with smooth scrolling
 - Tests: Added simple TUI rendering tests, including behaviour based on user input
 - UX: Concretize user instructions when working with TUN interfaces
 
 ### Fixed
 
 - Fix: Pass known diagnostic commands with their arguments
-- Fix: Clear user input after commiting (request TUI re-rendering)
+- Fix: Clear user input after committing (request TUI re-rendering)
 
 ### Changed
 
@@ -40,7 +40,7 @@ and this project largely adheres to [Semantic Versioning](https://semver.org/spe
 
 - CoAP: Respond to requests with 4.04 rather than ignoring them
 - CoAP: Respond to separate responses and other with RST
-- TUI: Respect the users terminal theme (light- / darkmode) in choosen TUI colors
+- TUI: Respect the users terminal theme (light- / darkmode) in chosen TUI colors
 - TUI: Prints one of the IP addresses (if any) of the attached network interface
 
 ### Fixed

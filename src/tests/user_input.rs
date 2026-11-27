@@ -218,7 +218,7 @@ fn autocomplete() {
         "──────────────────────────────────────────────────────────────❌ not connected, retrying..",
     ]);
     let events = vec![
-        // move cursor one left Hel_p
+        // move cursor one left "Hel_p"
         Event::TerminalKey(KeyEvent::new(KeyCode::Left, KeyModifiers::empty())),
         Event::TerminalKey(KeyEvent::new(KeyCode::Backspace, KeyModifiers::empty())),
         Event::TerminalKey(KeyEvent::new(KeyCode::Backspace, KeyModifiers::empty())),
