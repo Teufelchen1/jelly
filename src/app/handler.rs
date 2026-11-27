@@ -33,6 +33,11 @@ impl App {
                 // inside (like `</foo/bar,baz>`, and our parsing is utterly broken already.
                 break;
             };
+            if matches!(s, "/jelly/board" | "/jelly/ver") {
+                let mut request: CoapRequest<String> = Self::build_get_request(s);
+                self.send_configuration_request(&mut request.message);
+                self.configuration_log.add_new(Request::new(request));
+            }
             if s.starts_with('/') {
                 eps.push(s.to_owned());
                 // Skip commands that we already learned.
@@ -72,14 +77,6 @@ impl App {
 
         let mut request: CoapRequest<String> = Self::build_get_request("/.well-known/core");
         request.message.add_option(CoapOption::Block2, vec![0x05]);
-        self.send_configuration_request(&mut request.message);
-        self.configuration_log.add_new(Request::new(request));
-
-        let mut request: CoapRequest<String> = Self::build_get_request("/jelly/board");
-        self.send_configuration_request(&mut request.message);
-        self.configuration_log.add_new(Request::new(request));
-
-        let mut request: CoapRequest<String> = Self::build_get_request("/jelly/ver");
         self.send_configuration_request(&mut request.message);
         self.configuration_log.add_new(Request::new(request));
     }
