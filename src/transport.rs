@@ -15,11 +15,11 @@ impl ReaderWriter for UnixStream {}
 
 pub type PortTuple = (Box<dyn ReaderWriter>, Box<dyn ReaderWriter>);
 
-pub fn new_port(device_path: &Path) -> Result<PortTuple, Error> {
+pub fn new_port(device_path: &Path, baud: u32) -> Result<PortTuple, Error> {
     let file_type = device_path.metadata()?.file_type();
     let (read_writeable0, read_writeable1): (Box<dyn ReaderWriter>, Box<dyn ReaderWriter>) =
         if file_type.is_char_device() {
-            let mut port = serialport::new(device_path.to_string_lossy(), 115_200).open()?;
+            let mut port = serialport::new(device_path.to_string_lossy(), baud).open()?;
             port.set_timeout(Duration::from_secs(600)).unwrap();
             (Box::new(port.try_clone().unwrap()), Box::new(port))
         } else if file_type.is_socket() {

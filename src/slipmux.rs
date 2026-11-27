@@ -23,7 +23,11 @@ use crate::events::Event;
 use crate::transport::ReaderWriter;
 use crate::transport::new_port;
 
-pub fn create_slipmux_thread(event_sender: Sender<Event>, device_path: PathBuf) -> Sender<Event> {
+pub fn create_slipmux_thread(
+    event_sender: Sender<Event>,
+    device_path: PathBuf,
+    baud: u32,
+) -> Sender<Event> {
     let (slipmux_sender, slipmux_receiver): (Sender<Event>, Receiver<Event>) = mpsc::channel();
     let port_guard = Arc::new(Mutex::new(None));
     let cloned_port_guard = Arc::clone(&port_guard);
@@ -33,7 +37,7 @@ pub fn create_slipmux_thread(event_sender: Sender<Event>, device_path: PathBuf) 
         .unwrap();
     thread::Builder::new()
         .name("HardwareReader".to_owned())
-        .spawn(move || read_thread(&event_sender, &device_path, &port_guard))
+        .spawn(move || read_thread(&event_sender, &device_path, baud, &port_guard))
         .unwrap();
     slipmux_sender
 }
@@ -90,10 +94,11 @@ fn write_thread(receiver: &Receiver<Event>, port_guard: &Arc<Mutex<Option<impl W
 fn read_thread(
     sender: &Sender<Event>,
     device_path: &Path,
+    baud: u32,
     port_guard: &Arc<Mutex<Option<Box<dyn ReaderWriter>>>>,
 ) {
     loop {
-        let Ok((mut read_port, write_port)) = new_port(device_path) else {
+        let Ok((mut read_port, write_port)) = new_port(device_path, baud) else {
             sender
                 .send(Event::Diagnostic(
                     "Unable to open the device, trying again in 3s\n".to_owned(),

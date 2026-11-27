@@ -33,18 +33,24 @@ type EventChannel = (Sender<Event>, Receiver<Event>);
 
 #[derive(Parser)]
 struct Cli {
-    /// The path to the UART TTY interface
+    /// Serial port (e.g. `/dev/ttyS0`) or Unix socket to talk to the device.
+    #[arg(value_name = "PORT")]
     tty_path: std::path::PathBuf,
+
+    /// The baud rate for the serial port
+    ///
+    /// Ignored when `PORT` is a Unix socket.
+    #[arg(short = 'b', long, default_value_t = 115_200)]
+    baud: u32,
 
     /// If enabled, attaches the SLIP network to the given host TUN interface
     ///
-    /// Default interface name on Linux is slip0 and on MacOS it is utun9
+    /// Default interface name on linux is slip0 and on macOS it is utun9.
     #[arg(
         short = 't',
         long,
         num_args = 0..=1,
         default_missing_value = if cfg!(target_os = "macos") { "utun9" } else { "slip0" },
-        verbatim_doc_comment,
         required_if_eq("headless_network", "true")
     )]
     network: Option<String>,
@@ -86,7 +92,7 @@ struct Cli {
     )]
     headless_configuration: bool,
 
-    /// If true, disables the TUI and shows the in-/out-going packets.
+    /// If true, disables the TUI and shows the in-/out-going packets
     ///
     /// Diagnostic messages are ignored.
     /// Configuration messages are ignored.
