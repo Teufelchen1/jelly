@@ -7,6 +7,30 @@ and this project largely adheres to [Semantic Versioning](https://semver.org/spe
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-28
+
+### Changed
+
+- Commands: Allow to carry custom state
+- CoAP: Request /jelly/* resources only after discovering them
+
+### Added
+
+- Commands: Introduce `edit` command
+- CoAP: Recognize Ariel's CBOR (impl-info) for device information (ariel-os/ariel-os#2417)
+- CLI: Allow to select the baud rate
+
+### Fixed
+
+- CoAP: No longer emit duplicated message IDs in certain situations (#77)
+- CoAP: Removed one .unwrap() on parsing errors in .well-known/core
+- Networking: On macOS, Handle TUN creation gracefully, give better errors
+- Chore: Fix typos and spelling mistakes
+
+### Removed
+
+- Commands: `ps`, `memread` and `saul` removed as poorly implemented and without any users
+
 ## [0.2.1] - 2026-03-18
 
 ### Changed
